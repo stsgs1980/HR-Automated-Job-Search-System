@@ -1,4 +1,4 @@
-# HH Auto-Respond — Changelog
+# HH Copilot — Changelog
 
 Все значимые изменения в расширении фиксируются в этом файле.
 Формат основан на [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/).
@@ -237,5 +237,5 @@
 
 ---
 
-[1.1.0]: https://github.com/stsgs1980/HR-Automated-Job-Search-System/compare/v1.0.0...v1.1.0
-[1.0.0]: https://github.com/stsgs1980/HR-Automated-Job-Search-System/releases/tag/v1.0.0
+[1.1.0]: https://github.com/stsgs1980/HH-Copilot/compare/v1.0.0...v1.1.0
+[1.0.0]: https://github.com/stsgs1980/HH-Copilot/releases/tag/v1.0.0

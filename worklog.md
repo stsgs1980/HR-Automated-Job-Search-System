@@ -385,5 +385,33 @@ Stage Summary:
 - CHANGELOG updated with all missing entries
 - Production build verified (49.2kb, no console.log)
 - Ready for git tag v1.6.0 and push
+
+---
+Task ID: 16
+Agent: main
+Task: UI rewrite -- 6-tab wireframe design system + project rename
+
+Work Log:
+- Rewrote src/ui/ to match wireframe: 6 tabs (Overview, Resume, Vacancies, Negotiations, Settings, Stats)
+- Green accent theme (#059669/#10B981), 720px panel, Inter font, glass-morphism, CSS animations
+- styles.js: full CSS with KPI ring, toggle switch, score ring, progress bar, animations
+- html.js: 6-tab HTML templates with all wireframe IDs (authBadge, authIndicator, kpi-*, vac-*, neg-*, etc.)
+- panel.js: Shadow DOM closed, 6-tab switching, CustomEvent bridge, event delegation
+- fab.js: green gradient FAB with pulse animation
+- state.js: extended panelState with negotiations, settings, logs, blacklist, massApply
+- New tab files: overview.js, negotiations.js, settings.js, stats.js
+- Adapted: vacancies.js (score-ring cards), resumes.js (accordion layout)
+- index.js: barrier file updated with all new exports
+- Fixed bug: overview.js addTimelineEvent() used undefined el() -> refs.shadowRoot?.getElementById()
+- Renamed project directory: HR-Automated-Job-Search-System -> HH-Copilot
+- Updated manifest.json: name "HH Auto-Respond" -> "HH Copilot"
+- Updated package.json: name "hh-auto-respond-extension" -> "hh-copilot"
+- Updated CHANGELOG.md: title + GitHub links
+- Production build verified: 111.6kb, no errors
+
+Stage Summary:
+- Full 6-tab UI matching wireframe implemented
+- Project renamed to HH-Copilot across all config files
+- Bug fix in overview.js (ReferenceError: el is not defined)
 ---
 

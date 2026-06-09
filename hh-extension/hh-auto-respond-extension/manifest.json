@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
-  "name": "HH Auto-Respond",
-  "description": "Автоматизация откликов на hh.ru — FAB + sidebar",
+  "name": "HH Copilot",
+  "description": "HH Copilot — автоматизация откликов на hh.ru, FAB + 6-tab sidebar",
   "version": "1.7.0",
   "permissions": ["storage", "cookies", "activeTab", "alarms"],
   "host_permissions": ["https://hh.ru/*", "https://*.hh.ru/*"],

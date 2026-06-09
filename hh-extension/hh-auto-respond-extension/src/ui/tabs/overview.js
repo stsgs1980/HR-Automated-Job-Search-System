@@ -29,7 +29,7 @@ export function renderOverviewKPI() {
 }
 
 export function addTimelineEvent(type, text, detail) {
-  const list = el('tl-activity-list');
+  const list = refs.shadowRoot?.getElementById('tl-activity-list');
   if (!list) return;
   const colors = {
     apply: '#059669',
