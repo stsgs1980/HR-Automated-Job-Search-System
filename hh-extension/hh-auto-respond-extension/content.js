@@ -1501,7 +1501,9 @@ async function init() {
     const path = window.location.pathname;
 
     if (/\/resume\/[a-f0-9]+/.test(path)) {
-      // На странице конкретного резюме — парсим его
+      // На странице конкретного резюме — сначала раскрываем скрытые секции
+      await expandHiddenSections();
+      // Парсим
       const resume = parseResume();
       if (resume.id) {
         panelState.resume = resume;
@@ -1525,6 +1527,31 @@ async function init() {
       panelLog.warn('Cannot parse resume from this page (' + path + '). Go to /resume/{hash} or /applicant/resumes');
     }
   });
+}
+
+/**
+ * Раскрывает скрытые секции резюме: «Посмотреть всё» в опыте, образовании и т.д.
+ * hh.ru показывает только 3 записи, остальные под «Посмотреть всё».
+ * Кликаем по этим кнопкам и ждём подгрузки данных.
+ */
+async function expandHiddenSections() {
+  const expandButtons = document.querySelectorAll('[data-qa="profile-experience-viewAll"], button');
+  const clicked = [];
+  expandButtons.forEach(btn => {
+    const text = (btn.textContent || '').trim().toLowerCase();
+    if (text.includes('посмотреть всё') || text.includes('показать все') || text.includes('показать ещё') ||
+        text.includes('посмотреть все') || text.includes('развернуть') || text.includes('expand')) {
+      try {
+        btn.click();
+        clicked.push(text);
+      } catch (e) {}
+    }
+  });
+  if (clicked.length > 0) {
+    panelLog.info('Expanded hidden sections: ' + clicked.join(', '));
+    // Ждём подгрузки контента
+    await new Promise(r => setTimeout(r, 1500));
+  }
 }
 
 function pollAuth() {
@@ -1562,7 +1589,8 @@ async function initPageLogic() {
     mainLog.info('SPA observer active');
 
   } else if (/^\/resume\/[a-f0-9]+/.test(path)) {
-    // Страница резюме — автоматически парсим
+    // Страница резюме — сначала раскрываем скрытые секции, потом парсим
+    await expandHiddenSections();
     const resume = parseResume();
     if (resume.id) {
       panelState.resume = resume;
