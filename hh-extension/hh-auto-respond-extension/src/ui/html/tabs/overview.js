@@ -23,6 +23,7 @@ function overviewAuthCard() {
       <div style="display:flex;align-items:center;gap:8px;">
         <span class="badge badge-green" id="authBadge"><span class="pulse-dot" style="width:5px;height:5px;background:#059669;border-radius:50%;display:inline-block;margin-right:3px;"></span> Авторизован</span>
         <button class="btn btn-outline btn-sm" data-action="check-auth">Проверить</button>
+        <button class="btn btn-sm" data-action="logout" style="background:#ef4444;color:#fff;border:none;padding:4px 12px;border-radius:6px;font-size:12px;font-weight:500;cursor:pointer;">Выход</button>
       </div>
     </div>
   </div>`;
