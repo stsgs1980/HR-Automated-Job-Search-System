@@ -2,11 +2,13 @@
  * UI: AUTH
  * ===========
  * HH.ru authentication detection and user name extraction.
+ * Logs are suppressed after first detection to avoid console spam.
  */
 
+let authLogged = false; // suppress repeated auth logs
+let authResult = null; // cache result
+
 // AUTH CHECK
-// NOTE: offsetParent === null для position:fixed элементов, поэтому НЕ проверяем его.
-// Проверяем только: элемент существует, не скрыт через display:none / visibility:hidden.
 export function checkAuth() {
   const selectors = [
     '[data-qa="mainmenu_applicant"]',
@@ -22,34 +24,58 @@ export function checkAuth() {
     '[data-qa="mainmenu"]',
     '.HH-React-Header-Nav',
     'nav[class*="nav"] a[href*="resumes"]',
-    // Cookie fallback: если есть cookie с именем пользователя, точно авторизован
   ];
+
+  // Quick check: if cached result exists and page hasn't changed, return it
+  const url = window.location.href;
+  if (authResult !== null && authResult._url === url) {
+    return authResult.loggedIn;
+  }
+
   for (const sel of selectors) {
     try {
       const el = document.querySelector(sel);
       if (!el) continue;
-      // Проверяем что не скрыт через display:none или visibility:hidden
       if (document.body.contains(el)) {
         const style = window.getComputedStyle(el);
         if (style.display !== 'none' && style.visibility !== 'hidden') {
-          console.log('[HH-AR][Auth] Found auth element:', sel);
+          if (!authLogged) {
+            console.log('[HH-AR][Auth] Authorized (selector:', sel + ')');
+            authLogged = true;
+          }
+          authResult = { loggedIn: true, _url: url };
           return true;
         }
       }
     } catch (e) { /* invalid selector */ }
   }
-  // Cookie-based fallback: ищем cookie hhruuid или _HH-RU-Auth
+
+  // Cookie-based fallback
   const cookies = document.cookie || '';
   if (cookies.includes('hhruuid') || cookies.includes('_HH-RU') || cookies.includes('hhtoken')) {
-    console.log('[HH-AR][Auth] Found auth cookie');
+    if (!authLogged) {
+      console.log('[HH-AR][Auth] Authorized (cookie)');
+      authLogged = true;
+    }
+    authResult = { loggedIn: true, _url: url };
     return true;
   }
-  console.log('[HH-AR][Auth] No auth indicators found');
+
+  if (!authLogged) {
+    console.log('[HH-AR][Auth] No auth indicators found');
+    authLogged = true;
+  }
+  authResult = { loggedIn: false, _url: url };
   return false;
 }
 
+/** Reset auth cache (call after login/logout) */
+export function resetAuthCache() {
+  authResult = null;
+  authLogged = false;
+}
+
 export function getUserName() {
-  // Попробуем несколько вариантов получения имени
   const nameSelectors = [
     '[data-qa="mainmenu_user_name"]',
     '.supernova-nav__item--applicant',
@@ -61,12 +87,10 @@ export function getUserName() {
       if (el) {
         const name = (el.textContent || '').trim();
         if (name && name.length > 0 && name.length < 100) {
-          console.log('[HH-AR][Auth] User name from:', sel, '=', name);
           return name;
         }
       }
     } catch (e) {}
   }
-  console.log('[HH-AR][Auth] Could not extract user name, using default');
   return 'Пользователь';
 }

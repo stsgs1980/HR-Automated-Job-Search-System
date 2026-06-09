@@ -28,14 +28,25 @@ export const HH_SELECTORS = {
   vacancyDescriptionContent: ['[data-qa="vacancy-description"] .vacancy-description-content'],
   vacancySkills: ['[data-qa="skills-element"]'],
   vacancySkillsOnPage: ['[data-qa="vacancy-serp__vacancy-skills"] .bloko-tag__text', '[data-qa="skills-element"]'],
-  responsePopup: ['[data-qa="vacancy-response-submit-popup"]'],
+  // Apply button on vacancy detail page
+  vacancyApplyButton: [
+    '[data-qa="vacancy-response-apply"]',
+    '[data-qa="vacancy-response-link-top"]',
+    'a[data-qa="vacancy-response-apply"]',
+    'button[data-qa="vacancy-response-apply"]',
+    'a[href*="/vacancy/response"]',
+    '[class*="vacancy-response"] button',
+    '[class*="vacancy-response"] a'
+  ],
+  // Popup / modal that appears after clicking apply
+  responsePopup: ['[data-qa="vacancy-response-submit-popup"]', '[data-qa="vacancy-response-popup-submit"]'],
   addCoverLetter: ['[data-qa="add-cover-letter"]'],
   coverLetterInput: ['textarea[data-qa="vacancy-response-popup-form-letter-input"]'],
-  submitButton: ['[data-qa="vacancy-response-submit-popup"]'],
+  submitButton: ['button[data-qa="vacancy-response-submit-popup"]', '[data-qa="vacancy-response-popup-submit"]', '[class*="response-popup"] button[type="submit"]'],
   alertMagritte: ['[data-qa="magritte-alert"]'],
   relocationConfirm: ['[data-qa="relocation-warning-confirm"]'],
   testTaskWarning: ['[data-qa="test-task-required"]'],
-  alreadyApplied: ['[data-qa="already-applied"]'],
+  alreadyApplied: ['[data-qa="already-applied"]', '[data-qa="vacancy-response-already-sent"]'],
   indirectEmployerAlert: ['[data-qa="indirect-employer-alert"]'],
   // ── Resume Page ──
   // MAGRITE: hashed CSS-classes НЕ работают!
