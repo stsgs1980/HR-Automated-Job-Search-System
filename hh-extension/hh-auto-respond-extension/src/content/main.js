@@ -7,8 +7,7 @@
  */
 
 import { createLogger } from '../lib/anti-hallucination.js';
-import { checkDailyReset } from '../lib/storage.js';
-import { getStats } from '../lib/storage.js';
+import { checkDailyReset, getStats, getAllSettings } from '../lib/storage.js';
 import { parseVacanciesFromPage } from '../parsers/vacancy-list.js';
 import { parseResume, parseResumeList, expandHiddenSections, diagnoseResumeDOM, getResumePageType } from '../parsers/resume-detail.js';
 import { continueApply } from '../engine/auto-respond.js';
@@ -24,6 +23,17 @@ window.__hhDiagnose = diagnoseResumeDOM;
 async function init() {
   mainLog.info('Loaded: ' + window.location.href);
   await checkDailyReset();
+
+  // Load stats + settings into panelState at boot (not just on /search/vacancy)
+  try {
+    const [stats, settings] = await Promise.all([getStats(), getAllSettings()]);
+    Object.assign(panelState.stats, stats);
+    Object.assign(panelState.settings, settings);
+    mainLog.info('Boot: stats + settings loaded from storage');
+  } catch (e) {
+    mainLog.warn('Boot: failed to load stats/settings: ' + e.message);
+  }
+
   createPanel();
 
   // Load saved resume from storage

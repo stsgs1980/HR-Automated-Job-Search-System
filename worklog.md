@@ -648,3 +648,28 @@ Stage Summary:
 ---
 
 Timestamp: 2026-06-09T22:08:29Z
+
+---
+Task ID: fix-ui-stats-bug
+Agent: main
+Task: Найти и исправить причину: UI показывает v1.7.2 и 0 лимиты
+
+Work Log:
+- Проведён анализ кода: version.js=1.7.3, manifest.json=1.7.3, shell.js использует process.env.VERSION
+- esbuild.config.mjs правильно инжектит VERSION через define из manifest.json
+- dist/content.js содержит "1.7.3" — версия правильная
+- ВЕРСИЯ: v1.7.2 на скриншоте юзера = Chrome грузит старый content.js (нужно перезагрузить расширение)
+- ЛИМИТЫ = 0: НАЙДЕН БАГ — panelState.stats инициализирован как {} и заполнялся только на /search/vacancy
+- НАЙДЕН БАГ: renderStatsValues() читал dailyLimit из panelState.stats (где нет этого поля) вместо panelState.settings
+- НАЙДЕН БАГ: getAllSettings() и getStats() не вызывались при загрузке расширения
+- НАЙДЕН БАГ: hourlyApplied читается в overview.js но никогда не записывается (rate-limiter хранит hourlyCount в памяти)
+- ИСПРАВЛЕНО: main.js init() — добавлена загрузка stats+settings через Promise.all перед createPanel()
+- ИСПРАВЛЕНО: vacancies.js renderStatsValues() — dailyLimit теперь читается из panelState.settings
+- Билд успешен: npm run build — dist/content.js 165.2kb
+
+Stage Summary:
+- Root cause #1 (0 limits): stats/settings не загружались при старте → panelState.stats={} → appliedToday||0=0
+- Root cause #2 (dailyLimit): renderStatsValues читал из stats вместо settings
+- Root cause #3 (version): Chrome кэширует старый content.js — юзеру нужно перезагрузить расширение из dist/
+- Root cause #4 (hourlyApplied): никогда не записывается в storage — косметический баг (всегда 0/ч)
+- Коммит: fix: load stats+settings at boot, fix dailyLimit source

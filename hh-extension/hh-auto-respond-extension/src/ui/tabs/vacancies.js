@@ -60,7 +60,7 @@ export function renderStatsValues() {
   const s = panelState.stats;
   const el = (id) => refs.shadowRoot?.getElementById(id);
   const applied = s.appliedToday || 0;
-  const limit = s.dailyLimit || 200;
+  const limit = panelState.settings.dailyLimit || 200;
   const set = (id, val) => { const e = el(id); if (e) e.textContent = val; };
 
   set('sv-applied', applied);
