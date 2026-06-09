@@ -5,6 +5,35 @@
 
 ---
 
+## [1.3.0] — 2026-06-09
+
+### Исправлено
+- **Критический баг: 8 из 11 полей резюме не парсились** на Magritte-страницах
+  - Причина: селекторы использовали CSS-классы, хэшируемые Magritte при каждом деплое
+  - Результат: gender, age, address, specialization, skills, experience, education, languages — все ✗
+  - Только title, salary и skill-level-3 находились
+
+### Переписано
+- **`parseResume()` — полностью новая стратегия парсинга (Magritte-safe)**:
+  - **Автообнаружение секций** по тексту h2/h3 заголовков ("Опыт работы", "Образование" и т.д.)
+  - Не зависит от конкретных `data-qa` или CSS-классов — работает при любой версии Magritte
+  - Gender/age/address — парсинг из текстового содержимого рядом с h1
+  - Experience — поиск по ссылкам `/employer/`, тегам b/strong, паттернам дат
+  - Education — поиск по ссылкам и тегам b/strong внутри секции
+  - Skills — комбинированный поиск: `data-qa="skills-table"` + заголовок "Навыки"
+  - Languages — bloko-tag внутри секции с заголовком "Языки"
+- **`HH_SELECTORS`** — полная чистка от Magritte-хэшированных CSS-классов:
+  - Убраны: `.resume-block__title-text`, `.resume-block__salary`, `h1.bloko-header-section-1`,
+    `h2.bloko-header-1`, `.applicant-resumes__resume`, `.resume-block-item`,
+    `.vacancy-serp-item__compensation`, `.vacancy-description`, `.vacancy-response-popup`,
+    `textarea.bloko-textarea`, `button.bloko-button_primary`, `.bloko-tag__section`
+  - Убраны из `parseResume()`: `.bloko-text_strong`, `.bloko-text`, `[class*="strong"]`,
+    `[class*="description"]`, `[class*="experience"]` — все Magritte-хэшированные
+  - Заменены на: `b, strong, p` + `data-qa` атрибуты (стабильные)
+  - Внутренние селекторы опыта/образования: `b/strong` вместо `.bloko-text_strong`
+
+---
+
 ## [1.2.0] — 2026-06-09
 
 ### Исправлено
