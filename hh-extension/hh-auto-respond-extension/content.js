@@ -532,6 +532,50 @@ function diagnoseResumeDOM() {
   });
   console.groupEnd();
 
+  // 7. Детальный дамп EXPERIENCE блока
+  console.group('%c[HH-AR][DIAG] Experience block inner structure:', 'color:#ef4444;font-weight:bold');
+  const expCard = document.querySelector('[data-qa="resume-list-card-experience"]');
+  if (expCard) {
+    console.log('  experienceBlock FOUND, children:', expCard.children.length);
+    // Все data-qa внутри
+    const expQa = expCard.querySelectorAll('[data-qa]');
+    expQa.forEach((el, i) => {
+      console.log('  expQa[' + i + ']:', el.getAttribute('data-qa'), '| tag:', el.tagName, '| text:', (el.textContent || '').trim().substring(0, 100));
+    });
+    // Прямые дочерние элементы (1 уровень)
+    Array.from(expCard.children).forEach((child, i) => {
+      const qa = child.getAttribute('data-qa') || '(no data-qa)';
+      const tag = child.tagName;
+      const text = (child.textContent || '').trim().substring(0, 150);
+      const subQa = Array.from(child.querySelectorAll('[data-qa]')).map(e => e.getAttribute('data-qa'));
+      console.log('  child[' + i + ']:', { tag, qa, text, subDataQa: subQa });
+    });
+  } else {
+    console.log('  experienceBlock NOT FOUND');
+  }
+  console.groupEnd();
+
+  // 8. Детальный дамп EDUCATION блока
+  console.group('%c[HH-AR][DIAG] Education block inner structure:', 'color:#ef4444;font-weight:bold');
+  const eduCard = document.querySelector('[data-qa="resume-list-card-education"]');
+  if (eduCard) {
+    console.log('  educationBlock FOUND, children:', eduCard.children.length);
+    const eduQa = eduCard.querySelectorAll('[data-qa]');
+    eduQa.forEach((el, i) => {
+      console.log('  eduQa[' + i + ']:', el.getAttribute('data-qa'), '| tag:', el.tagName, '| text:', (el.textContent || '').trim().substring(0, 100));
+    });
+    Array.from(eduCard.children).forEach((child, i) => {
+      const qa = child.getAttribute('data-qa') || '(no data-qa)';
+      const tag = child.tagName;
+      const text = (child.textContent || '').trim().substring(0, 150);
+      const subQa = Array.from(child.querySelectorAll('[data-qa]')).map(e => e.getAttribute('data-qa'));
+      console.log('  child[' + i + ']:', { tag, qa, text, subDataQa: subQa });
+    });
+  } else {
+    console.log('  educationBlock NOT FOUND');
+  }
+  console.groupEnd();
+
   console.log('%c[HH-AR][DIAG] ═══ END DUMP ═══', 'color:#2964FF;font-weight:bold');
   console.log('%c[HH-AR][DIAG] Скопируй ВЕСЬ вывод из консоли и отправь мне.', 'color:#ef4444;font-size:13px');
 }
@@ -692,67 +736,134 @@ function parseResume() {
   // ═════════════════════════════════════════
   // ОПЫТ РАБОТЫ (Experience)
   // data-qa="resume-list-card-experience" — контейнер секции
-  // Внутри: подблоки по структуре, ссылки на /employer/
+  // Стратегия: data-qa карточек компаний внутри блока.
+  // Известные data-qa: profile-experience-company-card (запись работы),
+  //   edit-experience-button-* (кнопки редактирования = количество записей).
+  // Fallback: структура без data-qa — ищем employer-ссылки.
   // ═════════════════════════════════════════
   const expCard = document.querySelector('[data-qa="resume-list-card-experience"]');
   if (expCard) {
     resume._debug.found.push('experienceBlock (data-qa="resume-list-card-experience")');
 
-    // Ищем записи опыта — каждый опыт это отдельный div/data-qa блок
     const expEntries = [];
-    // Способ 1: ищем edit-experience-button-* чтобы определить количество записей
-    const editBtns = document.querySelectorAll('[data-qa^="edit-experience-button-"]');
-    const expCount = editBtns.length;
-    resumeLog.info('Experience edit buttons found: ' + expCount);
 
-    // Способ 2: ищем дочерние div-контейнеры с employer-ссылками
-    const processed = new Set();
-    const allDivs = expCard.querySelectorAll('div');
-    for (const item of allDivs) {
-      if (processed.has(item)) continue;
-      const job = {};
-      // Компания — ссылка на /employer/
-      const companyEl = item.querySelector('a[href*="/employer/"]');
-      if (companyEl) job.company = (companyEl.textContent || '').trim();
-      // Позиция
-      if (!job.position) {
-        const strongEl = item.querySelector('b, strong, [data-qa*="title"], [data-qa*="position"]');
-        if (strongEl && strongEl !== companyEl) job.position = (strongEl.textContent || '').trim();
-      }
-      // Длительность
-      if (!job.duration) {
-        const spans = item.querySelectorAll('span, div');
-        for (const sp of spans) {
-          const t = (sp.textContent || '').trim();
-          if (/\d{4}\s*[\u2014\-]\s*\d{4}/.test(t) || /\d{4}\s*[\u2014\-]\s*по наст/.test(t) ||
-              /(?:январ|феврал|март|апрел|ма[йя]|июн|июл|август|сентяб|октяб|нояб|декаб)/i.test(t)) {
+    // Способ 1: data-qa карточек опыта
+    const companyCards = expCard.querySelectorAll('[data-qa="profile-experience-company-card"]');
+    if (companyCards.length > 0) {
+      resumeLog.info('Experience: found ' + companyCards.length + ' company-card data-qa elements');
+      companyCards.forEach(card => {
+        const job = {};
+        // Компания: ищем data-qa с employer или ссылку
+        const employerEl = card.querySelector('[data-qa*="employer"], [data-qa*="company"]');
+        if (employerEl) {
+          // Берём только прямое текстовое содержимое, без детей
+          const links = employerEl.querySelectorAll('a');
+          if (links.length > 0) {
+            job.company = (links[0].textContent || '').trim();
+          } else {
+            job.company = (employerEl.textContent || '').trim();
+          }
+        }
+        // Позиция
+        const posEl = card.querySelector('[data-qa*="position"], [data-qa*="title"]');
+        if (posEl) job.position = (posEl.textContent || '').trim();
+        // Длительность — ищем текст с годами/датами
+        const allTextEls = card.querySelectorAll('span, div, p');
+        for (const el of allTextEls) {
+          const t = (el.textContent || '').trim();
+          if (t.length < 80 && (/\d{4}\s*[\u2014\-]\s*\d{4}/.test(t) || /\d{4}\s*[\u2014\-]\s*по наст/.test(t) ||
+              /(?:январ|феврал|март|апрел|ма[йя]|июн|июл|август|сентяб|октяб|нояб|декаб)/i.test(t))) {
             job.duration = t;
             break;
           }
         }
-      }
-      // Описание
-      if (!job.description) {
-        const descEl = item.querySelector('p, [data-qa*="description"]');
+        // Описание
+        const descEl = card.querySelector('[data-qa*="description"], p');
         if (descEl) {
           const dt = (descEl.textContent || '').trim();
           if (dt.length > 30) job.description = dt;
         }
-      }
-      // Ещё раз проверяем employer links
-      if (!job.company) {
-        const links = item.querySelectorAll('a');
+        // Fallback для компании: ссылка на /employer/
+        if (!job.company) {
+          const empLink = card.querySelector('a[href*="/employer/"]');
+          if (empLink) job.company = (empLink.textContent || '').trim();
+        }
+        // Fallback для позиции: первая ссылка (не employer)
+        if (!job.position) {
+          const links = card.querySelectorAll('a');
+          for (const a of links) {
+            const href = a.getAttribute('href') || '';
+            if (!href.includes('/employer/')) {
+              job.position = (a.textContent || '').trim();
+              break;
+            }
+          }
+        }
+        if (job.company || job.position) expEntries.push(job);
+      });
+    }
+
+    // Способ 2: если company-card не нашли — ищем по edit-кнопкам
+    if (expEntries.length === 0) {
+      const editBtns = document.querySelectorAll('[data-qa^="edit-experience-button-"]');
+      resumeLog.info('Experience: fallback to edit buttons, found ' + editBtns.length);
+      // Каждая edit-кнопка соответствует одной записи опыта.
+      // Ищем родительский контейнер каждой кнопки.
+      editBtns.forEach(btn => {
+        // Поднимаемся к ближайшему контейнеру записи
+        let entry = btn.parentElement;
+        for (let depth = 0; depth < 5 && entry && entry !== expCard; depth++) {
+          entry = entry.parentElement;
+        }
+        if (!entry || entry === expCard) {
+          // Берём parent кнопки как ближайший контейнер
+          entry = btn.parentElement;
+          for (let depth = 0; depth < 3 && entry; depth++) {
+            if (entry.parentElement === expCard || entry === expCard) break;
+            entry = entry.parentElement;
+          }
+        }
+        if (!entry) return;
+        const job = {};
+        const companyEl = entry.querySelector('a[href*="/employer/"]');
+        if (companyEl) job.company = (companyEl.textContent || '').trim();
+        const posEl = entry.querySelector('[data-qa*="position"], [data-qa*="title"]');
+        if (posEl) job.position = (posEl.textContent || '').trim();
+        const spans = entry.querySelectorAll('span, div');
+        for (const sp of spans) {
+          const t = (sp.textContent || '').trim();
+          if (t.length < 80 && (/\d{4}\s*[\u2014\-]\s*\d{4}/.test(t) || /\d{4}\s*[\u2014\-]\s*по наст/.test(t) ||
+              /(?:январ|феврал|март|апрел|ма[йя]|июн|июл|август|сентяб|октяб|нояб|декаб)/i.test(t))) {
+            job.duration = t; break;
+          }
+        }
+        if (job.company || job.position) expEntries.push(job);
+      });
+    }
+
+    // Способ 3: общий fallback — дочерние контейнеры с employer-ссылками
+    if (expEntries.length === 0) {
+      resumeLog.info('Experience: fallback to employer links in children');
+      const children = expCard.children;
+      for (const child of children) {
+        const job = {};
+        const links = child.querySelectorAll('a');
         for (const a of links) {
           const href = a.getAttribute('href') || '';
           if (href.includes('/employer/')) {
             job.company = (a.textContent || '').trim();
-            break;
+          } else if (href.includes('/vacancy/') || href.includes('/employer/')) {
+            job.position = (a.textContent || '').trim();
           }
         }
-      }
-      if (job.company || job.position) {
-        expEntries.push(job);
-        processed.add(item);
+        // Дата из прямых детей
+        for (const el of child.querySelectorAll('span, div')) {
+          const t = (el.textContent || '').trim();
+          if (t.length < 80 && (/\d{4}\s*[\u2014\-]\s*\d{4}/.test(t) || /\d{4}\s*[\u2014\-]\s*по наст/.test(t))) {
+            job.duration = t; break;
+          }
+        }
+        if (job.company || job.position) expEntries.push(job);
       }
     }
 
@@ -769,31 +880,93 @@ function parseResume() {
   // ═════════════════════════════════════════
   // ОБРАЗОВАНИЕ (Education)
   // data-qa="resume-list-card-education" — контейнер
-  // [data-qa^="resume-list-card-education-item-"] — отдельные записи
+  // Стратегия: перебираем ВСЕ data-qa внутри блока,
+  // затем прямых детей, извлекаем текст + ссылки.
+  // НЕ полагаемся на конкретный data-qa шаблон для записей.
   // ═════════════════════════════════════════
   const eduCard = document.querySelector('[data-qa="resume-list-card-education"]');
   if (eduCard) {
     resume._debug.found.push('educationBlock (data-qa="resume-list-card-education")');
 
     const eduEntries = [];
-    // Ищем записи образования по data-qa="resume-list-card-education-item-*"
-    const eduItems = eduCard.querySelectorAll('[data-qa^="resume-list-card-education-item-"]');
 
-    if (eduItems.length > 0) {
-      eduItems.forEach(item => {
+    // Способ 1: ищем data-qa с "education" внутри eduCard (кроме самого контейнера)
+    const eduInnerQa = eduCard.querySelectorAll('[data-qa*="education"]');
+    const eduContainers = [];
+    eduInnerQa.forEach(el => {
+      // Пропускаем сам контейнер секции
+      if (el === eduCard) return;
+      // Пропускаем дубли (если элемент уже внутри другого найденного)
+      if (eduContainers.some(c => c.contains(el))) return;
+      eduContainers.push(el);
+    });
+    resumeLog.info('Education: found ' + eduContainers.length + ' inner data-qa elements');
+
+    eduContainers.forEach(item => {
+      const edu = {};
+      // Название учебного заведения — ссылка или data-qa с title
+      const linkEl = item.querySelector('a');
+      if (linkEl) edu.name = (linkEl.textContent || '').trim();
+      if (!edu.name) {
+        const titleEl = item.querySelector('[data-qa*="title"], [data-qa*="name"]');
+        if (titleEl) edu.name = (titleEl.textContent || '').trim();
+      }
+      // Fallback: берём первый существенный текст
+      if (!edu.name) {
+        const textEls = item.querySelectorAll('span, div, p');
+        for (const el of textEls) {
+          const t = (el.textContent || '').trim();
+          // Название вуза обычно содержит кириллицу и > 3 символов, без цифр
+          if (t.length > 3 && /[А-Яа-яЁё]/.test(t) && !/^\d/.test(t) && !/\d{4}/.test(t)) {
+            edu.name = t;
+            break;
+          }
+        }
+      }
+      // Год окончания
+      const spans = item.querySelectorAll('span, div');
+      for (const sp of spans) {
+        const t = (sp.textContent || '').trim();
+        if (/^\d{4}$/.test(t) || (/\d{4}/.test(t) && t.length < 15)) {
+          edu.year = t;
+          break;
+        }
+      }
+      // Факультет/специальность — ищем текст с ключевыми словами
+      const descEl = item.querySelector('[data-qa*="description"], [data-qa*="faculty"], p');
+      if (descEl) {
+        const dt = (descEl.textContent || '').trim();
+        if (dt.length > 5 && dt !== edu.name && dt !== edu.year) {
+          edu.description = dt;
+        }
+      }
+      if (edu.name && edu.name.length > 2) {
+        eduEntries.push(edu);
+      }
+    });
+
+    // Способ 2: если data-qa подход не дал результатов — прямые дети eduCard
+    if (eduEntries.length === 0) {
+      resumeLog.info('Education: fallback to direct children of eduCard');
+      Array.from(eduCard.children).forEach(child => {
         const edu = {};
-        // Название учебного заведения
-        const linkEl = item.querySelector('a');
+        const linkEl = child.querySelector('a');
         if (linkEl) edu.name = (linkEl.textContent || '').trim();
         if (!edu.name) {
-          const strongEl = item.querySelector('b, strong, [data-qa*="title"]');
-          if (strongEl) edu.name = (strongEl.textContent || '').trim();
+          // Первый существенный текстовый элемент
+          const textEls = child.querySelectorAll('span, div, p');
+          for (const el of textEls) {
+            const t = (el.textContent || '').trim();
+            if (t.length > 3 && /[А-Яа-яЁё]/.test(t) && !/^\d/.test(t) && !/\d{4}/.test(t)) {
+              edu.name = t;
+              break;
+            }
+          }
         }
-        // Год окончания
-        const spans = item.querySelectorAll('span, div');
+        const spans = child.querySelectorAll('span, div');
         for (const sp of spans) {
           const t = (sp.textContent || '').trim();
-          if (/\d{4}/.test(t) && t.length < 30) {
+          if (/^\d{4}$/.test(t) || (/\d{4}/.test(t) && t.length < 15)) {
             edu.year = t;
             break;
           }
@@ -802,29 +975,23 @@ function parseResume() {
           eduEntries.push(edu);
         }
       });
-    } else {
-      // Fallback: все div внутри education card
-      const eduDivs = eduCard.querySelectorAll('div');
-      const eduProcessed = new Set();
-      eduDivs.forEach(item => {
-        if (eduProcessed.has(item)) return;
-        const edu = {};
-        const linkEl = item.querySelector('a');
-        if (linkEl) edu.name = (linkEl.textContent || '').trim();
-        if (!edu.name) {
-          const strongEl = item.querySelector('b, strong, [data-qa*="title"]');
-          if (strongEl) edu.name = (strongEl.textContent || '').trim();
+    }
+
+    // Способ 3: если всё ещё пусто — берём весь текст eduCard и парсим
+    if (eduEntries.length === 0) {
+      resumeLog.info('Education: fallback to full text scan');
+      const fullText = (eduCard.textContent || '').trim();
+      // Ищем pattern: «Название ВУЗа ... год»
+      const lines = fullText.split(/[\n\r]+/).map(l => l.trim()).filter(l => l.length > 3);
+      for (const line of lines) {
+        if (/[А-Яа-яЁё]{3,}/.test(line) && line.length < 200) {
+          const yearMatch = line.match(/(\d{4})/);
+          eduEntries.push({
+            name: line.replace(/\d{4}/g, '').trim().substring(0, 100),
+            year: yearMatch ? yearMatch[1] : ''
+          });
         }
-        const spans = item.querySelectorAll('span, div');
-        for (const sp of spans) {
-          const t = (sp.textContent || '').trim();
-          if (/\d{4}/.test(t) && t.length < 30) { edu.year = t; break; }
-        }
-        if (edu.name && edu.name.length > 2) {
-          eduEntries.push(edu);
-          eduProcessed.add(item);
-        }
-      });
+      }
     }
 
     resume.education = eduEntries;
