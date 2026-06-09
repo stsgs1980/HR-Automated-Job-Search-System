@@ -716,14 +716,14 @@ function parseResume() {
         resume.skills.push(text);
       }
     });
-    // Fallback: bloko-tag внутри skills-card
-    if (resume.skills.length === 0) {
-      const blokoTags = skillsCard.querySelectorAll('.bloko-tag__text');
-      blokoTags.forEach(tag => {
-        const text = (tag.textContent || '').trim();
-        if (text && text.length > 0 && text.length < 100) resume.skills.push(text);
-      });
-    }
+    // Fallback: bloko-tag внутри skills-card (дополняет, не заменяет)
+    const blokoTags = skillsCard.querySelectorAll('.bloko-tag__text');
+    blokoTags.forEach(tag => {
+      const text = (tag.textContent || '').trim();
+      if (text && text.length > 0 && text.length < 100 && !resume.skills.includes(text)) {
+        resume.skills.push(text);
+      }
+    });
   } else {
     resume._debug.missing.push('skillsBlock (no data-qa="skills-card")');
   }
@@ -834,74 +834,49 @@ function parseResume() {
 
     const eduEntries = [];
 
-    // Способ 1: ищем data-qa с "education" внутри eduCard (кроме самого контейнера)
-    const eduInnerQa = eduCard.querySelectorAll('[data-qa*="education"]');
-    const eduContainers = [];
-    eduInnerQa.forEach(el => {
-      // Пропускаем сам контейнер секции
-      if (el === eduCard) return;
-      // Пропускаем дубли (если элемент уже внутри другого найденного)
-      if (eduContainers.some(c => c.contains(el))) return;
-      eduContainers.push(el);
-    });
-    resumeLog.info('Education: found ' + eduContainers.length + ' inner data-qa elements');
+    // Способ 1: cell-based структура (как в experience)
+    // eduCard > children: каждая запись образования.
+    // Фильтруем UI-текст (заголовки, кнопки).
+    const eduUiTexts = /^(посмотреть всё|редактировать|образование|доп\.? образование|высшее|среднее|среднее специальное)$/i;
+    // Ищем все cell-left-side внутри eduCard (как в experience)
+    const eduCells = eduCard.querySelectorAll('[data-qa="cell-left-side"]');
+    resumeLog.info('Education: found ' + eduCells.length + ' cell-left-side elements');
 
-    eduContainers.forEach(item => {
+    eduCells.forEach(cell => {
       const edu = {};
-      // Название учебного заведения — ссылка или data-qa с title
-      const linkEl = item.querySelector('a');
-      if (linkEl) edu.name = (linkEl.textContent || '').trim();
-      if (!edu.name) {
-        const titleEl = item.querySelector('[data-qa*="title"], [data-qa*="name"]');
-        if (titleEl) edu.name = (titleEl.textContent || '').trim();
-      }
-      // Fallback: берём первый существенный текст
-      if (!edu.name) {
-        const textEls = item.querySelectorAll('span, div, p');
-        for (const el of textEls) {
-          const t = (el.textContent || '').trim();
-          // Название вуза обычно содержит кириллицу и > 3 символов, без цифр
-          if (t.length > 3 && /[А-Яа-яЁё]/.test(t) && !/^\d/.test(t) && !/\d{4}/.test(t)) {
-            edu.name = t;
-            break;
-          }
+      const cellTexts = cell.querySelectorAll('[data-qa="cell-text-content"]');
+      cellTexts.forEach(ct => {
+        const t = (ct.textContent || '').trim();
+        if (!t || t.length < 2) return;
+        if (eduUiTexts.test(t)) return;
+        if (!edu.name) {
+          edu.name = t;
+        } else if (!edu.description) {
+          edu.description = t;
+        } else if (!edu.year && /\d{4}/.test(t)) {
+          edu.year = t.match(/\d{4}/)?.[0] || t;
         }
-      }
-      // Год окончания
-      const spans = item.querySelectorAll('span, div');
-      for (const sp of spans) {
-        const t = (sp.textContent || '').trim();
-        if (/^\d{4}$/.test(t) || (/\d{4}/.test(t) && t.length < 15)) {
-          edu.year = t;
-          break;
-        }
-      }
-      // Факультет/специальность — ищем текст с ключевыми словами
-      const descEl = item.querySelector('[data-qa*="description"], [data-qa*="faculty"], p');
-      if (descEl) {
-        const dt = (descEl.textContent || '').trim();
-        if (dt.length > 5 && dt !== edu.name && dt !== edu.year) {
-          edu.description = dt;
-        }
-      }
-      if (edu.name && edu.name.length > 2) {
+      });
+      if (edu.name && !eduUiTexts.test(edu.name) && edu.name.length > 3) {
         eduEntries.push(edu);
       }
     });
 
-    // Способ 2: если data-qa подход не дал результатов — прямые дети eduCard
+    // Способ 2: если cell-left-side не дали результатов — прямые дети eduCard
     if (eduEntries.length === 0) {
       resumeLog.info('Education: fallback to direct children of eduCard');
       Array.from(eduCard.children).forEach(child => {
         const edu = {};
         const linkEl = child.querySelector('a');
-        if (linkEl) edu.name = (linkEl.textContent || '').trim();
+        if (linkEl) {
+          const t = (linkEl.textContent || '').trim();
+          if (!eduUiTexts.test(t)) edu.name = t;
+        }
         if (!edu.name) {
-          // Первый существенный текстовый элемент
           const textEls = child.querySelectorAll('span, div, p');
           for (const el of textEls) {
             const t = (el.textContent || '').trim();
-            if (t.length > 3 && /[А-Яа-яЁё]/.test(t) && !/^\d/.test(t) && !/\d{4}/.test(t)) {
+            if (t.length > 3 && /[А-Яа-яЁё]/.test(t) && !/^\d/.test(t) && !/\d{4}/.test(t) && !eduUiTexts.test(t)) {
               edu.name = t;
               break;
             }
@@ -915,7 +890,7 @@ function parseResume() {
             break;
           }
         }
-        if (edu.name && edu.name.length > 2) {
+        if (edu.name && !eduUiTexts.test(edu.name) && edu.name.length > 2) {
           eduEntries.push(edu);
         }
       });
