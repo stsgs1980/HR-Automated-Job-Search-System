@@ -357,164 +357,50 @@
     return vacancies;
   }
 
-  // src/parsers/resume-detail.js
+  // src/parsers/resume-detail/parse.js
   var resumeLog = createLogger("Resume");
-  function getResumePageType() {
-    const path = window.location.pathname;
-    if (/\/resume\/[a-f0-9]+/.test(path)) return "resume";
-    if (path.includes("/applicant/resumes")) return "resume-list";
-    return "other";
-  }
-  async function expandHiddenSections() {
-    const expandButtons = document.querySelectorAll('[data-qa="profile-experience-viewAll"], button');
-    const clicked = [];
-    expandButtons.forEach((btn) => {
-      const text = (btn.textContent || "").trim().toLowerCase();
-      if (text.includes("\u043F\u043E\u0441\u043C\u043E\u0442\u0440\u0435\u0442\u044C \u0432\u0441\u0451") || text.includes("\u043F\u043E\u043A\u0430\u0437\u0430\u0442\u044C \u0432\u0441\u0435") || text.includes("\u043F\u043E\u043A\u0430\u0437\u0430\u0442\u044C \u0435\u0449\u0451") || text.includes("\u043F\u043E\u0441\u043C\u043E\u0442\u0440\u0435\u0442\u044C \u0432\u0441\u0435") || text.includes("\u0440\u0430\u0437\u0432\u0435\u0440\u043D\u0443\u0442\u044C") || text.includes("expand")) {
-        try {
-          btn.click();
-          clicked.push(text);
-        } catch (e) {
+  function parseCompanyCard(card) {
+    const job = {};
+    const cellLeft = card.querySelector('[data-qa="cell-left-side"]');
+    if (cellLeft) {
+      const cellTexts = cellLeft.querySelectorAll('[data-qa="cell-text-content"]');
+      if (cellTexts.length >= 1) {
+        job.company = (cellTexts[0].textContent || "").trim();
+      }
+      if (cellTexts.length >= 2) {
+        job.duration = (cellTexts[1].textContent || "").trim();
+      }
+    }
+    const stepContent = card.querySelector('[data-qa="magritte-stepper-step-content"]');
+    if (stepContent) {
+      const stepCellLeft = stepContent.querySelector('[data-qa="cell-left-side"]');
+      if (stepCellLeft) {
+        const stepTexts = stepCellLeft.querySelectorAll('[data-qa="cell-text-content"]');
+        if (stepTexts.length >= 1) {
+          job.position = (stepTexts[0].textContent || "").trim();
+        }
+        if (stepTexts.length >= 2) {
+          let rawPeriod = (stepTexts[1].textContent || "").trim();
+          rawPeriod = rawPeriod.replace(/\s*\(\d[^)]+\)$/, "").trim();
+          job.period = rawPeriod;
         }
       }
-    });
-    if (clicked.length > 0) {
-      resumeLog.info("Expanded hidden sections: " + clicked.join(", "));
-      await new Promise((r) => setTimeout(r, 1500));
-    }
-  }
-  function diagnoseResumeDOM() {
-    console.log("%c[HH-AR][DIAG] \u2550\u2550\u2550 DOM DIAGNOSTIC DUMP \u2550\u2550\u2550", "color:#2964FF;font-weight:bold;font-size:14px");
-    console.log("[HH-AR][DIAG] URL:", window.location.href);
-    console.log("[HH-AR][DIAG] Page type:", getResumePageType());
-    const allQa = document.querySelectorAll("[data-qa]");
-    const qaMap = {};
-    allQa.forEach((el) => {
-      const qa = el.getAttribute("data-qa");
-      const tag = el.tagName.toLowerCase();
-      const text = (el.textContent || "").trim().substring(0, 80);
-      const key = qa;
-      if (!qaMap[key]) qaMap[key] = [];
-      qaMap[key].push({ tag, text: text || "(empty)", class: (el.className || "").toString().substring(0, 60) });
-    });
-    const groups = {};
-    Object.keys(qaMap).sort().forEach((qa) => {
-      const prefix = qa.split("__")[0].split("-")[0].split("_")[0];
-      if (!groups[prefix]) groups[prefix] = [];
-      groups[prefix].push(qa);
-    });
-    console.log("%c[HH-AR][DIAG] Total data-qa elements: " + allQa.length, "color:#22c55e");
-    console.log("%c[HH-AR][DIAG] Unique data-qa values: " + Object.keys(qaMap).length, "color:#22c55e");
-    console.group("%c[HH-AR][DIAG] All data-qa values:", "color:#2964FF");
-    console.table(Object.keys(qaMap).sort().map((qa) => ({
-      "data-qa": qa,
-      "count": qaMap[qa].length,
-      "tag": qaMap[qa][0].tag,
-      "sample_text": qaMap[qa][0].text,
-      "sample_class": qaMap[qa][0].class
-    })));
-    console.groupEnd();
-    console.group("%c[HH-AR][DIAG] Groups by prefix:", "color:#2964FF");
-    Object.keys(groups).sort().forEach((prefix) => {
-      console.log("%c  " + prefix + " (" + groups[prefix].length + "):", "color:#f59e0b", groups[prefix].join(", "));
-    });
-    console.groupEnd();
-    console.group('%c[HH-AR][DIAG] Resume blocks (.resume-block, [data-qa*="resume"]):', "color:#2964FF");
-    const resumeBlocks = document.querySelectorAll('[data-qa*="resume"], .resume-block, [class*="resume"]');
-    resumeBlocks.forEach((block, i) => {
-      const qa = block.getAttribute("data-qa") || "(no data-qa)";
-      const cls = (block.className || "").toString().substring(0, 100);
-      const text = (block.textContent || "").trim().substring(0, 120);
-      console.log("  Block #" + i + ":", { qa, cls, text });
-    });
-    console.groupEnd();
-    console.group('%c[HH-AR][DIAG] Bloko tags (.bloko-tag, [data-qa*="tag"]):', "color:#2964FF");
-    const tags = document.querySelectorAll('.bloko-tag, .bloko-tag__text, [data-qa*="tag"], [data-qa*="skill"]');
-    const tagTexts = [];
-    tags.forEach((tag) => {
-      const t = (tag.textContent || "").trim();
-      if (t && t.length < 100 && !tagTexts.includes(t)) {
-        tagTexts.push(t);
-        console.log("  Tag:", t, "| data-qa:", tag.getAttribute("data-qa") || "(none)", "| class:", (tag.className || "").toString().substring(0, 60));
+      const fullStepText = (stepContent.textContent || "").trim();
+      let desc = fullStepText;
+      const posText = job.position || "";
+      const periodText = job.period || "";
+      if (posText && desc.startsWith(posText)) {
+        desc = desc.substring(posText.length);
       }
-    });
-    console.log("  Total unique tags:", tagTexts.length);
-    console.groupEnd();
-    console.group("%c[HH-AR][DIAG] Selector check (resume selectors):", "color:#2964FF");
-    const resumeSelectorKeys = Object.keys(HH_SELECTORS).filter((k) => k.startsWith("resume"));
-    resumeSelectorKeys.forEach((key) => {
-      const sels = HH_SELECTORS[key];
-      let found = false;
-      for (const sel of sels) {
-        try {
-          const el = document.querySelector(sel);
-          if (el && document.body.contains(el)) {
-            console.log("%c  \u2713 " + key + " \u2192 " + sel, "color:#22c55e", "text:", (el.textContent || "").trim().substring(0, 60));
-            found = true;
-            break;
-          }
-        } catch (e) {
-        }
+      if (periodText && desc.startsWith(periodText)) {
+        desc = desc.substring(periodText.length);
       }
-      if (!found) {
-        console.log("%c  \u2717 " + key + " \u2192 none matched", "color:#ef4444", "tried:", sels);
+      desc = desc.trim();
+      if (desc.length > 20) {
+        job.description = desc;
       }
-    });
-    console.groupEnd();
-    console.group("%c[HH-AR][DIAG] Headings (h1-h3):", "color:#2964FF");
-    document.querySelectorAll("h1, h2, h3").forEach((h) => {
-      console.log("  " + h.tagName + ":", (h.textContent || "").trim().substring(0, 100), "| data-qa:", h.getAttribute("data-qa") || "(none)");
-    });
-    console.groupEnd();
-    console.group('%c[HH-AR][DIAG] Page sections (section, [data-qa*="block"]):', "color:#2964FF");
-    const sections = document.querySelectorAll('section, [data-qa*="block"], .bloko-column');
-    sections.forEach((s, i) => {
-      const qa = s.getAttribute("data-qa") || "(none)";
-      const heading = s.querySelector('h2, h3, [data-qa*="title"]');
-      const headingText = heading ? (heading.textContent || "").trim().substring(0, 80) : "(no heading)";
-      console.log("  Section #" + i + ":", qa, "| heading:", headingText);
-    });
-    console.groupEnd();
-    console.group("%c[HH-AR][DIAG] Experience block inner structure:", "color:#ef4444;font-weight:bold");
-    const expCard = document.querySelector('[data-qa="resume-list-card-experience"]');
-    if (expCard) {
-      console.log("  experienceBlock FOUND, children:", expCard.children.length);
-      const expQa = expCard.querySelectorAll("[data-qa]");
-      expQa.forEach((el, i) => {
-        console.log("  expQa[" + i + "]:", el.getAttribute("data-qa"), "| tag:", el.tagName, "| text:", (el.textContent || "").trim().substring(0, 100));
-      });
-      Array.from(expCard.children).forEach((child, i) => {
-        const qa = child.getAttribute("data-qa") || "(no data-qa)";
-        const tag = child.tagName;
-        const text = (child.textContent || "").trim().substring(0, 150);
-        const subQa = Array.from(child.querySelectorAll("[data-qa]")).map((e) => e.getAttribute("data-qa"));
-        console.log("  child[" + i + "]:", { tag, qa, text, subDataQa: subQa });
-      });
-    } else {
-      console.log("  experienceBlock NOT FOUND");
     }
-    console.groupEnd();
-    console.group("%c[HH-AR][DIAG] Education block inner structure:", "color:#ef4444;font-weight:bold");
-    const eduCard = document.querySelector('[data-qa="resume-list-card-education"]');
-    if (eduCard) {
-      console.log("  educationBlock FOUND, children:", eduCard.children.length);
-      const eduQa = eduCard.querySelectorAll("[data-qa]");
-      eduQa.forEach((el, i) => {
-        console.log("  eduQa[" + i + "]:", el.getAttribute("data-qa"), "| tag:", el.tagName, "| text:", (el.textContent || "").trim().substring(0, 100));
-      });
-      Array.from(eduCard.children).forEach((child, i) => {
-        const qa = child.getAttribute("data-qa") || "(no data-qa)";
-        const tag = child.tagName;
-        const text = (child.textContent || "").trim().substring(0, 150);
-        const subQa = Array.from(child.querySelectorAll("[data-qa]")).map((e) => e.getAttribute("data-qa"));
-        console.log("  child[" + i + "]:", { tag, qa, text, subDataQa: subQa });
-      });
-    } else {
-      console.log("  educationBlock NOT FOUND");
-    }
-    console.groupEnd();
-    console.log("%c[HH-AR][DIAG] \u2550\u2550\u2550 END DUMP \u2550\u2550\u2550", "color:#2964FF;font-weight:bold");
-    console.log("%c[HH-AR][DIAG] \u0421\u043A\u043E\u043F\u0438\u0440\u0443\u0439 \u0412\u0415\u0421\u042C \u0432\u044B\u0432\u043E\u0434 \u0438\u0437 \u043A\u043E\u043D\u0441\u043E\u043B\u0438 \u0438 \u043E\u0442\u043F\u0440\u0430\u0432\u044C \u043C\u043D\u0435.", "color:#ef4444;font-size:13px");
+    return job.company || job.position ? job : null;
   }
   function parseResume() {
     const t0 = performance.now();
@@ -648,49 +534,6 @@
       }
     });
     resumeLog.info("Experience: total company-cards on page: " + uniqueCards.length);
-    function parseCompanyCard(card) {
-      const job = {};
-      const cellLeft = card.querySelector('[data-qa="cell-left-side"]');
-      if (cellLeft) {
-        const cellTexts = cellLeft.querySelectorAll('[data-qa="cell-text-content"]');
-        if (cellTexts.length >= 1) {
-          job.company = (cellTexts[0].textContent || "").trim();
-        }
-        if (cellTexts.length >= 2) {
-          job.duration = (cellTexts[1].textContent || "").trim();
-        }
-      }
-      const stepContent = card.querySelector('[data-qa="magritte-stepper-step-content"]');
-      if (stepContent) {
-        const stepCellLeft = stepContent.querySelector('[data-qa="cell-left-side"]');
-        if (stepCellLeft) {
-          const stepTexts = stepCellLeft.querySelectorAll('[data-qa="cell-text-content"]');
-          if (stepTexts.length >= 1) {
-            job.position = (stepTexts[0].textContent || "").trim();
-          }
-          if (stepTexts.length >= 2) {
-            let rawPeriod = (stepTexts[1].textContent || "").trim();
-            rawPeriod = rawPeriod.replace(/\s*\(\d[^)]+\)$/, "").trim();
-            job.period = rawPeriod;
-          }
-        }
-        const fullStepText = (stepContent.textContent || "").trim();
-        let desc = fullStepText;
-        const posText = job.position || "";
-        const periodText = job.period || "";
-        if (posText && desc.startsWith(posText)) {
-          desc = desc.substring(posText.length);
-        }
-        if (periodText && desc.startsWith(periodText)) {
-          desc = desc.substring(periodText.length);
-        }
-        desc = desc.trim();
-        if (desc.length > 20) {
-          job.description = desc;
-        }
-      }
-      return job.company || job.position ? job : null;
-    }
     const expEntries = [];
     uniqueCards.forEach((card) => {
       const job = parseCompanyCard(card);
@@ -822,6 +665,168 @@
     }, null, 2));
     return resume;
   }
+
+  // src/parsers/resume-detail/diagnose.js
+  function diagnoseResumeDOM() {
+    console.log("%c[HH-AR][DIAG] \u2550\u2550\u2550 DOM DIAGNOSTIC DUMP \u2550\u2550\u2550", "color:#2964FF;font-weight:bold;font-size:14px");
+    console.log("[HH-AR][DIAG] URL:", window.location.href);
+    console.log("[HH-AR][DIAG] Page type:", getResumePageType());
+    const allQa = document.querySelectorAll("[data-qa]");
+    const qaMap = {};
+    allQa.forEach((el) => {
+      const qa = el.getAttribute("data-qa");
+      const tag = el.tagName.toLowerCase();
+      const text = (el.textContent || "").trim().substring(0, 80);
+      const key = qa;
+      if (!qaMap[key]) qaMap[key] = [];
+      qaMap[key].push({ tag, text: text || "(empty)", class: (el.className || "").toString().substring(0, 60) });
+    });
+    const groups = {};
+    Object.keys(qaMap).sort().forEach((qa) => {
+      const prefix = qa.split("__")[0].split("-")[0].split("_")[0];
+      if (!groups[prefix]) groups[prefix] = [];
+      groups[prefix].push(qa);
+    });
+    console.log("%c[HH-AR][DIAG] Total data-qa elements: " + allQa.length, "color:#22c55e");
+    console.log("%c[HH-AR][DIAG] Unique data-qa values: " + Object.keys(qaMap).length, "color:#22c55e");
+    console.group("%c[HH-AR][DIAG] All data-qa values:", "color:#2964FF");
+    console.table(Object.keys(qaMap).sort().map((qa) => ({
+      "data-qa": qa,
+      "count": qaMap[qa].length,
+      "tag": qaMap[qa][0].tag,
+      "sample_text": qaMap[qa][0].text,
+      "sample_class": qaMap[qa][0].class
+    })));
+    console.groupEnd();
+    console.group("%c[HH-AR][DIAG] Groups by prefix:", "color:#2964FF");
+    Object.keys(groups).sort().forEach((prefix) => {
+      console.log("%c  " + prefix + " (" + groups[prefix].length + "):", "color:#f59e0b", groups[prefix].join(", "));
+    });
+    console.groupEnd();
+    console.group('%c[HH-AR][DIAG] Resume blocks (.resume-block, [data-qa*="resume"]):', "color:#2964FF");
+    const resumeBlocks = document.querySelectorAll('[data-qa*="resume"], .resume-block, [class*="resume"]');
+    resumeBlocks.forEach((block, i) => {
+      const qa = block.getAttribute("data-qa") || "(no data-qa)";
+      const cls = (block.className || "").toString().substring(0, 100);
+      const text = (block.textContent || "").trim().substring(0, 120);
+      console.log("  Block #" + i + ":", { qa, cls, text });
+    });
+    console.groupEnd();
+    console.group('%c[HH-AR][DIAG] Bloko tags (.bloko-tag, [data-qa*="tag"]):', "color:#2964FF");
+    const tags = document.querySelectorAll('.bloko-tag, .bloko-tag__text, [data-qa*="tag"], [data-qa*="skill"]');
+    const tagTexts = [];
+    tags.forEach((tag) => {
+      const t = (tag.textContent || "").trim();
+      if (t && t.length < 100 && !tagTexts.includes(t)) {
+        tagTexts.push(t);
+        console.log("  Tag:", t, "| data-qa:", tag.getAttribute("data-qa") || "(none)", "| class:", (tag.className || "").toString().substring(0, 60));
+      }
+    });
+    console.log("  Total unique tags:", tagTexts.length);
+    console.groupEnd();
+    console.group("%c[HH-AR][DIAG] Selector check (resume selectors):", "color:#2964FF");
+    const resumeSelectorKeys = Object.keys(HH_SELECTORS).filter((k) => k.startsWith("resume"));
+    resumeSelectorKeys.forEach((key) => {
+      const sels = HH_SELECTORS[key];
+      let found = false;
+      for (const sel of sels) {
+        try {
+          const el = document.querySelector(sel);
+          if (el && document.body.contains(el)) {
+            console.log("%c  \u2713 " + key + " \u2192 " + sel, "color:#22c55e", "text:", (el.textContent || "").trim().substring(0, 60));
+            found = true;
+            break;
+          }
+        } catch (e) {
+        }
+      }
+      if (!found) {
+        console.log("%c  \u2717 " + key + " \u2192 none matched", "color:#ef4444", "tried:", sels);
+      }
+    });
+    console.groupEnd();
+    console.group("%c[HH-AR][DIAG] Headings (h1-h3):", "color:#2964FF");
+    document.querySelectorAll("h1, h2, h3").forEach((h) => {
+      console.log("  " + h.tagName + ":", (h.textContent || "").trim().substring(0, 100), "| data-qa:", h.getAttribute("data-qa") || "(none)");
+    });
+    console.groupEnd();
+    console.group('%c[HH-AR][DIAG] Page sections (section, [data-qa*="block"]):', "color:#2964FF");
+    const sections = document.querySelectorAll('section, [data-qa*="block"], .bloko-column');
+    sections.forEach((s, i) => {
+      const qa = s.getAttribute("data-qa") || "(none)";
+      const heading = s.querySelector('h2, h3, [data-qa*="title"]');
+      const headingText = heading ? (heading.textContent || "").trim().substring(0, 80) : "(no heading)";
+      console.log("  Section #" + i + ":", qa, "| heading:", headingText);
+    });
+    console.groupEnd();
+    console.group("%c[HH-AR][DIAG] Experience block inner structure:", "color:#ef4444;font-weight:bold");
+    const expCard = document.querySelector('[data-qa="resume-list-card-experience"]');
+    if (expCard) {
+      console.log("  experienceBlock FOUND, children:", expCard.children.length);
+      const expQa = expCard.querySelectorAll("[data-qa]");
+      expQa.forEach((el, i) => {
+        console.log("  expQa[" + i + "]:", el.getAttribute("data-qa"), "| tag:", el.tagName, "| text:", (el.textContent || "").trim().substring(0, 100));
+      });
+      Array.from(expCard.children).forEach((child, i) => {
+        const qa = child.getAttribute("data-qa") || "(no data-qa)";
+        const tag = child.tagName;
+        const text = (child.textContent || "").trim().substring(0, 150);
+        const subQa = Array.from(child.querySelectorAll("[data-qa]")).map((e) => e.getAttribute("data-qa"));
+        console.log("  child[" + i + "]:", { tag, qa, text, subDataQa: subQa });
+      });
+    } else {
+      console.log("  experienceBlock NOT FOUND");
+    }
+    console.groupEnd();
+    console.group("%c[HH-AR][DIAG] Education block inner structure:", "color:#ef4444;font-weight:bold");
+    const eduCard = document.querySelector('[data-qa="resume-list-card-education"]');
+    if (eduCard) {
+      console.log("  educationBlock FOUND, children:", eduCard.children.length);
+      const eduQa = eduCard.querySelectorAll("[data-qa]");
+      eduQa.forEach((el, i) => {
+        console.log("  eduQa[" + i + "]:", el.getAttribute("data-qa"), "| tag:", el.tagName, "| text:", (el.textContent || "").trim().substring(0, 100));
+      });
+      Array.from(eduCard.children).forEach((child, i) => {
+        const qa = child.getAttribute("data-qa") || "(no data-qa)";
+        const tag = child.tagName;
+        const text = (child.textContent || "").trim().substring(0, 150);
+        const subQa = Array.from(child.querySelectorAll("[data-qa]")).map((e) => e.getAttribute("data-qa"));
+        console.log("  child[" + i + "]:", { tag, qa, text, subDataQa: subQa });
+      });
+    } else {
+      console.log("  educationBlock NOT FOUND");
+    }
+    console.groupEnd();
+    console.log("%c[HH-AR][DIAG] \u2550\u2550\u2550 END DUMP \u2550\u2550\u2550", "color:#2964FF;font-weight:bold");
+    console.log("%c[HH-AR][DIAG] \u0421\u043A\u043E\u043F\u0438\u0440\u0443\u0439 \u0412\u0415\u0421\u042C \u0432\u044B\u0432\u043E\u0434 \u0438\u0437 \u043A\u043E\u043D\u0441\u043E\u043B\u0438 \u0438 \u043E\u0442\u043F\u0440\u0430\u0432\u044C \u043C\u043D\u0435.", "color:#ef4444;font-size:13px");
+  }
+
+  // src/parsers/resume-detail/index.js
+  var resumeLog2 = createLogger("Resume");
+  function getResumePageType() {
+    const path = window.location.pathname;
+    if (/\/resume\/[a-f0-9]+/.test(path)) return "resume";
+    if (path.includes("/applicant/resumes")) return "resume-list";
+    return "other";
+  }
+  async function expandHiddenSections() {
+    const expandButtons = document.querySelectorAll('[data-qa="profile-experience-viewAll"], button');
+    const clicked = [];
+    expandButtons.forEach((btn) => {
+      const text = (btn.textContent || "").trim().toLowerCase();
+      if (text.includes("\u043F\u043E\u0441\u043C\u043E\u0442\u0440\u0435\u0442\u044C \u0432\u0441\u0451") || text.includes("\u043F\u043E\u043A\u0430\u0437\u0430\u0442\u044C \u0432\u0441\u0435") || text.includes("\u043F\u043E\u043A\u0430\u0437\u0430\u0442\u044C \u0435\u0449\u0451") || text.includes("\u043F\u043E\u0441\u043C\u043E\u0442\u0440\u0435\u0442\u044C \u0432\u0441\u0435") || text.includes("\u0440\u0430\u0437\u0432\u0435\u0440\u043D\u0443\u0442\u044C") || text.includes("expand")) {
+        try {
+          btn.click();
+          clicked.push(text);
+        } catch (e) {
+        }
+      }
+    });
+    if (clicked.length > 0) {
+      resumeLog2.info("Expanded hidden sections: " + clicked.join(", "));
+      await new Promise((r) => setTimeout(r, 1500));
+    }
+  }
   function parseResumeList() {
     const resumes = [];
     const links = document.querySelectorAll('a[href*="/resume/"]');
@@ -837,7 +842,7 @@
         url: href.startsWith("http") ? href : "https://hh.ru" + href
       });
     });
-    resumeLog.info("Resume list: " + resumes.length + " resumes found");
+    resumeLog2.info("Resume list: " + resumes.length + " resumes found");
     return resumes;
   }
 
@@ -1223,16 +1228,7 @@
 `;
   }
 
-  // src/ui/html.js
-  function esc(s) {
-    if (!s) return "";
-    const d = document.createElement("div");
-    d.textContent = s;
-    return d.innerHTML;
-  }
-  function scoreClass(s) {
-    return s >= 70 ? "high" : s >= 40 ? "medium" : "low";
-  }
+  // src/ui/html/icons.js
   var ICONS = {
     briefcase: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>',
     file: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>',
@@ -1256,100 +1252,40 @@
     bubble: '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>',
     chevronDown: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#71717a" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>'
   };
-  function getSidebarHTML() {
-    return `
-    <div class="har-header">
-      <div style="display:flex;align-items:center;gap:10px;">
-        <div style="width:32px;height:32px;background:linear-gradient(135deg,#059669,#10B981);border-radius:10px;display:flex;align-items:center;justify-content:center;">
-          ${ICONS.briefcase.replace("currentColor", "#fff").replace('width="16" height="16"', 'width="16" height="16"')}
-        </div>
-        <div>
-          <div style="font-size:14px;font-weight:700;">HH Copilot</div>
-          <div style="font-size:11px;color:#71717a;display:flex;align-items:center;gap:4px;">
-            <span class="pulse-dot" style="width:6px;height:6px;background:#10B981;border-radius:50;display:inline-block;"></span>
-            \u041F\u0440\u043E\u0432\u0435\u0440\u044F\u0435\u043C \u0430\u0432\u0442\u043E\u0440\u0438\u0437\u0430\u0446\u0438\u044E...
-          </div>
-        </div>
-      </div>
-      <button class="har-close-btn" data-action="close-panel" aria-label="\u0417\u0430\u043A\u0440\u044B\u0442\u044C \u043F\u0430\u043D\u0435\u043B\u044C"
-        style="width:28px;height:28px;border-radius:8px;border:none;background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#71717a;">
-        ${ICONS.close}
-      </button>
+
+  // src/ui/html/helpers.js
+  function esc(s) {
+    if (!s) return "";
+    const d = document.createElement("div");
+    d.textContent = s;
+    return d.innerHTML;
+  }
+  function scoreClass(s) {
+    return s >= 70 ? "high" : s >= 40 ? "medium" : "low";
+  }
+  function settingRow(label, hint, type, id, value, suffix) {
+    return `<div style="display:flex;align-items:center;justify-content:space-between;">
+    <div>
+      <div style="font-size:12px;font-weight:500;">${label}</div>
+      ${hint ? `<div style="font-size:11px;color:#71717a;">${hint}</div>` : ""}
     </div>
-    <div class="har-content">
-      <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 32px;text-align:center;">
-        <div class="har-spinner"></div>
-        <h3 style="font-size:16px;font-weight:700;margin:16px 0 8px;">\u041F\u0440\u043E\u0432\u0435\u0440\u044F\u0435\u043C \u0430\u0432\u0442\u043E\u0440\u0438\u0437\u0430\u0446\u0438\u044E...</h3>
-        <p style="font-size:13px;color:#71717a;line-height:1.5;">\u041E\u043F\u0440\u0435\u0434\u0435\u043B\u044F\u0435\u043C \u0441\u0442\u0430\u0442\u0443\u0441 \u043D\u0430 hh.ru</p>
-      </div>
+    <div style="display:flex;align-items:center;gap:6px;">
+      <input type="${type}" id="${id}" value="${value}" style="width:64px;padding:6px 8px;border:1px solid #e4e4e7;border-radius:8px;font-size:12px;text-align:center;">
+      <span style="font-size:11px;color:#71717a;">${suffix}</span>
     </div>
-    <div class="har-footer">
-      <span style="font-size:11px;color:#71717a;">HH Copilot v1.7.2</span>
-      <div style="display:flex;align-items:center;gap:4px;">
-        <span style="width:6px;height:6px;background:#10B981;border-radius:50%;"></span>
-        <span style="font-size:11px;color:#71717a;">chrome.storage</span>
-      </div>
-    </div>`;
+  </div>`;
   }
-  function getLoggedInHTML(userName) {
-    const name = userName && userName !== "\u041F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u044C" ? esc(userName) : "";
-    return `
-    ${getHeaderHTML(name)}
-    ${getTabBarHTML()}
-    ${getOverviewSection()}
-    ${getResumeSection()}
-    ${getVacanciesSection()}
-    ${getNegotiationsSection()}
-    ${getSettingsSection()}
-    ${getStatsSection()}
-    <div class="har-footer">
-      <span style="font-size:11px;color:#71717a;">HH Copilot v1.7.2</span>
-      <div style="display:flex;align-items:center;gap:4px;">
-        <span style="width:6px;height:6px;background:#10B981;border-radius:50%;"></span>
-        <span style="font-size:11px;color:#71717a;">chrome.storage</span>
-      </div>
-    </div>`;
+  function settingToggle(label, hint, id, checked) {
+    return `<div style="display:flex;align-items:center;justify-content:space-between;">
+    <div>
+      <div style="font-size:12px;font-weight:500;">${label}</div>
+      ${hint ? `<div style="font-size:11px;color:#71717a;">${hint}</div>` : ""}
+    </div>
+    <label class="toggle"><input type="checkbox" id="${id}" ${checked ? "checked" : ""}><span class="slider"></span></label>
+  </div>`;
   }
-  function getHeaderHTML(userName) {
-    const name = userName ? esc(userName) : "";
-    const badgeLabel = name ? name : "\u041E\u043D\u043B\u0430\u0439\u043D";
-    return `
-    <div class="har-header">
-      <div style="display:flex;align-items:center;gap:10px;">
-        <div style="width:32px;height:32px;background:linear-gradient(135deg,#059669,#10B981);border-radius:10px;display:flex;align-items:center;justify-content:center;">
-          ${ICONS.briefcase.replace("currentColor", "#fff").replace('width="16" height="16"', 'width="16" height="16"')}
-        </div>
-        <div style="flex:1;">
-          <div style="font-size:14px;font-weight:700;">HH Copilot</div>
-          <div id="header-auth-status" style="font-size:11px;color:#71717a;display:flex;align-items:center;gap:4px;">
-            <span class="pulse-dot" style="width:6px;height:6px;background:#10B981;border-radius:50%;display:inline-block;"></span>
-            ${name ? name : "\u0410\u0432\u0442\u043E\u0440\u0438\u0437\u043E\u0432\u0430\u043D"}
-          </div>
-        </div>
-      </div>
-      <div id="authIndicator" class="badge badge-green" style="cursor:pointer;" title="\u041D\u0430\u0436\u043C\u0438\u0442\u0435 \u0434\u043B\u044F \u043F\u0440\u043E\u0432\u0435\u0440\u043A\u0438 \u0430\u0432\u0442\u043E\u0440\u0438\u0437\u0430\u0446\u0438\u0438">
-        <span style="width:5px;height:5px;background:#059669;border-radius:50%;display:inline-block;margin-right:4px;"></span>
-        ${badgeLabel}
-      </div>
-      <button class="har-close-btn" data-action="close-panel" aria-label="\u0417\u0430\u043A\u0440\u044B\u0442\u044C \u043F\u0430\u043D\u0435\u043B\u044C"
-        style="width:28px;height:28px;border-radius:8px;border:none;background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#71717a;">
-        ${ICONS.close}
-      </button>
-    </div>`;
-  }
-  function getTabBarHTML() {
-    const tabs = [
-      { id: "overview", label: "\u041E\u0431\u0437\u043E\u0440", icon: ICONS.briefcase },
-      { id: "resume", label: "\u0420\u0435\u0437\u044E\u043C\u0435", icon: ICONS.file },
-      { id: "vacancies", label: "\u0412\u0430\u043A\u0430\u043D\u0441\u0438\u0438", icon: ICONS.folder },
-      { id: "negotiations", label: "\u041F\u0435\u0440\u0435\u0433\u043E\u0432\u043E\u0440\u044B", icon: ICONS.chat },
-      { id: "settings", label: "\u041D\u0430\u0441\u0442\u0440\u043E\u0439\u043A\u0438", icon: ICONS.gear },
-      { id: "stats", label: "\u0421\u0442\u0430\u0442\u0438\u0441\u0442\u0438\u043A\u0430", icon: ICONS.chart }
-    ];
-    return `<div class="har-tabbar">${tabs.map(
-      (t) => `<button class="tab-btn ${t.id === "overview" ? "active" : ""}" data-tab="${t.id}">${t.icon}<span>${t.label}</span></button>`
-    ).join("")}</div>`;
-  }
+
+  // src/ui/html/tabs/overview.js
   function getOverviewSection() {
     return `<div class="tab-section active" id="tab-overview">
     ${overviewAuthCard()}
@@ -1506,6 +1442,8 @@
     </div>
   </div>`;
   }
+
+  // src/ui/html/tabs/resume.js
   function getResumeSection() {
     return `<div class="tab-section" id="tab-resume">
     <div class="card fade-in" style="margin-bottom:12px;">
@@ -1546,6 +1484,8 @@
     </div>
   </div>`;
   }
+
+  // src/ui/html/tabs/vacancies.js
   function getVacanciesSection() {
     return `<div class="tab-section" id="tab-vacancies">
     <div class="card fade-in" style="margin-bottom:12px;">
@@ -1608,6 +1548,8 @@
     </div>
   </div>`;
   }
+
+  // src/ui/html/tabs/negotiations.js
   function getNegotiationsSection() {
     return `<div class="tab-section" id="tab-negotiations">
     <div class="card fade-in" style="margin-bottom:12px;">
@@ -1668,6 +1610,8 @@
     </div>
   </div>`;
   }
+
+  // src/ui/html/tabs/settings.js
   function getSettingsSection() {
     return `<div class="tab-section" id="tab-settings">
     ${settingsRateLimits()}
@@ -1747,27 +1691,8 @@
     </div>
   </div>`;
   }
-  function settingRow(label, hint, type, id, value, suffix) {
-    return `<div style="display:flex;align-items:center;justify-content:space-between;">
-    <div>
-      <div style="font-size:12px;font-weight:500;">${label}</div>
-      ${hint ? `<div style="font-size:11px;color:#71717a;">${hint}</div>` : ""}
-    </div>
-    <div style="display:flex;align-items:center;gap:6px;">
-      <input type="${type}" id="${id}" value="${value}" style="width:64px;padding:6px 8px;border:1px solid #e4e4e7;border-radius:8px;font-size:12px;text-align:center;">
-      <span style="font-size:11px;color:#71717a;">${suffix}</span>
-    </div>
-  </div>`;
-  }
-  function settingToggle(label, hint, id, checked) {
-    return `<div style="display:flex;align-items:center;justify-content:space-between;">
-    <div>
-      <div style="font-size:12px;font-weight:500;">${label}</div>
-      ${hint ? `<div style="font-size:11px;color:#71717a;">${hint}</div>` : ""}
-    </div>
-    <label class="toggle"><input type="checkbox" id="${id}" ${checked ? "checked" : ""}><span class="slider"></span></label>
-  </div>`;
-  }
+
+  // src/ui/html/tabs/stats.js
   function getStatsSection() {
     return `<div class="tab-section" id="tab-stats">
     <div style="display:flex;gap:6px;margin-bottom:12px;">
@@ -1829,6 +1754,102 @@
       </div>
     </div>
   </div>`;
+  }
+
+  // src/ui/html/shell.js
+  function getSidebarHTML() {
+    return `
+    <div class="har-header">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div style="width:32px;height:32px;background:linear-gradient(135deg,#059669,#10B981);border-radius:10px;display:flex;align-items:center;justify-content:center;">
+          ${ICONS.briefcase.replace("currentColor", "#fff").replace('width="16" height="16"', 'width="16" height="16"')}
+        </div>
+        <div>
+          <div style="font-size:14px;font-weight:700;">HH Copilot</div>
+          <div style="font-size:11px;color:#71717a;display:flex;align-items:center;gap:4px;">
+            <span class="pulse-dot" style="width:6px;height:6px;background:#10B981;border-radius:50;display:inline-block;"></span>
+            \u041F\u0440\u043E\u0432\u0435\u0440\u044F\u0435\u043C \u0430\u0432\u0442\u043E\u0440\u0438\u0437\u0430\u0446\u0438\u044E...
+          </div>
+        </div>
+      </div>
+      <button class="har-close-btn" data-action="close-panel" aria-label="\u0417\u0430\u043A\u0440\u044B\u0442\u044C \u043F\u0430\u043D\u0435\u043B\u044C"
+        style="width:28px;height:28px;border-radius:8px;border:none;background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#71717a;">
+        ${ICONS.close}
+      </button>
+    </div>
+    <div class="har-content">
+      <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 32px;text-align:center;">
+        <div class="har-spinner"></div>
+        <h3 style="font-size:16px;font-weight:700;margin:16px 0 8px;">\u041F\u0440\u043E\u0432\u0435\u0440\u044F\u0435\u043C \u0430\u0432\u0442\u043E\u0440\u0438\u0437\u0430\u0446\u0438\u044E...</h3>
+        <p style="font-size:13px;color:#71717a;line-height:1.5;">\u041E\u043F\u0440\u0435\u0434\u0435\u043B\u044F\u0435\u043C \u0441\u0442\u0430\u0442\u0443\u0441 \u043D\u0430 hh.ru</p>
+      </div>
+    </div>
+    <div class="har-footer">
+      <span style="font-size:11px;color:#71717a;">HH Copilot v1.7.2</span>
+      <div style="display:flex;align-items:center;gap:4px;">
+        <span style="width:6px;height:6px;background:#10B981;border-radius:50%;"></span>
+        <span style="font-size:11px;color:#71717a;">chrome.storage</span>
+      </div>
+    </div>`;
+  }
+  function getLoggedInHTML(userName) {
+    const name = userName && userName !== "\u041F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u044C" ? esc(userName) : "";
+    return `
+    ${getHeaderHTML(name)}
+    ${getTabBarHTML()}
+    ${getOverviewSection()}
+    ${getResumeSection()}
+    ${getVacanciesSection()}
+    ${getNegotiationsSection()}
+    ${getSettingsSection()}
+    ${getStatsSection()}
+    <div class="har-footer">
+      <span style="font-size:11px;color:#71717a;">HH Copilot v1.7.2</span>
+      <div style="display:flex;align-items:center;gap:4px;">
+        <span style="width:6px;height:6px;background:#10B981;border-radius:50%;"></span>
+        <span style="font-size:11px;color:#71717a;">chrome.storage</span>
+      </div>
+    </div>`;
+  }
+  function getHeaderHTML(userName) {
+    const name = userName ? esc(userName) : "";
+    const badgeLabel = name ? name : "\u041E\u043D\u043B\u0430\u0439\u043D";
+    return `
+    <div class="har-header">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div style="width:32px;height:32px;background:linear-gradient(135deg,#059669,#10B981);border-radius:10px;display:flex;align-items:center;justify-content:center;">
+          ${ICONS.briefcase.replace("currentColor", "#fff").replace('width="16" height="16"', 'width="16" height="16"')}
+        </div>
+        <div style="flex:1;">
+          <div style="font-size:14px;font-weight:700;">HH Copilot</div>
+          <div id="header-auth-status" style="font-size:11px;color:#71717a;display:flex;align-items:center;gap:4px;">
+            <span class="pulse-dot" style="width:6px;height:6px;background:#10B981;border-radius:50%;display:inline-block;"></span>
+            ${name ? name : "\u0410\u0432\u0442\u043E\u0440\u0438\u0437\u043E\u0432\u0430\u043D"}
+          </div>
+        </div>
+      </div>
+      <div id="authIndicator" class="badge badge-green" style="cursor:pointer;" title="\u041D\u0430\u0436\u043C\u0438\u0442\u0435 \u0434\u043B\u044F \u043F\u0440\u043E\u0432\u0435\u0440\u043A\u0438 \u0430\u0432\u0442\u043E\u0440\u0438\u0437\u0430\u0446\u0438\u0438">
+        <span style="width:5px;height:5px;background:#059669;border-radius:50%;display:inline-block;margin-right:4px;"></span>
+        ${badgeLabel}
+      </div>
+      <button class="har-close-btn" data-action="close-panel" aria-label="\u0417\u0430\u043A\u0440\u044B\u0442\u044C \u043F\u0430\u043D\u0435\u043B\u044C"
+        style="width:28px;height:28px;border-radius:8px;border:none;background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#71717a;">
+        ${ICONS.close}
+      </button>
+    </div>`;
+  }
+  function getTabBarHTML() {
+    const tabs = [
+      { id: "overview", label: "\u041E\u0431\u0437\u043E\u0440", icon: ICONS.briefcase },
+      { id: "resume", label: "\u0420\u0435\u0437\u044E\u043C\u0435", icon: ICONS.file },
+      { id: "vacancies", label: "\u0412\u0430\u043A\u0430\u043D\u0441\u0438\u0438", icon: ICONS.folder },
+      { id: "negotiations", label: "\u041F\u0435\u0440\u0435\u0433\u043E\u0432\u043E\u0440\u044B", icon: ICONS.chat },
+      { id: "settings", label: "\u041D\u0430\u0441\u0442\u0440\u043E\u0439\u043A\u0438", icon: ICONS.gear },
+      { id: "stats", label: "\u0421\u0442\u0430\u0442\u0438\u0441\u0442\u0438\u043A\u0430", icon: ICONS.chart }
+    ];
+    return `<div class="har-tabbar">${tabs.map(
+      (t) => `<button class="tab-btn ${t.id === "overview" ? "active" : ""}" data-tab="${t.id}">${t.icon}<span>${t.label}</span></button>`
+    ).join("")}</div>`;
   }
 
   // src/ui/auth.js
@@ -2370,7 +2391,90 @@
     return forms[2];
   }
 
-  // src/ui/panel.js
+  // src/ui/panel/render.js
+  function renderSidebarContent() {
+    const content = refs.shadowRoot?.querySelector(".har-content");
+    if (!content) return;
+    if (panelState.isLoggedIn === null) {
+      content.innerHTML = `<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 32px;text-align:center;">
+      <div class="har-spinner"></div>
+      <h3 style="font-size:16px;font-weight:700;margin:16px 0 8px;">\u041F\u0440\u043E\u0432\u0435\u0440\u044F\u0435\u043C \u0430\u0432\u0442\u043E\u0440\u0438\u0437\u0430\u0446\u0438\u044E...</h3>
+      <p style="font-size:13px;color:#71717a;line-height:1.5;">\u041E\u043F\u0440\u0435\u0434\u0435\u043B\u044F\u0435\u043C \u0441\u0442\u0430\u0442\u0443\u0441 \u043D\u0430 hh.ru</p>
+    </div>`;
+      return;
+    }
+    if (!panelState.isLoggedIn) {
+      content.innerHTML = `<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 32px;text-align:center;">
+      <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+      <h3 style="font-size:16px;font-weight:700;margin:16px 0 8px;">\u0412\u043E\u0439\u0434\u0438\u0442\u0435 \u0432 hh.ru</h3>
+      <p style="font-size:13px;color:#71717a;line-height:1.5;margin-bottom:24px;">\u0420\u0430\u0441\u0448\u0438\u0440\u0435\u043D\u0438\u0435 \u0440\u0430\u0431\u043E\u0442\u0430\u0435\u0442 \u0441 \u0432\u0430\u0448\u0435\u0439 \u0443\u0447\u0451\u0442\u043D\u043E\u0439 \u0437\u0430\u043F\u0438\u0441\u044C\u044E.<br>\u0410\u0432\u0442\u043E\u0440\u0438\u0437\u0443\u0439\u0442\u0435\u0441\u044C \u0434\u043B\u044F \u0432\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u044F \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0437\u0430\u0446\u0438\u0438.</p>
+      <a href="https://hh.ru/account/login" target="_blank" class="btn btn-primary" style="text-decoration:none;">\u0412\u043E\u0439\u0442\u0438 \u043D\u0430 hh.ru</a>
+      <button class="btn btn-outline" id="har-retry-auth" style="margin-top:8px;">\u041F\u0440\u043E\u0432\u0435\u0440\u0438\u0442\u044C \u0441\u043D\u043E\u0432\u0430</button>
+    </div>`;
+      return;
+    }
+    const container = refs.shadowRoot?.querySelector(".fab-panel");
+    if (!container) return;
+    const userName = getUserName();
+    container.innerHTML = getLoggedInHTML(userName);
+    const headerStatus = refs.shadowRoot?.getElementById("header-auth-status");
+    if (headerStatus && userName !== "\u041F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u044C") {
+      headerStatus.innerHTML = `<span class="pulse-dot" style="width:6px;height:6px;background:#10B981;border-radius:50%;display:inline-block;"></span>${esc(userName)}`;
+    }
+    if (refs.fabEl && userName !== "\u041F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u044C") {
+      refs.fabEl.setAttribute("title", "HH Copilot: " + userName + ". \u041D\u0430\u0436\u043C\u0438\u0442\u0435 \u0434\u043B\u044F \u043E\u0442\u043A\u0440\u044B\u0442\u0438\u044F.");
+    }
+  }
+  function renderInitialData() {
+    renderOverviewKPI();
+    renderVacancyList();
+    renderStatsValues();
+    renderStats();
+    renderBlacklist();
+    renderSettingsValues();
+    renderNegotiationList();
+  }
+
+  // src/ui/panel/helpers.js
+  function addBlacklistItem() {
+    const input = refs.shadowRoot?.getElementById("bl-input");
+    if (!input || !input.value.trim()) return;
+    const name = input.value.trim();
+    if (!panelState.blacklist.includes(name)) {
+      panelState.blacklist.push(name);
+      input.value = "";
+      renderBlacklist();
+      addLogEntry("info", "\u0414\u043E\u0431\u0430\u0432\u043B\u0435\u043D\u0430 \u043A\u043E\u043C\u043F\u0430\u043D\u0438\u044F \u0432 \u0427\u0421: " + name);
+    }
+  }
+  function removeBlacklistItem(name) {
+    panelState.blacklist = panelState.blacklist.filter((n) => n !== name);
+    renderBlacklist();
+  }
+  function selectConversation(convId) {
+    panelState.activeConversation = convId;
+    renderNegotiationList();
+    renderChatMessages();
+  }
+  function filterVacancies() {
+    const search = (refs.shadowRoot?.getElementById("vac-search")?.value || "").toLowerCase();
+    const status = refs.shadowRoot?.getElementById("vac-status-filter")?.value || "all";
+    const minScore = parseInt(refs.shadowRoot?.getElementById("vac-score-range")?.value || "0", 10);
+    const items = refs.shadowRoot?.querySelectorAll("#har-vlist .vacancy-item");
+    let visible = 0;
+    items.forEach((item) => {
+      const title = (item.dataset.title || "").toLowerCase();
+      const itemStatus = item.dataset.status || "new";
+      const itemScore = parseInt(item.dataset.score || "0", 10);
+      const matchTitle = !search || title.includes(search);
+      const matchStatus = status === "all" || itemStatus === status;
+      const matchScore = itemScore >= minScore;
+      item.style.display = matchTitle && matchStatus && matchScore ? "" : "none";
+      if (matchTitle && matchStatus && matchScore) visible++;
+    });
+  }
+
+  // src/ui/panel/index.js
   var panelLog = createLogger("Panel");
   function updateAuthState() {
     const was = panelState.isLoggedIn;
@@ -2379,6 +2483,13 @@
       panelState.isLoggedIn = now;
       panelLog.info("Auth: " + (now ? "LOGGED IN" : "NOT LOGGED IN"));
       renderSidebarContent();
+      if (panelState.isLoggedIn) {
+        const container = refs.shadowRoot?.querySelector(".fab-panel");
+        if (container) {
+          bindAllEvents(container);
+          renderInitialData();
+        }
+      }
       updateFabIcon();
     }
   }
@@ -2416,50 +2527,6 @@
     }
     updateFabIcon();
     panelLog.info("Sidebar " + (panelState.isOpen ? "opened" : "closed"));
-  }
-  function renderSidebarContent() {
-    const content = refs.shadowRoot?.querySelector(".har-content");
-    if (!content) return;
-    if (panelState.isLoggedIn === null) {
-      content.innerHTML = `<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 32px;text-align:center;">
-      <div class="har-spinner"></div>
-      <h3 style="font-size:16px;font-weight:700;margin:16px 0 8px;">\u041F\u0440\u043E\u0432\u0435\u0440\u044F\u0435\u043C \u0430\u0432\u0442\u043E\u0440\u0438\u0437\u0430\u0446\u0438\u044E...</h3>
-      <p style="font-size:13px;color:#71717a;line-height:1.5;">\u041E\u043F\u0440\u0435\u0434\u0435\u043B\u044F\u0435\u043C \u0441\u0442\u0430\u0442\u0443\u0441 \u043D\u0430 hh.ru</p>
-    </div>`;
-      return;
-    }
-    if (!panelState.isLoggedIn) {
-      content.innerHTML = `<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 32px;text-align:center;">
-      <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
-      <h3 style="font-size:16px;font-weight:700;margin:16px 0 8px;">\u0412\u043E\u0439\u0434\u0438\u0442\u0435 \u0432 hh.ru</h3>
-      <p style="font-size:13px;color:#71717a;line-height:1.5;margin-bottom:24px;">\u0420\u0430\u0441\u0448\u0438\u0440\u0435\u043D\u0438\u0435 \u0440\u0430\u0431\u043E\u0442\u0430\u0435\u0442 \u0441 \u0432\u0430\u0448\u0435\u0439 \u0443\u0447\u0451\u0442\u043D\u043E\u0439 \u0437\u0430\u043F\u0438\u0441\u044C\u044E.<br>\u0410\u0432\u0442\u043E\u0440\u0438\u0437\u0443\u0439\u0442\u0435\u0441\u044C \u0434\u043B\u044F \u0432\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u044F \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0437\u0430\u0446\u0438\u0438.</p>
-      <a href="https://hh.ru/account/login" target="_blank" class="btn btn-primary" style="text-decoration:none;">\u0412\u043E\u0439\u0442\u0438 \u043D\u0430 hh.ru</a>
-      <button class="btn btn-outline" id="har-retry-auth" style="margin-top:8px;">\u041F\u0440\u043E\u0432\u0435\u0440\u0438\u0442\u044C \u0441\u043D\u043E\u0432\u0430</button>
-    </div>`;
-      return;
-    }
-    const container = refs.shadowRoot?.querySelector(".fab-panel");
-    if (!container) return;
-    const userName = getUserName();
-    container.innerHTML = getLoggedInHTML(userName);
-    bindAllEvents(container);
-    renderInitialData();
-    const headerStatus = refs.shadowRoot?.getElementById("header-auth-status");
-    if (headerStatus && userName !== "\u041F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u044C") {
-      headerStatus.innerHTML = `<span class="pulse-dot" style="width:6px;height:6px;background:#10B981;border-radius:50%;display:inline-block;"></span>${esc(userName)}`;
-    }
-    if (refs.fabEl && userName !== "\u041F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u044C") {
-      refs.fabEl.setAttribute("title", "HH Copilot: " + userName + ". \u041D\u0430\u0436\u043C\u0438\u0442\u0435 \u0434\u043B\u044F \u043E\u0442\u043A\u0440\u044B\u0442\u0438\u044F.");
-    }
-  }
-  function renderInitialData() {
-    renderOverviewKPI();
-    renderVacancyList();
-    renderStatsValues();
-    renderStats();
-    renderBlacklist();
-    renderSettingsValues();
-    renderNegotiationList();
   }
   function switchTab(tabId) {
     panelState.activeTab = tabId;
@@ -2614,43 +2681,6 @@
     if (statusFilter) {
       statusFilter.addEventListener("change", () => filterVacancies());
     }
-  }
-  function addBlacklistItem() {
-    const input = refs.shadowRoot?.getElementById("bl-input");
-    if (!input || !input.value.trim()) return;
-    const name = input.value.trim();
-    if (!panelState.blacklist.includes(name)) {
-      panelState.blacklist.push(name);
-      input.value = "";
-      renderBlacklist();
-      addLogEntry("info", "\u0414\u043E\u0431\u0430\u0432\u043B\u0435\u043D\u0430 \u043A\u043E\u043C\u043F\u0430\u043D\u0438\u044F \u0432 \u0427\u0421: " + name);
-    }
-  }
-  function removeBlacklistItem(name) {
-    panelState.blacklist = panelState.blacklist.filter((n) => n !== name);
-    renderBlacklist();
-  }
-  function selectConversation(convId) {
-    panelState.activeConversation = convId;
-    renderNegotiationList();
-    renderChatMessages();
-  }
-  function filterVacancies() {
-    const search = (refs.shadowRoot?.getElementById("vac-search")?.value || "").toLowerCase();
-    const status = refs.shadowRoot?.getElementById("vac-status-filter")?.value || "all";
-    const minScore = parseInt(refs.shadowRoot?.getElementById("vac-score-range")?.value || "0", 10);
-    const items = refs.shadowRoot?.querySelectorAll("#har-vlist .vacancy-item");
-    let visible = 0;
-    items.forEach((item) => {
-      const title = (item.dataset.title || "").toLowerCase();
-      const itemStatus = item.dataset.status || "new";
-      const itemScore = parseInt(item.dataset.score || "0", 10);
-      const matchTitle = !search || title.includes(search);
-      const matchStatus = status === "all" || itemStatus === status;
-      const matchScore = itemScore >= minScore;
-      item.style.display = matchTitle && matchStatus && matchScore ? "" : "none";
-      if (matchTitle && matchStatus && matchScore) visible++;
-    });
   }
   function updateVacancies(vacancies) {
     panelState.vacancies = (vacancies || []).filter((v) => v && v.id && v.title);

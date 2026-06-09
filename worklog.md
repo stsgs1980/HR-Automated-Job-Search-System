@@ -477,3 +477,26 @@ Work Log:
 Stage Summary:
 - All version strings now consistent at v1.7.2
 - Need to automate version sync to avoid this in future
+
+---
+Task ID: 21
+Agent: main
+Task: Anti-monolith final split + TASK-CASCADE.md v4.0.0 update
+
+Work Log:
+- Verified all files: parse.js (408), panel/index.js (277) still exceeded 250 lines
+- Split parse.js (408) into 4 files: parse-company-card.js (59), parse-resume.js (79), parse-resume-sections.js (179), parse-resume-education.js (111)
+- Split panel/index.js (277->127) + new events.js (161): switchTab, toggleTimeline, toggleSub, bindAllEvents, bindTabClicks, bindSidebarClicks, bindTimelineToggles, bindInputChanges
+- All 42 JS files now under 250 lines (max = styles.js at 240)
+- Updated TASK-CASCADE.md v3.0.0 -> v4.0.0:
+  - Phase 0 (F0.1-F0.9) all marked COMPLETED
+  - Added Phase 0.5: FAB CSS isolation, Auth UX, 6-tab wireframe, filtering, blacklist, version sync, CustomEvent bridge
+  - Rewrote Section 1.2 to describe actual 42-file modular architecture
+  - Rewrote Section 1.3 removing completed items
+- HH-Copilot-Task-Cascade-v3.docx does NOT exist (checked disk + git history)
+- Standing rule: no .docx without user consent
+
+Stage Summary:
+- Anti-monolith: ALL 42 JS files < 250 lines
+- TASK-CASCADE.md v4.0.0 reflects actual project state at v1.7.2
+- docx file was never in this repo — no deletion needed

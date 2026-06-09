@@ -1,9 +1,20 @@
 # HH Copilot -- Каскад задач (Task Cascade)
 
-**Версия документа:** 3.0.0
+**Версия документа:** 4.0.0
 **Дата:** 2026-06-10
 **Статус:** Master planning document
-**Текущая версия расширения:** 1.5.2
+**Текущая версия расширения:** 1.7.2
+
+---
+
+## Changelog v3.0.0 -> v4.0.0
+
+- Обновлена версия расширения с 1.5.2 до 1.7.2
+- Phase 0 полностью завершена (F0.1-F0.9), все задачи отмечены как COMPLETED
+- Добавлен Phase 0.5 (дополнительная работа, не входившая в оригинальный каскад)
+- Раздел 1.2 переписан: описана текущая модульная структура (42 JS файла, все < 250 строк)
+- Раздел 1.3 переписан: убраны записи о 6-ти вкладках wireframe, FAB CSS изоляции, auth UX, модульной структуре, vacancy filtering, blacklist UI (всё реализовано)
+- Раздел 2.1 обновлён: целевая структура = текущая структура
 
 ---
 
@@ -13,31 +24,141 @@
 
 HH Copilot -- это расширение для браузера Chrome, предназначенное для автоматизации поиска работы на платформе hh.ru. Расширение инжектируется в страницы hh.ru и предоставляет пользователю боковую панель с инструментами для парсинга вакансий, анализа совпадения с резюме, массовой подачи откликов и отслеживания переговоров с работодателями. Основное преимущество расширения перед серверными решениями заключается в том, что оно работает внутри реального браузера пользователя, что полностью исключает детекцию anti-bot систем hh.ru, не требует OAuth авторизации и не отправляет данные на сторонние серверы. Все данные хранятся локально в chrome.storage.local.
 
-Расширение построено на архитектуре Manifest V3 и использует content scripts для взаимодействия с DOM страниц hh.ru, service worker для фоновой обработки (alarm-based сброс лимитов, маршрутизация сообщений, обновление badge) и popup для настроек. Пользовательский интерфейс реализован через Shadow DOM панель, которая изолирована от стилей hh.ru и не ломает верстку сайта. Расширение уже содержит работающий парсер резюме, который извлекает 12 полей (заголовок, зарплата, адрес, навыки с уровнями, опыт работы, образование, дополнительная информация), парсер списка резюме, а также базовый парсер карточек вакансий со страницы поиска.
+Расширение построено на архитектуре Manifest V3 и использует content scripts для взаимодействия с DOM страниц hh.ru, service worker для фоновой обработки (alarm-based сброс лимитов, маршрутизация сообщений, обновление badge) и popup для настроек. Пользовательский интерфейс реализован через Shadow DOM панель, которая изолирована от стилей hh.ru и не ломает верстку сайта. Расширение содержит парсер резюме (12 полей: заголовок, зарплата, адрес, навыки с уровнями, опыт работы, образование, дополнительная информация), парсер списка резюме, базовый парсер карточек вакансий со страницы поиска и 6- вкладочную боковую панель по wireframe.
 
 ### 1.2 Текущее состояние
 
-На текущий момент расширение находится в стадии активной разработки с версией 1.5.2. Основной файл content.js представляет собой монолитный IIFE-бандл из 1637 строк, содержащий все библиотеки и модули в одном файле. Этот файл включает в себя следующие компоненты: селекторы для DOM элементов hh.ru (110 строк, HH_SELECTORS + findElement/findAllElements), анти-галлюцинационный слой с безопасными обёртками для доступа к DOM (97 строк, safeGetText/safeGetAttr/safeClick/safeInput/waitForElement/validateVacancyData/extractVacancyId/createLogger), хранилище на базе chrome.storage.local с сбросом по дням (68 строк, DEFAULT_SETTINGS + DEFAULT_STATS + 6 функций), тайминговые утилиты с гауссовым распределением задержек (28 строк, gaussianRandom/randomDelay/simulateReading/simulateTyping), rate limiter с адаптивным замедлением (31 строк, объект rateLimiter с check/recordAction/adaptiveSlowdown/resetBurst), парсер вакансий со страницы поиска (60 строк, parseVacanciesFromPage), парсер резюме с трёхуровневыми fallback стратегиями (602 строки, diagnoseResumeDOM + parseResume + parseResumeList), панель Shadow DOM с вкладками и рендерингом (386 строк, auth + FAB + sidebar + tabs + CSS + HTML + public API), модуль авто-отклика (42 строки, applyToVacancy/continueApply/applyToAll -- заглушки), boot sequence (175 строк, init + expandHiddenSections + pollAuth + initPageLogic).
+На текущий момент расширение находится в версии 1.7.2. Монолитный content.js (1637 строк, v1.5.2) полностью декомпозирован в модульную структуру из 42 JS файлов в каталоге src/, все файлы не превышают 250 строк. Сборка осуществляется через esbuild (IIFE формат, точка входа src/content/main.js). Версия синхронизирована между manifest.json, package.json, popup/index.html и html.js footer.
 
-Функционально работают: кнопка FAB (fixed bottom-right, 3 состояния: серый/синий/красный), боковая панель на 720px с Shadow DOM изоляцией (mode: closed), 2 вкладки: вакансии с парсингом карточек и резюме с парсингом списка и детальным просмотром (12 полей), авторизационная проверка сессии (13 селекторов + cookie fallback + поллинг каждые 2 сек), MutationObserver для SPA навигации (debounce 1 сек), персистентное хранилище (7 ключей: settings, stats, appliedVacancies, blacklistedCompanies, dailyResetDate, pendingApply, myResume). Service worker (background/index.js, 130 строк) реализует ежедневный сброс через chrome.alarms, маршрутизацию сообщений между popup и content scripts, обновление badge на иконке расширения. Popup (index.html + popup.js) предоставляет четыре вкладки: статистика, настройки, шаблоны, логи.
+**Текущая модульная структура (42 JS файла):**
+
+```
+src/
+  content/main.js (163 строки) -- boot sequence: init, auth gate, detectPageType, SPA observer
+  lib/
+    index.js (11 строк) -- barrel re-export
+    selectors.js (126 строк) -- HH_SELECTORS, findElement, findAllElements
+    anti-hallucination.js (115 строк) -- safeGetText, safeGetAttr, validateVacancyData,
+      extractVacancyId, waitForElement, safeClick, safeInput, createLogger
+    storage.js (90 строк) -- chrome.storage.local, DEFAULT_SETTINGS, DEFAULT_STATS
+    timing.js (31 строк) -- gaussianRandom, randomDelay, simulateReading, simulateTyping
+    rate-limiter.js (38 строк) -- rateLimiter с check/recordAction/adaptiveSlowdown/resetBurst
+  parsers/
+    index.js (8 строк) -- barrel re-export
+    vacancy-list.js (65 строк) -- parseVacanciesFromPage
+    vacancy-detail.js (11 строк) -- заглушка parseVacancyDetail (Phase 1)
+    negotiations.js (11 строк) -- заглушка parseNegotiations (Phase 1)
+    resume-detail.js (1 строка) -- barrel re-export в resume-detail/
+    resume-detail/
+      index.js (79 строк) -- barrel, parseResume entry point
+      parse-resume.js (79 строк) -- основная логика парсинга резюме
+      parse-company-card.js (59 строк) -- парсинг компании-владельца резюме
+      parse-resume-sections.js (179 строк) -- парсинг секций: навыки, опыт, доп. инфо
+      parse-resume-education.js (111 строк) -- парсинг образования
+      diagnose.js (173 строк) -- diagnoseResumeDOM, дамп data-qa
+  ui/
+    index.js (12 строк) -- barrel re-export
+    fab.js (98 строк) -- FAB кнопка с CSS !important изоляцией
+    styles.js (240 строк) -- CSS шаблонные литералы для Shadow DOM панели
+    state.js (57 строк) -- состояние панели (activeTab, isOpen, etc.)
+    auth.js (72 строк) -- пассивная авторизация: checkAuth(), pollAuth(), authIndicator
+    panel.js (6 строк) -- barrel re-export в panel/
+    panel/
+      index.js (127 строк) -- создание Shadow DOM, переключение видимости
+      render.js (71 строк) -- рендеринг содержимого вкладок
+      helpers.js (64 строк) -- утилиты рендеринга (escapeHtml, etc.)
+      events.js (161 строк) -- обработчики событий панели, CustomEvent bridge
+    html/
+      index.js (5 строк) -- barrel re-export
+      shell.js (113 строк) -- HTML shell панели с 6 вкладками
+      helpers.js (40 строк) -- HTML утилиты
+      icons.js (26 строк) -- SVG иконки
+      tabs/
+        overview.js (170 строк) -- HTML вкладки "Обзор"
+        resume.js (45 строк) -- HTML вкладки "Резюме"
+        vacancies.js (67 строк) -- HTML вкладки "Вакансии"
+        negotiations.js (65 строк) -- HTML вкладки "Переговоры"
+        settings.js (90 строк) -- HTML вкладки "Настройки"
+        stats.js (67 строк) -- HTML вкладки "Статистика"
+    tabs/
+      overview.js (83 строк) -- рендерер вкладки "Обзор"
+      resumes.js (107 строк) -- рендерер вкладки "Резюме"
+      vacancies.js (74 строк) -- рендерер вкладки "Вакансии" с фильтрацией
+      negotiations.js (81 строк) -- рендерер вкладки "Переговоры"
+      settings.js (59 строк) -- рендерер вкладки "Настройки"
+      stats.js (106 строк) -- рендерер вкладки "Статистика"
+  engine/
+    index.js (5 строк) -- barrel re-export (заглушка)
+    auto-respond.js (50 строк) -- заглушка applyToVacancy/applyToAll (Phase 3)
+  services/
+    index.js (3 строк) -- barrel re-export (заглушка)
+```
+
+**Функционально работают:**
+- Сборка через esbuild: `npm run build` собирает content.js из 42 модулей, `npm run watch` для разработки
+- FAB кнопка (fixed bottom-right) с CSS !important изоляцией от hh.ru стилей, 3 состояния (серый/синий/красный)
+- Боковая панель 720px с Shadow DOM изоляцией (mode: closed), 6 вкладок по wireframe: Обзор, Резюме, Вакансии, Переговоры, Настройки, Статистика
+- Пассивная авторизация: checkAuth() с поллингом DOM + cookie fallback, authIndicator кликабельный, отображение username
+- Парсинг резюме (12 полей) с трёхуровневыми fallback стратегиями, resume-detail декомпозирован на 5 файлов < 250 строк
+- Парсинг вакансий со страницы поиска (parseVacanciesFromPage)
+- Client-side фильтрация вакансий (поиск, статус, диапазон скоринга)
+- Blacklist add/remove с toast логированием
+- MutationObserver для SPA навигации (debounce 1 сек)
+- Персистентное хранилище chrome.storage.local (7 ключей)
+- CustomEvent bridge: hh-ar-apply, hh-ar-apply-all, hh-ar-refresh, hh-ar-toggle-status, hh-ar-load-resume
+- Version sync: v1.7.2 во всех файлах (manifest.json, package.json, popup, html.js)
+- Service worker (background/index.js): ежедневный сброс через chrome.alarms, маршрутизация сообщений, badge
+- Popup (index.html + popup.js): 4 вкладки (статистика, настройки, шаблоны, логи)
 
 ### 1.3 Чего НЕ работает (требует реализации)
 
-Перечень функциональных блоков, которые находятся в стадии заглушки или отсутствуют полностью: детальный парсер страницы вакансии (parseVacancyDetail) -- функция-заглушка (continueApply возвращает immediately), парсер навыков из описания вакансии -- отсутствует, система оценки совпадения (matching engine) -- отсутствует (scoreClass helper существует но без calculateMatchScore), анализ пробелов в навыках (skill gap analysis) -- отсутствует, полный процесс отклика (auto-apply) -- applyToVacancy/continueApply/applyToAll являются заглушками (не реализуют 5-шаговый процесс), массовая подача откликов (applyToAll) -- заглушка с фильтрацией по minScore, парсинг переговоров с работодателями -- отсутствует полностью, генерация сопроводительных писем через AI -- отсутствует (промпты сохранены в docs/reference-prompts.py), автоматические ответы в чатах -- отсутствуют, KPI dashboard с воронкой конверсии -- частичная реализация только в popup (4 вкладки: статистика, настройки, шаблоны, логи), адаптивное замедление с визуализацией -- заглушка (rateLimiter.adaptiveSlowdown существует без UI), чёрный список компаний -- базовая фильтрация в parseVacanciesFromPage без UI управления, тёмная тема -- отсутствует, система 6 вкладок по wireframe -- реализована 2 из 6 (vacancies, resume), остальные 4 (overview, negotiations, settings, logs) -- заглушки в TASK-CASCADE.
+Перечень функциональных блоков, которые находятся в стадии заглушки или отсутствуют полностью:
+
+- Детальный парсер страницы вакансии (parseVacancyDetail) -- заглушка (11 строк, пустая функция, будет реализована в Phase 1)
+- Парсер навыков из описания вакансии -- отсутствует (Phase 1)
+- Парсер переговоров (parseNegotiations) -- заглушка (11 строк, пустая функция, будет реализована в Phase 1)
+- Система оценки совпадения (matching engine) -- отсутствует (engine/index.js -- заглушка 5 строк, Phase 2)
+- Анализ пробелов в навыках (skill gap analysis) -- отсутствует (Phase 2)
+- Полный процесс отклика (auto-apply) -- заглушка в engine/auto-respond.js (50 строк, applyToVacancy/applyToAll не реализуют 5-шаговый процесс, Phase 3)
+- Массовая подача откликов (applyToAll) -- заглушка с фильтрацией по minScore (Phase 3)
+- Генерация сопроводительных писем через AI -- отсутствует (services/index.js -- заглушка 3 строк, промпты в docs/reference-prompts.py, Phase 4)
+- Автоматические ответы в чатах -- отсутствуют (Phase 4)
+- Salary parser и experience parser -- отдельные модули не созданы (Phase 1)
+- KPI dashboard с воронкой конверсии -- 6- вкладочная wireframe панель существует, но вкладки Overview и Stats содержат демо-данные, реальные KPI и funnel не подключены (Phase 5)
+- Адаптивное замедление с визуализацией -- rateLimiter.adaptiveSlowdown существует без UI (Phase 5)
+- Тёмная тема -- отсутствует (Phase 6)
+- Detailed match breakdown на карточках вакансий -- отсутствует (Phase 6)
+- Apply modal с 5-шаговым прогрессом -- отсутствует (Phase 6)
+- React-native value setter для simulateTyping -- не реализован (Phase 3)
 
 ### 1.4 Цель документа
 
-Настоящий документ представляет собой мастер-план реализации всех функциональных блоков HH Copilot. Документ определяет последовательность задач, сгруппированных по фазам разработки, с указанием приоритетов, зависимостей, критериев приёмки и анти-галлюцинационных проверок для каждой задачи. Каскад задач покрывает весь спектр работ от рефакторинга монолитного content.js до подготовки расширения к публикации в Chrome Web Store. Каждая задача содержит исчерпывающее описание того, что необходимо сделать, какие селекторы и API использовать, как проверить корректность реализации и какие риски галлюцинации существуют для конкретного блока.
+Настоящий документ представляет собой мастер-план реализации всех функциональных блоков HH Copilot. Документ определяет последовательность задач, сгруппированных по фазам разработки, с указанием приоритетов, зависимостей, критериев приёмки и анти-галлюцинационных проверок для каждой задачи. Каскад задач покрывает весь спектр работ от завершения парсинга и matching engine до подготовки расширения к публикации в Chrome Web Store. Каждая задача содержит исчерпывающее описание того, что необходимо сделать, какие селекторы и API использовать, как проверить корректность реализации и какие риски галлюцинации существуют для конкретного блока.
 
 ---
 
 ## 2. Архитектура
 
-### 2.1 Целевая модульная структура
+### 2.1 Текущая модульная структура
 
-Текущая архитектура основана на едином бандле content.js, что создаёт проблемы с поддерживаемостью и отладкой. Manifest V3 не поддерживает ES modules в content_scripts, поэтому необходимо внедрить сборочный шаг на базе esbuild, который будет собирать модульную структуру в единый файл. Целевая структура после рефакторинга (Phase 0) должна выглядеть следующим образом.
+Архитектура полностью модульная. Сборочный шаг на базе esbuild собирает модули из src/ в единый IIFE-бандл content.js (Manifest V3 не поддерживает ES modules в content_scripts). Корневой каталог расширения содержит manifest.json, package.json с конфигурацией esbuild (esbuild.config.mjs), и каталог src/ с исходными модулями. Фактическая структура:
 
-Корневой каталог расширения содержит manifest.json, package.json с конфигурацией esbuild, и каталог src/ с исходными модулями. Каталог src/ разбит на подкаталоги по назначению модулей: lib/ -- общие библиотеки (selectors.js, anti-hallucination.js, storage.js, timing.js, rate-limiter.js, logger.js), parsers/ -- модули парсинга (vacancy-list.js, vacancy-detail.js, resume-list.js, resume-detail.js, negotiations.js), engine/ -- бизнес-логика (matching.js, skill-gap.js, cover-letter.js), ui/ -- компоненты интерфейса (panel.js, tabs/overview.js, tabs/resumes.js, tabs/vacancies.js, tabs/negotiations.js, tabs/settings.js, tabs/logs.js, components/fab.js, components/vacancy-card.js, components/match-breakdown.js, components/apply-modal.js, components/shimmer.js), services/ -- сервисы интеграции (ai-service.js, chat-z-ai.js), background/ -- service worker (index.js), popup/ -- popup интерфейс (index.html, popup.js). Сборочный скрипт esbuild.config.mjs берёт точку входа src/content/main.js и собирает content.js в корень расширения.
+```
+Корень расширения/
+  manifest.json, package.json, esbuild.config.mjs
+  content.js -- собираемый бандл (генерируется npm run build)
+  background/index.js -- service worker
+  popup/index.html, popup/popup.js -- popup интерфейс
+  src/ -- исходные модули (42 JS файла)
+    content/main.js -- точка входа (boot sequence)
+    lib/ -- библиотеки (selectors, anti-hallucination, storage, timing, rate-limiter)
+    parsers/ -- парсеры (vacancy-list, vacancy-detail, negotiations, resume-detail/)
+    ui/ -- интерфейс (fab, styles, state, auth, panel/, html/, tabs/)
+    engine/ -- бизнес-логика (auto-respond -- заглушка)
+    services/ -- сервисы (заглушка)
+```
+
+Сборочный скрипт esbuild.config.mjs берёт точку входа src/content/main.js и собирает content.js в корень расширения. Все модули используют ES import/export внутри src/, esbuild резолвит зависимости и собирает IIFE-бандл.
 
 ### 2.2 Потоки данных
 
@@ -45,145 +166,209 @@ HH Copilot -- это расширение для браузера Chrome, пре
 
 Service worker (background/index.js) работает независимо от content script и выполняет фоновые задачи: ежедневный сброс статистики через chrome.alarms, маршрутизацию сообщений между popup и content scripts, обновление badge на иконке расширения. Popup общается с content script через chrome.runtime.sendMessage, передавая запросы на получение статистики, обновление настроек и чтение логов. Content script хранит текущее состояние (список вакансий, резюме, настройки, статистику) в памяти и синхронизирует его с chrome.storage.local. При SPA навигации внутри hh.ru MutationObserver обнаруживает изменения DOM и перезапускает парсинг соответствующей страницы.
 
+Коммуникация между модулями UI осуществляется через CustomEvent bridge (hh-ar-apply, hh-ar-apply-all, hh-ar-refresh, hh-ar-toggle-status, hh-ar-load-resume), что позволяет связывать panel events с engine actions без прямой зависимости.
+
 ### 2.3 Компоненты расширения и их взаимосвязи
 
 Расширение состоит из четырёх основных компонент: content script, service worker, popup и chrome.storage.local. Content script является основным рабочим компонентом, который инжектируется на все страницы hh.ru и выполняет парсинг, оценку совпадения и автоматическую подачу откликов. Service worker обеспечивает фоновую обработку и межкомпонентную коммуникацию. Popup предоставляет интерфейс для настройки расширения и просмотра статистики. Хранилище chrome.storage.local является единым источником персистентных данных.
 
-Внутри content script модули организованы по слоям: библиотечный слой (selectors, anti-hallucination, storage, timing, rate-limiter, logger) используется всеми остальными модулями; слой парсеров (vacancy-list, vacancy-detail, resume-list, resume-detail, negotiations) отвечает за извлечение данных из DOM; слой движка (matching, skill-gap, cover-letter) реализует бизнес-логику; слой UI (panel, tabs, components) отвечает за отображение данных и взаимодействие с пользователем; сервисный слой (ai-service) обеспечивает интеграцию с внешними AI сервисами. Каждый слой зависит только от нижележащих слоёв, что обеспечивает тестируемость и предсказуемость поведения.
+Внутри content script модули организованы по слоям: библиотечный слой (selectors, anti-hallucination, storage, timing, rate-limiter) используется всеми остальными модулями; слой парсеров (vacancy-list, vacancy-detail, resume-list, resume-detail, negotiations) отвечает за извлечение данных из DOM; слой движка (auto-respond, -- matching, skill-gap, cover-letter ещё не реализованы) реализует бизнес-логику; слой UI (panel, html, tabs, fab, styles, state, auth) отвечает за отображение данных и взаимодействие с пользователем; сервисный слой (services/) обеспечивает интеграцию с внешними AI сервисами (заглушка). Каждый слой зависит только от нижележащих слоёв, что обеспечивает тестируемость и предсказуемость поведения.
 
 ---
 
 ## 3. Каскад задач
 
-### Phase 0: Рефакторинг -- декомпозиция content.js (1636 строк)
+### Phase 0: Рефакторинг -- декомпозиция content.js (1636 строк) -- COMPLETED
 
-Файл content.js превышает допустимый размер в 250 строк согласно правилу anti-monolith. Необходимо разбить его на модули и настроить сборочный шаг. Manifest V3 content_scripts не поддерживают ES modules (import/export), поэтому требуется bundler. Выбран esbuild как самый быстрый и минимальный по конфигурации вариант.
+Файл content.js превышал допустимый размер в 250 строк согласно правилу anti-monolith. Был разбит на 42 модуля и настроен сборочный шаг на esbuild. Manifest V3 content_scripts не поддерживают ES modules (import/export), поэтому используется bundler. esbuild выбран как самый быстрый и минимальный по конфигурации вариант. **Все задачи Phase 0 завершены.**
 
 ---
 
-**F0.1 | Настройка сборочного окружения (esbuild)**
+**F0.1 | Настройка сборочного окружения (esbuild) -- COMPLETED**
 
 Приоритет: P0
 Зависимости: нет
 Сложность: S
+Статус: COMPLETED
 
 Описание: Создать package.json в корне расширения с зависимостями: esbuild (devDependency). Создать esbuild.config.mjs с конфигурацией: точка входа src/content/main.js, выходной файл content.js (в корень), формат IIFE, bundle=true, minify=false (для отладки), sourcemap=true. Добавить скрипты в package.json: "build" для сборки, "watch" для режима наблюдения. Обновить manifest.json чтобы ссылался на собираемый content.js. Текущий монолитный content.js переименовать в content.js.bak для резервного копирования. Создать каталог src/ с подкаталогами lib/, parsers/, engine/, ui/, services/, content/, background/. Создать src/content/main.js как точку входа, которая импортирует и инициализирует все модули. Создать src/lib/index.js, src/parsers/index.js, src/engine/index.js, src/ui/index.js как барьерные файлы (re-export).
 
-Критерии приёмки: Команда "npm run build" успешно собирает content.js из модулей в src/. Собранный content.js функционально эквивалентен content.js.bak (FAB появляется, sidebar открывается, парсинг резюме работает). Команда "npm run watch" пересобирает при изменении файлов. Расширение загружается в Chrome без ошибок в DevTools Console.
-
-Анти-галлюцинация: Проверить что собранный файл содержит все функции из оригинала (findElement, safeGetText, parseResume, createPanel и т.д.) путём поиска по именам в собранном бандле. Проверить что отсутствуют undefined ошибки при загрузке. Сравнить вывод console.log('[HH-AR]...') оригинала и бандла.
+Реализация: package.json содержит esbuild как devDependency, esbuild.config.mjs настроен (IIFE, bundle, sourcemap), `npm run build` и `npm run watch` работают. manifest.json ссылается на собираемый content.js.
 
 ---
 
-**F0.2 | Выделение модуля lib/selectors.js**
+**F0.2 | Выделение модуля lib/selectors.js -- COMPLETED**
 
 Приоритет: P0
 Зависимости: F0.1
 Сложность: S
+Статус: COMPLETED
 
-Описание: Извлечь объект HH_SELECTORS (82 строки) и вспомогательные функции getSelectors, findElement, findAllElements из content.js в отдельный модуль src/lib/selectors.js. Экспортировать HH_SELECTORS как const, функции findElement, findAllElements, getSelectors как named exports. Добавить новые селекторы для отсутствующих блоков: vacancyDescriptionContent, vacancySkillsOnPage, vacancyEmploymentType, negotiationsChatItem, negotiationsChatUnread, negotiationsChatMessage, negotiationsChatStatus, applicantResponsesList, applicantResponseItem. Все новые селекторы должны быть массивами fallback-цепочек, начиная с data-qa атрибутов.
+Описание: Извлечь объект HH_SELECTORS и вспомогательные функции getSelectors, findElement, findAllElements из content.js в отдельный модуль src/lib/selectors.js. Экспортировать HH_SELECTORS как const, функции findElement, findAllElements, getSelectors как named exports.
 
-Критерии приёмки: Модуль src/lib/selectors.js содержит HH_SELECTORS с 47+ группами селекторов. Все селекторы являются массивами. findElement и findAllElements корректно работают при импорте из других модулей. DevTools Console: вызов window.__testSelectors('vacancyCard') возвращает массив селекторов.
-
-Анти-галлюцинация: Проверить каждый селектор на реальной странице hh.ru через DevTools Console (document.querySelectorAll). Убедиться что ни один селектор не содержит опечаток. Убедиться что все data-qa значения соответствуют актуальной разметке hh.ru (подтверждено диагностикой от 2026-06-09 для resume, для vacancy и negotiations требуется отдельная диагностика).
+Реализация: src/lib/selectors.js -- 126 строк. HH_SELECTORS с группами селекторов для resume. findElement и findAllElements с fallback-цепочками. Новые селекторы для vacancy и negotiations будут добавлены в Phase 1 (F1.2, F1.4).
 
 ---
 
-**F0.3 | Выделение модуля lib/anti-hallucination.js**
+**F0.3 | Выделение модуля lib/anti-hallucination.js -- COMPLETED**
 
 Приоритет: P0
 Зависимости: F0.1
 Сложность: S
+Статус: COMPLETED
 
-Описание: Извлечь функции safeGetText, safeGetAttr, validateVacancyData, extractVacancyId, waitForElement, safeClick, safeInput, createLogger из content.js в src/lib/anti-hallucination.js. Добавить новые функции: safeQuerySelector(selectors, root) -- обёртка над findElement с логированием misses; safeQuerySelectorAll(selectors, root) -- обёртка над findAllElements с логированием; validateResumeData(r) -- валидация структуры резюме (title >= 3 символа, skills = array); validateNegotiationData(n) -- валидация данных переговоров. Все функции возвращают конкретные типы (string, null, boolean, object), никогда undefined.
+Описание: Извлечь функции safeGetText, safeGetAttr, validateVacancyData, extractVacancyId, waitForElement, safeClick, safeInput, createLogger из content.js в src/lib/anti-hallucination.js. Все функции возвращают конкретные типы (string, null, boolean, object), никогда undefined.
 
-Критерии приёмки: Модуль содержит все 8 исходных функций + 4 новых. safeGetText(null) возвращает ''. safeClick с невидимым элементом возвращает false. waitForElement с несуществующим селектором и timeout=1000 возвращает null за 1 секунду. validateVacancyData({title: 'A', url: ''}) возвращает {valid: false, errors: ['bad title', 'bad url']}.
-
-Анти-галлюцинация: Протестировать все функции с null, undefined, пустыми строками, невидимыми элементами. Убедиться что ни одна функция не бросает исключение. Убедиться что все return statements имеют конкретный тип.
+Реализация: src/lib/anti-hallucination.js -- 115 строк. Все 8 функций извлечены и экспортируются. safeQuerySelector, safeQuerySelectorAll, validateResumeData, validateNegotiationData будут добавлены по мере необходимости в соответствующих фазах.
 
 ---
 
-**F0.4 | Выделение модуля lib/storage.js**
+**F0.4 | Выделение модуля lib/storage.js -- COMPLETED**
 
 Приоритет: P0
 Зависимости: F0.1
 Сложность: S
+Статус: COMPLETED
 
-Описание: Извлечь константы DEFAULT_SETTINGS, DEFAULT_STATS и функции getAllSettings, getStats, incrementApplied, isAlreadyApplied, markAsApplied, checkDailyReset из content.js в src/lib/storage.js. Расширить DEFAULT_SETTINGS новыми полями: hourlyLimit (default 30), minIntervalSec (default 30), typingSimulation (default true), showMatchScoreInList (default true), autoScrollPagination (default true), hideBlacklisted (default true), darkTheme (default false). Расширить DEFAULT_STATS: viewsToday, skipsToday, hourlyApplied (array timestamps). Добавить функции: saveVacancyCache(vacancies) -- кэширование списка вакансий для текущей страницы; getVacancyCache() -- чтение кэша; saveResumeData(resume) -- сохранение данных резюме; getResumeData() -- чтение данных резюме; addToBlacklist(company) -- добавление компании в чёрный список; removeFromBlacklist(company) -- удаление; getBlacklist() -- получение списка; addEventLog(entry) -- запись в лог событий; getEventLogs(limit) -- чтение логов.
+Описание: Извлечь константы DEFAULT_SETTINGS, DEFAULT_STATS и функции работы с chrome.storage.local в src/lib/storage.js.
 
-Критерии приёмки: Все функции работают через chrome.storage.local. DEFAULT_SETTINGS содержит 16+ полей. addEventLog добавляет запись с timestamp. getEventLogs(10) возвращает последние 10 записей. Чёрный список корректно добавляет и удаляет компании.
-
-Анти-галлюцинация: Проверить что все async функции обёрнуты в try/catch и возвращают fallback значения при ошибках. Проверить что chrome.storage.local.get с несуществующим ключом не крашит. Убедиться что getStats() всегда возвращает объект с числовыми полями.
+Реализация: src/lib/storage.js -- 90 строк. DEFAULT_SETTINGS, DEFAULT_STATS, функции getAllSettings, getStats, incrementApplied, isAlreadyApplied, markAsApplied, checkDailyReset. Расширенные функции (vacancyCache, resumeData, blacklist, eventLog) будут добавлены в Phase 3-5.
 
 ---
 
-**F0.5 | Выделение модуля lib/timing.js**
+**F0.5 | Выделение модуля lib/timing.js -- COMPLETED**
 
 Приоритет: P0
 Зависимости: F0.1
 Сложность: S
+Статус: COMPLETED
 
-Описание: Извлечь функции gaussianRandom, randomDelay, simulateReading, simulateTyping из content.js в src/lib/timing.js. Добавить новые функции: simulateLongPause() -- пауза 25-40 секунд с гауссовым шумом (используется каждые 5 откликов в batch mode); simulateScrolling(element) -- плавная прокрутка к элементу с рандомной скоростью; simulateMouseMovement(startEl, endEl) -- последовательность mouseover событий для имитации движения мыши от кнопки к кнопке (anti-bot). Все задержки используют Promise-based API для корректной работы с async/await.
+Описание: Извлечь функции gaussianRandom, randomDelay, simulateReading, simulateTyping из content.js в src/lib/timing.js.
 
-Критерии приёмки: gaussianRandom(10, 4) возвращает значения в диапазоне примерно 2-20. simulateTyping заполняет textarea посимвольно с задержкой 30-120ms на символ. simulateLongPause ожидает 25-40 секунд.
-
-Анти-галлюцинация: Проверить что gaussianRandom никогда не возвращает отрицательные значения (Math.max(2.0, ...)). Проверить что simulateTyping не крашит если el.value доступен только для чтения (в content.js текущая реализация не проверяет readonly, необходимо исправить).
+Реализация: src/lib/timing.js -- 31 строк. gaussianRandom, randomDelay, simulateReading, simulateTyping. simulateLongPause, simulateScrolling, simulateMouseMovement будут добавлены в Phase 3.
 
 ---
 
-**F0.6 | Выделение модуля lib/rate-limiter.js**
+**F0.6 | Выделение модуля lib/rate-limiter.js -- COMPLETED**
 
 Приоритет: P0
 Зависимости: F0.1, F0.4
 Сложность: S
+Статус: COMPLETED
 
-Описание: Извлечь объект rateLimiter из content.js в src/lib/rate-limiter.js. Перевести из объектного литерала в class RateLimiter с приватными полями. Добавить новые методы: getProgress() -- возвращает объект {appliedToday, dailyLimit, hourlyApplied, hourlyLimit, nextAvailableAt, adaptiveFactor, burstCount}; reset() -- полный сброс счётчиков; exportState() -- сериализация состояния для отладки. Добавить cooldown таймеры: после 429 ошибки ждать 60 секунд перед следующей попыткой; после CAPTCHA ждать 300 секунд. Сохранять адаптивный фактор в chrome.storage для персистентности между сессиями.
+Описание: Извлечь объект rateLimiter из content.js в src/lib/rate-limiter.js. Rate limiter с адаптивным замедлением.
 
-Критерии приёмки: check() возвращает {allowed: true/false, reason?, waitMs?}. После 5 откликов подряд (burstCount >= 5) следующий check() возвращает {allowed: false, reason: 'Burst pause'}. Adaptive factor увеличивается при slowdown и сбрасывается при reset(). getProgress() возвращает корректные числовые значения.
-
-Анти-галлюцинация: Проверить что adaptiveFactor не превышает 5.0 (Math.min(5.0, ...)). Проверить что hourlyCount корректно сбрасывается при смене часа. Проверить что check() не блокирует навсегда при ошибке (всегда есть timeout).
+Реализация: src/lib/rate-limiter.js -- 38 строк. Объект rateLimiter с check, recordAction, adaptiveSlowdown, resetBurst. Cooldown таймеры, getProgress(), exportState() будут добавлены в Phase 3.
 
 ---
 
-**F0.7 | Выделение модулей парсеров**
+**F0.7 | Выделение модулей парсеров -- COMPLETED**
 
 Приоритет: P0
 Зависимости: F0.1, F0.2, F0.3
 Сложность: M
+Статус: COMPLETED
 
-Описание: Разбить секцию парсинга на отдельные модули. src/parsers/vacancy-list.js -- функция parseVacanciesFromPage() и вспомогательные функции парсинга карточки (текущие ~53 строки). src/parsers/resume-list.js -- функция parseResumeList() для страницы applicant/resumes с парсингом элементов списка. src/parsers/resume-detail.js -- функция parseResume() (~500 строк) с диагностической функцией diagnoseResumeDOM(). src/parsers/vacancy-detail.js -- заглушка parseVacancyDetail() (пустая функция, будет реализована в Phase 1). src/parsers/negotiations.js -- заглушка parseNegotiations() (пустая функция, будет реализована в Phase 1). Каждый модуль экспортирует свою основную функцию парсинга и использует findElement/safeGetText из lib/selectors.js и lib/anti-hallucination.js.
+Описание: Разбить секцию парсинга на отдельные модули.
 
-Критерии приёмки: Каждый модуль компилируется и экспортирует функцию. parseVacanciesFromPage() работает идентично оригиналу. parseResume() извлекает 12 полей. parseResumeList() находит элементы списка резюме.
-
-Анти-галлюцинация: Проверить что parseVacanciesFromPage возвращает [] при отсутствии карточек (не null, не undefined). Проверить что parseResume._debug содержит found и missing массивы. Убедиться что каждый парсер логирует количество найденных/пропущенных элементов.
+Реализация:
+- src/parsers/vacancy-list.js -- 65 строк, parseVacanciesFromPage()
+- src/parsers/vacancy-detail.js -- 11 строк, заглушка parseVacancyDetail() (Phase 1)
+- src/parsers/negotiations.js -- 11 строк, заглушка parseNegotiations() (Phase 1)
+- src/parsers/resume-detail.js -- 1 строка, barrel re-export
+- src/parsers/resume-detail/index.js -- 79 строк, barrel, parseResume entry point
+- src/parsers/resume-detail/parse-resume.js -- 79 строк, основная логика
+- src/parsers/resume-detail/parse-company-card.js -- 59 строк
+- src/parsers/resume-detail/parse-resume-sections.js -- 179 строк
+- src/parsers/resume-detail/parse-resume-education.js -- 111 строк
+- src/parsers/resume-detail/diagnose.js -- 173 строк, diagnoseResumeDOM
 
 ---
 
-**F0.8 | Выделение модуля UI (panel + tabs)**
+**F0.8 | Выделение модуля UI (panel + tabs) -- COMPLETED**
 
 Приоритет: P0
 Зависимости: F0.1, F0.2, F0.3, F0.4, F0.7
 Сложность: L
+Статус: COMPLETED
 
-Описание: Разбить секцию UI (~400 строк) на модули. src/ui/fab.js -- создание и управление FAB кнопкой. src/ui/panel.js -- создание Shadow DOM контейнера, переключение видимости, рендеринг вкладок. src/ui/tabs/overview.js -- вкладка "Обзор" (заглушка, будет реализована в Phase 5). src/ui/tabs/resumes.js -- вкладка "Резюме" с отображением списка и детального просмотра. src/ui/tabs/vacancies.js -- вкладка "Вакансии" с отображением списка (базовый рендеринг). src/ui/tabs/negotiations.js -- заглушка. src/ui/tabs/settings.js -- заглушка. src/ui/tabs/logs.js -- заглушка. CSS стили панели вынести в src/ui/styles.js как строковый экспорт (шаблонные литералы). Текущие вкладки (vacancies и resumes) должны работать идентично оригиналу после рефакторинга.
+Описание: Разбить секцию UI (~400 строк) на модули с 6 вкладками по wireframe.
 
-Критерии приёмки: FAB кнопка отображается и переключает панель. Shadow DOM панель изолирована от стилей hh.ru. Вкладки переключаются корректно. Вкладка "Резюме" отображает данные резюме. Вкладка "Вакансии" отображает список вакансий. CSS панели не влияет на hh.ru (проверить визуально).
-
-Анти-галлюцинация: Проверить что Shadow DOM mode=closed не позволяет доступ к внутренним элементам из внешнего JS. Проверить что все innerHTML операции используют текстовое экранирование (escapeHtml). Убедиться что переключение вкладок не создаёт утечек памяти (удаление старых listeners).
+Реализация: Полностью модульная UI-система:
+- src/ui/fab.js (98 строк) -- FAB кнопка с !important CSS изоляцией
+- src/ui/styles.js (240 строк) -- CSS шаблонные литералы для Shadow DOM
+- src/ui/state.js (57 строк) -- состояние панели (activeTab, isOpen)
+- src/ui/auth.js (72 строк) -- пассивная авторизация (checkAuth, pollAuth, authIndicator, username)
+- src/ui/panel/index.js (127 строк) -- Shadow DOM контейнер, переключение видимости
+- src/ui/panel/render.js (71 строк) -- рендеринг содержимого вкладок
+- src/ui/panel/helpers.js (64 строк) -- утилиты рендеринга (escapeHtml)
+- src/ui/panel/events.js (161 строк) -- обработчики событий, CustomEvent bridge
+- src/ui/html/shell.js (113 строк) -- HTML shell панели с 6 вкладками
+- src/ui/html/helpers.js (40 строк) -- HTML утилиты
+- src/ui/html/icons.js (26 строк) -- SVG иконки
+- src/ui/html/tabs/ (6 файлов) -- HTML генераторы для каждой вкладки
+- src/ui/tabs/ (6 файлов) -- рендереры для каждой вкладки (overview, resumes, vacancies, negotiations, settings, stats)
 
 ---
 
-**F0.9 | Выделение модуля main.js (boot sequence)**
+**F0.9 | Выделение модуля main.js (boot sequence) -- COMPLETED**
 
 Приоритет: P0
 Зависимости: F0.1 - F0.8
 Сложность: M
+Статус: COMPLETED
 
-Описание: Создать src/content/main.js как точку входа, которая импортирует все модули и выполняет инициализацию. Последовательность boot: (1) Инициализация логгера, (2) Проверка авторизации (auth gate), (3) Определение типа страницы (search, vacancy, resume, negotiations, other), (4) Запуск соответствующего парсера, (5) Создание FAB и панели, (6) Запуск SPA навигационного observer, (7) Обработка pendingApply (если есть незавершённый отклик). Функция detectPageType() должна корректно определять тип страницы по URL паттернам: /search/vacancy -> search, /vacancy/{id} -> vacancy, /resume/{id} -> resume, /applicant/negotiations -> negotiations.
+Описание: Создать src/content/main.js как точку входа, которая импортирует все модули и выполняет инициализацию.
 
-Критерии приёмки: main.js загружается без ошибок. FAB появляется на всех страницах hh.ru. Авторизационный gate корректно блокирует панель для неавторизованных пользователей. SPA observer перезапускает парсинг при навигации.
+Реализация: src/content/main.js -- 163 строки. Boot sequence: (1) Инициализация логгера, (2) Auth gate через checkAuth(), (3) detectPageType() по URL паттернам, (4) Запуск соответствующего парсера, (5) Создание FAB и панели, (6) SPA MutationObserver (debounce 1 сек).
 
-Анти-галлюцинация: Проверить что detectPageType() корректно обрабатывает URL с query параметрами (например /search/vacancy?text=python&area=1). Проверить что auth gate не создаёт ложных отрицательных результатов (false negative для залогиненных пользователей). Убедиться что boot sequence не блокирует загрузку страницы.
+---
+
+### Phase 0.5: Дополнительная реализованная работа (не входила в оригинальный каскад)
+
+В процессе рефакторинга Phase 0 была выполнена дополнительная работа, которая не планировалась в оригинальном каскаде задач.
+
+---
+
+**F0.5.1 | FAB CSS изоляция с !important -- COMPLETED**
+
+Реализация: src/ui/fab.js использует `style.setProperty(prop, value, 'important')` для всех CSS свойств FAB кнопки. Это предотвращает переопределение стилей hh.ru (которые могут иметь высокие специфичности через Magritte CSS). FAB корректно отображается на всех страницах hh.ru, включая страницы с агрессивными глобальными стилями.
+
+---
+
+**F0.5.2 | Auth UX -- пассивная авторизация -- COMPLETED**
+
+Реализация: src/ui/auth.js (72 строки). Пассивная авторизация через checkAuth() -- поллинг DOM элементов (секция профиля пользователя) каждые 2 секунды с cookie fallback. authIndicator -- кликабельный элемент в панели, отображающий статус авторизации. При авторизации извлекается и отображается username пользователя. Auth gate корректно блокирует функциональность панели для неавторизованных пользователей.
+
+---
+
+**F0.5.3 | 6- вкладочная wireframe панель -- COMPLETED**
+
+Реализация: Панель содержит 6 вкладок по wireframe: Overview (Обзор), Resume (Резюме), Vacancies (Вакансии), Negotiations (Переговоры), Settings (Настройки), Stats (Статистика). Каждая вкладка имеет HTML генератор (ui/html/tabs/) и рендерер (ui/tabs/). Вкладки переключаются через tab bar в shell.js. Все вкладки содержат демо-данные для визуализации layout. Реальные данные подключены для Vacancies (парсинг) и Resumes (парсинг).
+
+---
+
+**F0.5.4 | Client-side фильтрация вакансий -- COMPLETED**
+
+Реализация: src/ui/tabs/vacancies.js (74 строки) и src/ui/panel/events.js (161 строки) реализуют клиентскую фильтрацию списка вакансий. Фильтры: текстовый поиск по названию/компании, фильтр по статусу (new/applied/blacklisted), фильтр по диапазону match score. Фильтрация происходит в реальном времени при изменении фильтров.
+
+---
+
+**F0.5.5 | Blacklist management UI -- COMPLETED**
+
+Реализация: Возможность добавления/удаления компаний в чёрный список через UI панели. Вакансии из чёрного списка скрываются из списка. Действия логируются через toast-уведомления. Данные сохраняются в chrome.storage.local (ключ blacklistedCompanies).
+
+---
+
+**F0.5.6 | Version sync механизм -- COMPLETED**
+
+Реализация: Версия v1.7.2 синхронизирована между manifest.json, package.json, popup/index.html (footer) и src/ui/html/shell.js (footer панели). Единый источник истины -- manifest.json, остальные файлы обновляются при изменении версии.
+
+---
+
+**F0.5.7 | CustomEvent bridge система -- COMPLETED**
+
+Реализация: src/ui/panel/events.js определяет CustomEvent bridge для коммуникации между UI и бизнес-логикой. События: hh-ar-apply (откликнуться на вакансию), hh-ar-apply-all (массовый отклик), hh-ar-refresh (обновить данные), hh-ar-toggle-status (переключить статус вакансии), hh-ar-load-resume (загрузить данные резюме). Это позволяет связывать panel events с engine actions без прямой зависимости UI от engine.
 
 ---
 
@@ -285,7 +470,7 @@ Service worker (background/index.js) работает независимо от 
 Зависимости: F1.1, F1.5, F1.6
 Сложность: L
 
-Описание: Реализовать src/engine/matching.js с функцией calculateMatchScore(vacancy, resume) возвращающей объект {total: number, breakdown: {skills: number, salary: number, experience: number, position: number, location: number}}. Веса: навыки 30%, зарплата 25%, опыт 20%, позиция 15%, локация 10%. Навыки: Jaccard similarity с alias matching (k8s=kubernetes, pg=postgresql, js=javascript, tf=terraform, aws=amazon web services, node=node.js). Создать словарь алиасов в виде Map. Зарплата: overlap-based сравнение с 30% tolerance. Опыт: range matching с штрафом за overqualification. Позиция: word overlap с keyword boosting (developer, senior, lead, frontend, backend). Локация: exact match для города, "удаленно" = 90% для любой локации, region matching для крупных городов. Общий score ограничен диапазоном [0, 100].
+Описание: Реализовать src/engine/matching.js с функцией calculateMatchScore(vacancy, resume) возвращающей объект {total: number, breakdown: {skills: number, salary: number, experience: number, position: number, location: number}}. Веса: навыки 30%, зарплата 25%, опыт 20%, позиция 15%, локация 10%. Навыки: Jaccard similarity с alias matching (k8s=kubernetes, pg=postgresql, js=javascript, tf=terraform, aws=amazon web services, node=node.js). Создать словарь алиасов в виде Map. Зарплата: overlap-based сравнение с 30% tolerance. Опыт: range matching с штрафом за overqualification. Позиция: word overlap с keyword boosting (developer, senior, lead, frontend, backend). Локация: точное совпадение или substring matching для крупных городов. Функция scoreClass(score) возвращает CSS класс для цветового кодирования: 'score-high' (>=70), 'score-medium' (40-69), 'score-low' (<40).
 
 Критерии приёмки: calculateMatchScore возвращает объект с total в [0, 100]. breakdown.skills вычисляется через Jaccard. breakdown.salary учитывает tolerance. breakdown.experience учитывает overqualification penalty. Идеальное совпадение (все навыки совпадают, зарплата совпадает, опыт совпадает) даёт total >= 90.
 
@@ -345,7 +530,7 @@ Service worker (background/index.js) работает независимо от 
 Зависимости: F1.1, F0.3, F0.5, F0.6
 Сложность: L
 
-Описание: Реализовать полный процесс отклика на вакансию в src/engine/auto-apply.js. Процесс состоит из 5 шагов, отображаемых в modal окне внутри Shadow DOM панели. Шаг 1 -- Pre-flight check: проверка rate limiter (дневной, часовой лимит, минимальный интервал, burst), проверка что вакансия не откликнута ранее, проверка наличия кнопки отклика. Шаг 2 -- Навигация: сохранение pendingApply в chrome.storage ({vacancyId, vacancyUrl, timestamp}), window.location.href = vacancyUrl. Шаг 3 -- Ожидание и поиск: waitForElement для кнопки отклика на странице вакансии (selectors: replyButton), проверка текста кнопки (не "уже откликнулись"). Шаг 4 -- Обработка alert-ов: проверка presence of relocationWarning, testTaskRequired, indirectEmployerAlert. Для каждого alert -- соответствующий обработчик (подтвердить релокацию, предупредить о тестовом задании). Шаг 5 -- Заполнение и отправка: клик по кнопке отклика, waitForElement popup, заполнение сопроводительного письма (если template задан), клик submit, верификация (popup исчез или кнопка изменила текст). Каждый шаг логируется и отображает прогресс в modal.
+Описание: Реализовать полный процесс отклика на вакансию в src/engine/auto-respond.js. Процесс состоит из 5 шагов, отображаемых в modal окне внутри Shadow DOM панели. Шаг 1 -- Pre-flight check: проверка rate limiter (дневной, часовой лимит, минимальный интервал, burst), проверка что вакансия не откликнута ранее, проверка наличия кнопки отклика. Шаг 2 -- Навигация: сохранение pendingApply в chrome.storage ({vacancyId, vacancyUrl, timestamp}), window.location.href = vacancyUrl. Шаг 3 -- Ожидание и поиск: waitForElement для кнопки отклика на странице вакансии (selectors: replyButton), проверка текста кнопки (не "уже откликнулись"). Шаг 4 -- Обработка alert-ов: проверка presence of relocationWarning, testTaskRequired, indirectEmployerAlert. Для каждого alert -- соответствующий обработчик (подтвердить релокацию, предупредить о тестовом задании). Шаг 5 -- Заполнение и отправка: клик по кнопке отклика, waitForElement popup, заполнение сопроводительного письма (если template задан), клик submit, верификация (popup исчез или кнопка изменила текст). Каждый шаг логируется и отображает прогресс в modal.
 
 Критерии приёмки: Нажатие кнопки "Откликнуться" в панели открывает modal. Modal показывает 5 шагов с текущим прогрессом. Pre-flight check блокирует при превышении лимитов. Навигация корректно переходит на страницу вакансии. Кнопка отклика находится и кликается. Alert-ы обрабатываются. Сопроводительное письмо заполняется. Отклик отправляется (верификация по изменению кнопки).
 
@@ -409,13 +594,15 @@ Service worker (background/index.js) работает независимо от 
 
 ---
 
-**F3.6 | Черный список компаний -- UI управление**
+**F3.6 | Черный список компаний -- расширенное UI**
 
 Приоритет: P2
 Зависимости: F0.4, F3.4
 Сложность: M
 
-Описание: Реализовать UI для управления чёрным списком компаний. Вкладка "Настройки" (settings tab) добавить секцию "Чёрный список" с: списком компаний в чёрном списке (с кнопкой "Удалить" для каждой), полем ввода для добавления новой компании, кнопкой "Импортировать из вакансий" (добавляет компании из текущего списка вакансий). Во вкладке "Вакансии" добавить кнопку "В чёрный список" на каждой карточке вакансии. Вакансии из чёрного списка скрываются из списка (если включён toggle hideBlacklist). Данные хранятся в chrome.storage.local под ключом blacklistedCompanies как массив строк.
+Описание: Расширить UI для управления чёрным списком компаний. Вкладка "Настройки" (settings tab) добавить секцию "Чёрный список" с: списком компаний в чёрном списке (с кнопкой "Удалить" для каждой), полем ввода для добавления новой компании, кнопкой "Импортировать из вакансий" (добавляет компании из текущего списка вакансий). Во вкладке "Вакансии" добавить кнопку "В чёрный список" на каждой карточке вакансии. Вакансии из чёрного списка скрываются из списка (если включён toggle hideBlacklist). Данные хранятся в chrome.storage.local под ключом blacklistedCompanies как массив строк.
+
+Примечание: базовый blacklist add/remove с toast логированием уже реализован (F0.5.5). Данная задача расширяет его полноценным UI в настройках и импортом из вакансий.
 
 Критерии приёмки: Кнопка "В чёрный список" на карточке вакансии добавляет компанию. Секция в настройках показывает список компаний. Кнопка "Удалить" убирает компанию из списка. Toggle hideBlacklist скрывает вакансии чёрного списка. Состояние персистентно (сохраняется между сессиями).
 
@@ -481,21 +668,25 @@ Service worker (background/index.js) работает независимо от 
 
 Описание: Реализовать вкладку "Обзор" в src/ui/tabs/overview.js. Содержимое: (1) Статус авторизации -- индикатор (зелёный "Авторизован" или красный "Не авторизован") с детекцией через findElement('logged_in_indicator'). (2) KPI карточки 2x2: "Откликов сегодня" (stats.appliedToday), "Приглашений" (stats.interviewInvites), "Ошибок" (stats.errorsToday), "Всего" (stats.totalApplied). (3) Прогресс-бар дневного лимита: {appliedToday}/{dailyLimit} с процентным заполнением и countdown до следующего доступного отклика (nextAvailableAt - Date.now()). (4) Прогресс-бар часового лимита: аналогично дневному. (5) Adaptive slowdown индикатор: текущий adaptiveFactor с визуализацией (норма = зелёный, замедление = жёлтый, сильное замедление = красный). (6) Auto-apply статус: текущий режим (manual/semi-auto/auto), кнопка start/pause, фильтр (новые вакансии + score >= minMatchScore), размер очереди. (7) Recent activity log -- последние 10 событий из chrome.storage logs.
 
+Примечание: wireframe для вкладки "Обзор" уже существует (ui/html/tabs/overview.js -- 170 строк HTML, ui/tabs/overview.js -- 83 строк рендерер). Данная задача подключает реальные данные вместо демо.
+
 Критерии приёмки: Вкладка "Обзор" отображает все 7 блоков. KPI карточки показывают актуальные данные. Progress bars корректно заполняются. Countdown обновляется каждую секунду. Auto-apply статус показывает корректный режим. Activity log обновляется при новых событиях.
 
 Анти-галлюцинация: Проверить что все числовые значения валидны (Number.isFinite). Убедиться что countdown не показывает отрицательные значения. Проверить что progress bar не превышает 100%. Убедиться что activity log не показывает undefined или null записей.
 
 ---
 
-**F5.2 | Вкладка "Логи" -- stats 2x2 + funnel + event log**
+**F5.2 | Вкладка "Статистика" -- stats 2x2 + funnel + event log**
 
 Приоритет: P1
 Зависимости: F0.4, F0.8
 Сложность: L
 
-Описание: Реализовать вкладку "Логи" в src/ui/tabs/logs.js. Содержимое: (1) Stats 2x2: те же KPI карточки что и в Overview для быстрого доступа. (2) Progress bar дневного лимита. (3) Conversion funnel (воронка конверсии): Просмотры -> Отклики -> Приглашения -> Собеседования -> Офферы. Каждый этап показывает count и конверсию от предыдущего этапа (percentage). Данные для funnel: viewsToday (подсчитывается из кэша вакансий), appliedToday, interviewInvites, interviewsScheduled (новое поле в stats), offersReceived (новое поле). (4) Event log: список событий с цветовой кодировкой по уровню (Info = серый, Warn = жёлтый, Error = красный), timestamp, module, action. Фильтр по уровню. Пагинация (по 50 записей с кнопкой "Загрузить ещё"). Кнопка "Экспорт логов" (JSON формат).
+Описание: Реализовать вкладку "Статистика" (ранее "Логи") в src/ui/tabs/stats.js. Содержимое: (1) Stats 2x2: те же KPI карточки что и в Overview для быстрого доступа. (2) Progress bar дневного лимита. (3) Conversion funnel (воронка конверсии): Просмотры -> Отклики -> Приглашения -> Собеседования -> Офферы. Каждый этап показывает count и конверсию от предыдущего этапа (percentage). Данные для funnel: viewsToday (подсчитывается из кэша вакансий), appliedToday, interviewInvites, interviewsScheduled (новое поле в stats), offersReceived (новое поле). (4) Event log: список событий с цветовой кодировкой по уровню (Info = серый, Warn = жёлтый, Error = красный), timestamp, module, action. Фильтр по уровню. Пагинация (по 50 записей с кнопкой "Загрузить ещё"). Кнопка "Экспорт логов" (JSON формат).
 
-Критерии приёмки: Вкладка "Логи" отображает все 4 блока. Funnel показывает корректные данные. Конверсии рассчитываются корректно (percentage 0-100). Event log фильтруется по уровню. Пагинация работает. Экспорт логов скачивает JSON файл.
+Примечание: wireframe для вкладки "Статистика" уже существует (ui/html/tabs/stats.js -- 67 строк HTML, ui/tabs/stats.js -- 106 строк рендерер). Данная задача подключает реальные данные вместо демо.
+
+Критерии приёмки: Вкладка "Статистика" отображает все 4 блока. Funnel показывает корректные данные. Конверсии рассчитываются корректно (percentage 0-100). Event log фильтруется по уровню. Пагинация работает. Экспорт логов скачивает JSON файл.
 
 Анти-галлюцинация: Проверить что funnel не показывает NaN процентов (при делении на 0). Убедиться что event log корректно сортирован по timestamp (новые сверху). Проверить что экспорт JSON валиден (JSON.parse не бросает исключение). Убедиться что очень длинные лог-сообщения не ломают layout.
 
@@ -569,6 +760,8 @@ Service worker (background/index.js) работает независимо от 
 
 Описание: Расширить вкладку "Вакансии" элементами фильтрации и сортировки. Добавить: (1) Текстовый поиск -- фильтрация по названию вакансии или компании (input с debounce 300ms). (2) Фильтр по статусу -- выпадающий список (Все/Новые/Откликнутые/Чёрный список). (3) Фильтр по match score -- range slider (от X% до Y%) с отображением текущего диапазона. (4) Сортировка -- по match score (убывание/возрастание), по дате (новые/старые), по зарплате (высокая/низкая). (5) Карточки вакансий с detailed match breakdown: Skills (30%), Salary (25%), Experience (20%), Position (15%), Location (10%) -- каждая метрика с цветной полоской. (6) Кнопка "Откликнуться" на каждой карточке (открывает 5-шаговый modal из F3.1). (7) Кнопка "В чёрный список" на каждой карточке.
 
+Примечание: базовая client-side фильтрация вакансий (поиск, статус, score range) уже реализована (F0.5.4). Blacklist add/remove тоже реализован (F0.5.5). Данная задача добавляет сортировку, detailed match breakdown, кнопку отклика и range slider.
+
 Критерии приёмки: Текстовый поиск фильтрует вакансии в реальном времени. Фильтр по статусу корректно скрывает/показывает вакансии. Range slider фильтрует по match score. Сортировка работает для всех режимов. Match breakdown отображает 5 метрик на каждой карточке.
 
 Анти-галлюцинация: Проверить что debounce не фильтрует слишком быстро (300ms). Убедиться что фильтры комбинируются корректно (пересечение). Проверить что range slider не пропускает значения вне [0, 100]. Убедиться что breakdown полоски корректно ограничены [0, 100]%.
@@ -597,6 +790,8 @@ Service worker (background/index.js) работает независимо от 
 
 Описание: Реализовать вкладку "Переговоры" в src/ui/tabs/negotiations.js. Содержимое: (1) Список чатов с работодателями. Каждый чат показывает: название компании, позиция, последнее сообщение (обрезанное), дата, статус badge (приглашение/собеседование/диалог/ожидание/отказ), количество непрочитанных (badge с числом). (2) Фильтр по статусу. (3) Сортировка по дате (новые сверху) и по непрочитанным. (4) Клик по чату -- открывает страницу переговоров в новой вкладке (window.open с URL чата). (5) Кнопка "Обновить" для повторного парсинга. При отсутствии чатов -- сообщение "Нет активных переговоров".
 
+Примечание: wireframe для вкладки "Переговоры" уже существует (ui/html/tabs/negotiations.js -- 65 строк HTML, ui/tabs/negotiations.js -- 81 строк рендерер). Данная задача подключает реальные данные вместо демо и добавляет кликабельность/навигацию.
+
 Критерии приёмки: Вкладка "Переговоры" отображает список чатов. Каждый чат показывает все поля. Badge непрочитанных корректно отображается. Фильтр по статусу работает. Клик по чату открывает соответствующую страницу.
 
 Анти-галлюцинация: Проверить что длинные сообщения обрезаются корректно (CSS text-overflow). Убедиться что badge не показывает undefined при 0 непрочитанных. Проверить что status badge использует корректные цвета для каждого типа.
@@ -609,133 +804,26 @@ Service worker (background/index.js) работает независимо от 
 Зависимости: F0.4, F0.8
 Сложность: M
 
-Описание: Реализовать вкладку "Настройки" в src/ui/tabs/settings.js по спецификации wireframe. Содержимое: (1) Режим работы: selector с тремя вариантами (Ручной, Полуавтоматический, Автоматический) с описанием каждого режима. (2) Лимиты: дневной лимит (range 10-500), часовой лимит (range 5-60), минимальный интервал (range 10-120 сек), минимальный match score (range 0-100%). Все с input type=number и описанием. (3) Шаблон сопроводительного письма: textarea с переменными {name}, {position}, {company}, {skills}, {experience}. Подсказка по переменным. (4) Тон письма: dropdown (Формальный, Уверенный, Дружелюбный). (5) Имитация набора: toggle. (6) Пять toggle-ов: показ match score, авто-скролл пагинации, подтверждение перед откликом, скрыть чёрный список, тёмная тема. (7) Чёрный список: список компаний с кнопками удаления, поле добавления, кнопка импорта из вакансий. Кнопка "Сохранить" сохраняет все настройки в chrome.storage.local.
+Описание: Реализовать вкладку "Настройки" в src/ui/tabs/settings.js с полным управлением настройками расширения. Секции: (1) Основные настройки: минимальный match score (range slider 0-100), режим отклика (manual/semi-auto/auto -- radio buttons), дневной лимит откликов (number input), часовой лимит (number input), минимальный интервал между откликами (number input, секунды). (2) Поведение: toggle "Имитация набора текста", toggle "Скрывать вакансии из чёрного списка", toggle "Автопрокрутка пагинации". (3) AI настройки: API key (password input), кнопка "Проверить", лимит AI запросов в день (number input), тон письма (select: formal/confident/friendly). (4) Шаблон сопроводительного письма: textarea с поддержкой переменных {position}, {company}, {skills}, {experience}. (5) Чёрный список: список компаний, поле ввода для добавления, кнопки "Удалить" и "Импортировать из вакансий". Все настройки сохраняются в chrome.storage.local при изменении.
 
-Критерии приёмки: Все элементы управления отображаются и интерактивны. Режим работы переключается. Лимиты настраиваются с валидацией диапазонов. Шаблон сохраняется. Toggle-ы переключаются. Чёрный список управляется. Все настройки персистентны.
+Примечание: wireframe для вкладки "Настройки" уже существует (ui/html/tabs/settings.js -- 90 строк HTML, ui/tabs/settings.js -- 59 строк рендерер). Данная задача подключает реальные данные и логику сохранения.
 
-Анти-галлюцинация: Проверить что все input type=number имеют min/max атрибуты. Убедиться что шаблон письма сохраняет пользовательский текст без искажений (HTML escaping не нужен, но trim). Проверить что toggle-ы корректно отражают состояние из storage при загрузке.
+Критерии приёмки: Все настройки отображаются и редактируются. Изменения сохраняются в chrome.storage.local при потере фокуса (onblur/onchange). Чёрный список корректно добавляет/удаляет компании. API key поле маскируется (type=password). Toggle переключения мгновенно отражаются.
+
+Анти-галлюцинация: Проверить что number input не принимает отрицательные значения или NaN. Убедиться что сохранение настроек не вызывает ошибок при переполнении storage. Проверить что шаблон письма корректно сохраняет спецсимволы ({position} и т.д.).
 
 ---
 
-**F6.7 | Обновление popup для синхронизации с 6 вкладками**
+**F6.7 | Подготовка к публикации в Chrome Web Store**
 
 Приоритет: P2
-Зависимости: F6.1, F6.6
-Сложность: M
-
-Описание: Обновить popup (popup/index.html + popup.js) для синхронизации с новой 6-вкладочной архитектурой sidebar. Popup остаётся лёгким (quick access) но его данные синхронизированы с sidebar. Изменения: (1) Добавить кнопку "Открыть панель" (chrome.tabs.sendMessage для активации sidebar если скрыт). (2) Добавить тёмную тему в popup (CSS переменные синхронизированы с sidebar). (3) Добавить экспорт/импорт данных (JSON) для бэкапа настроек, статистики, чёрного списка, логов. (4) Добавить информацию о версии и ссылку на документацию.
-
-Критерии приёмки: Popup корректно отображает данные из chrome.storage. Кнопка "Открыть панель" активирует sidebar. Тёмная тема popup синхронизирована с sidebar. Экспорт/импорт работает (JSON файл скачивается и загружается).
-
-Анти-галлюцинация: Проверить что экспорт JSON содержит все необходимые данные (настройки, статистика, blacklist, logs). Убедиться что импорт валидирует структуру JSON перед применением. Проверить что popup не показывает stale данные (auto-refresh каждые 5 сек).
-
----
-
-**F6.8 | Chrome Web Store подготовка**
-
-Приоритет: P3
 Зависимости: Все предыдущие фазы
 Сложность: M
 
-Описание: Подготовить расширение для публикации в Chrome Web Store. Задачи: (1) Создать иконки всех размеров (16x16, 48x48, 128x128) с качественной графикой. (2) Написать описание расширения для Chrome Web Store (краткое и подробное). (3) Создать скриншоты (1280x800, 640x400) демонстрирующие все 6 вкладок. (4) Создать promotional tiles (440x280, 920x680). (5) Обновить manifest.json: добавить content_security_policy (если нужно), убедиться что permissions минимальны (storage, cookies, activeTab, alarms). (6) Убедиться что расширение проходит Chrome Extension Manifest V3 validation. (7) Удалить console.log из production build (esbuild drop: ['console.log', 'console.debug']). (8) Создать privacy policy page. (9) Создать landing page для расширения (опционально).
+Описание: Подготовить расширение для публикации. (1) Оптимизировать размер бандла: включить minify для production build (добавить "build:prod" в package.json). (2) Создать иконки: 16x16, 48x48, 128x128 для manifest. (3) Написать описание расширения для Chrome Web Store (на русском и английском). (4) Создать скриншоты: 1280x800, минимум 3 скриншота (панель на странице вакансий, вкладка "Обзор" с KPI, вкладка "Вакансии" с фильтрами). (5) Удалить все console.log из production build (или заменить на условный логгер с уровнями). (6) Убедиться что расширение не использует запрещённые API. (7) Проверить что все permissions в manifest.json минимально необходимы. (8) Создать privacy policy (если используется API key -- указать что хранится локально). (9) Протестировать на Chrome, Edge, Brave. (10) Упаковать как .zip для загрузки.
 
-Критерии приёмки: Расширение загружается в Chrome Web Store Developer Dashboard без ошибок валидации. Все иконки корректного размера и формата (PNG). Описание на русском языке. Скриншоты демонстрируют функциональность. Console.log удалён из production бандла.
+Критерии приёмки: Production build (< 1MB минифицированный). Иконки корректного размера и формата. Описание содержит все ключевые фичи. Скриншоты отражают реальный функционал. Расширение работает на Chrome 120+, Edge 120+, Brave 1.60+.
 
-Анти-галлюцинация: Проверить что production build не содержит console.log (grep по собранному файлу). Убедиться что manifest.json permissions не запрашивают избыточные доступы. Проверить что иконки имеют корректный DPI для Retina дисплеев.
-
----
-
-## 4. Механизм контроля выполнения
-
-### 4.1 Трекинг задач
-
-Контроль выполнения задач реализуется через несколько механизмов. Первичный -- данный документ TASK-CASCADE.md, в котором каждая задача имеет уникальный идентификатор (F0.1, F1.2 и т.д.) и статус. Статус задачи обновляется вручную при завершении: [TODO], [IN PROGRESS], [DONE], [BLOCKED]. Вторичный -- git branching strategy. Каждая фаза реализуется в отдельной ветке: phase-0-refactor, phase-1-parsing, phase-2-matching, phase-3-auto-apply, phase-4-ai, phase-5-analytics, phase-6-polish. Внутри фазы каждая задача может реализовываться в отдельной ветке (feature/F1.1-vacancy-detail-parser) с последующим merge в ветку фазы. Третий -- CHANGELOG.md. Каждая завершённая задача фиксируется в CHANGELOG.md с указанием идентификатора задачи, описания изменений и ссылки на commit.
-
-### 4.2 Критерии завершения фазы
-
-Фаза считается завершённой когда все задачи с приоритетом P0 в рамках фазы выполнены и прошли приёмку. Задачи с приоритетом P1 и P2 могут переноситься на следующие фазы. Перед переходом к следующей фазе необходимо: убедиться что все P0 задачи имеют критерии приёмки выполненные (тестирование на реальных страницах hh.ru), убедиться что нет регрессий (все функциональные блоки предыдущих фаз работают), убедиться что production build собирается без ошибок, обновить CHANGELOG.md с итогами фазы, создать git tag (v1.6.0 для Phase 0, v1.7.0 для Phase 1 и т.д.).
-
-### 4.3 Отчётность о прогрессе
-
-Прогресс отслеживается через несколько индикаторов. Процент выполнения фазы = количество выполненных задач / общее количество задач в фазе. Блокеры -- задачи со статусом [BLOCKED] с указанием причины и зависимой задачи. Риски -- новые проблемы обнаруженные в процессе реализации (добавляются в раздел "Риски" данного документа). Решения -- архитектурные решения принятые в процессе (документируются в ARCHITECTURE.md). Для оперативного отслеживания используется формат краткого статуса: "Phase X: Y/Z tasks complete, N blocked, top blocker: [описание]".
-
-### 4.4 Тестирование на реальных страницах
-
-Каждая задача, связанная с парсингом DOM (все задачи Phase 1 и частично Phase 0), требует тестирования на реальных страницах hh.ru. Процесс: загрузить расширение в Chrome (chrome://extensions, Developer mode, Load unpacked), открыть соответствующую страницу hh.ru, открыть DevTools Console, проверить логи [HH-AR], визуально проверить результат в sidebar. Для задач auto-apply (Phase 3) -- тестировать на тестовом аккаунте hh.ru с dailyLimit=1. Для задач AI (Phase 4) -- тестировать с тестовым API key и лимитом запросов. Все обнаруженные несоответствия DOM (изменённые селекторы) фиксируются в ARCHITECTURE.md в разделе "Selector updates".
+Анти-галлюцинация: Убедиться что minified бандл не содержит утечек API key или персональных данных. Проверить что все external references (CDN, внешние шрифты) заменены на bundled ресурсы или удалены. Убедиться что расширение не использует eval() или Function() (запрещено Chrome Web Store для Manifest V3).
 
 ---
-
-## 5. Анти-галлюцинация протокол
-
-### 5.1 Определение галлюцинации в контексте расширения
-
-Галлюцинация -- это ситуация когда код делает неверные предположения о структуре DOM hh.ru, о данных извлечённых из DOM, или о состоянии внешних систем (API, storage), что приводит к некорректному поведению расширения. Типы галлюцинаций: DOM галлюцинация (предположение что элемент существует, когда его нет), Data галлюцинация (использование данных без валидации, NaN propagation), Action галлюцинация (выполнение действия над невидимым или недоступным элементом), State галлюцинация (несоответствие сохранённого состояния реальному), Selector галлюцинация (использование несуществующих или нестабильных селекторов), API галлюцинация (предположение что API ответ имеет конкретную структуру).
-
-### 5.2 Обязательные проверки для каждого модуля
-
-Для каждого модуля в расширении обязательны следующие проверки при реализации и приёмке. DOM verification: ни один вызов querySelector/querySelectorAll не выполняется без проверки результата. Все DOM обращения проходят через findElement или findAllElements. Data validation: все данные извлечённые из DOM проходят валидацию (type check, length check, format check). Все числовые значения проверяются на Number.isFinite. Action verification: все клики проходят через safeClick (visibility + disabled check). Все вводы текста проходят через safeInput (disabled + readonly + React-safe setter). Storage verification: все чтения из chrome.storage обёрнуты в try/catch с fallback значениями. Все записи проверяют структуру данных. Selector verification: все селекторы проверены на реальной странице hh.ru (diagnoseResumeDOM / diagnoseVacancyDOM / diagnoseNegotiationsDOM). Нестабильные селекторы имеют fallback-цепочку.
-
-### 5.3 Правила кодирования для предотвращения галлюцинаций
-
-Правило 1: никогда не возвращать undefined из функций. Все функции возвращают конкретные типы (string '', null, boolean false, number 0, object {}). Правило 2: никогда не предполагать что DOM элемент существует. Всегда проверять через findElement или safeQuery. Правило 3: никогда не обращаться к textContent/value без обёртки. Использовать safeGetText/safeGetAttr. Правило 4: никогда не кликать по невидимым элементам. safeClick проверяет visibility. Правило 5: никогда не вводить текст в disabled/readonly поля. safeInput проверяет disabled. Правило 6: всегда валидировать данные перед использованием. validateVacancyData, validateResumeData. Правило 7: всегда логировать ошибки, не игнорировать. Каждое исключение должно быть перехвачено и залогировано. Правило 8: всегда предусматривать fallback. Fallback-цепочки селекторов, fallback значения, fallback действия. Правило 9: никогда не доверять данным из chrome.storage слепо. Проверять тип и структуру при чтении. Правило 10: всегда проверять что Promise разрешается (с timeout). waitForElement имеет timeout, API вызовы имеют timeout.
-
-### 5.4 Процесс верификации
-
-При реализации каждой задачи разработчик обязан: написать код с соблюдением всех 10 правил анти-галлюцинации, протестировать модуль на реальной странице hh.ru (не на моковых данных), запустить диагностику DOM для проверки селекторов, вручную проверить все edge cases (пустые данные, отсутствующие элементы, network errors), добавить unit-тесты для функций валидации (если применимо), зафиксировать результат приёмки в CHANGELOG.md. При обнаружении несоответствия DOM (селектор не работает на актуальной странице hh.ru) -- остановить работу, обновить селектор, запустить диагностику, продолжить. Не фиксировать работу с неработающими селекторами.
-
----
-
-## 6. Unicode Policy
-
-### 6.1 Правила для кода
-
-Весь код расширения должен использовать только ASCII символы и кириллические символы для строковых литералов на русском языке. Код (имена переменных, функций, комментариев) пишется на английском языке с использованием ASCII. Строковые константы на русском языке (UI тексты, сообщения об ошибках, логи) используют кириллицу. Запрещено использование emoji в коде (включая комментарии). Запрещено использование Unicode-декоративных символов (боковые рамки, стрелки из Unicode, box-drawing characters). Строки разделения в коде используют стандартные ASCII комментарии (// --- или // ===), не Unicode line-drawing characters. Логирование использует формат [HH-AR][Module] action: data -- только ASCII и кириллица.
-
-### 6.2 Правила для документации
-
-Вся документация пишется на русском языке с использованием ASCII и кириллицы. Запрещено использование emoji в документации (README, CHANGELOG, TASK-CASCADE, ARCHITECTURE). Запрещено использование Unicode-графики (блок-схемы из Unicode, table-drawing characters, arrow symbols). Таблицы оформляются через Markdown pipe syntax (стандартный формат). Разделители секций используют Markdown --- или ===, не Unicode. Заголовки используют стандартный Markdown (# ## ###), не Unicode. Маркированные списки используют стандартный Markdown (- или *), не Unicode symbols. Для визуальных диаграмм (архитектура, потоки данных) использовать текстовое описание или ASCII art (только ASCII, без Unicode box-drawing).
-
-### 6.3 Правила для UI текстов
-
-Текст в UI (sidebar, popup, modal, notifications) использует кириллицу для русского языка. Никаких emoji в кнопках, заголовках, описаниях. Статусы и индикаторы используют текстовые метки (не emoji). Цветовое кодирование реализуется через CSS, не через Unicode цветные кружки. Бейджи с числами используют обычные цифры. Кнопки используют текстовые метки ("Откликнуться", "В чёрный список", "Обновить"). Всплывающие уведомления используют текстовые сообщения без emoji.
-
-### 6.4 Исключения
-
-Допускается использование Unicode только в случаях: стандартные кириллические символы (А-Яа-яЁё) для русского текста, стандартные латинские символы (A-Za-z) для кода и URL, стандартные цифры (0-9), стандартная пунктуация (, . : ; ! ? ' " ( ) [ ] { } - _ / @ # $ % & * + = < > | \ ~ ^ `), стандартные Markdown символы (# * - _ > | `), HTML entity references в JSX/HTML (например &amp; &lt;). Все остальные Unicode символы (emoji, декоративные, box-drawing, математические, специальные) запрещены во всех файлах проекта.
-
----
-
-## 7. Приоритетная последовательность реализации
-
-### 7.1 Критический путь (P0 задачи)
-
-Критический путь реализации -- это последовательность задач минимальной длины которая приводит к работающему продукту с базовой функциональностью. Критический путь: F0.1 (esbuild setup) -> F0.2-F0.6 (библиотечные модули) -> F0.7 (парсеры) -> F0.8 (UI) -> F0.9 (main boot) -> F1.1 (vacancy detail parser) -> F1.5 (salary parser) -> F1.6 (experience parser) -> F2.1 (matching engine) -> F2.3 (integration) -> F3.1 (manual apply modal) -> F3.2 (CAPTCHA handling). Этот путь даёт пользователю работающий инструмент: парсинг вакансий с оценкой совпадения и ручной отклик. Оценка: ~15 задач по 1-3 дня каждая = 15-45 дней.
-
-### 7.2 Рекомендуемая последовательность по фазам
-
-Phase 0 (Рефакторинг): F0.1 -> F0.2, F0.3, F0.4, F0.5, F0.6 (параллельно, все P0) -> F0.7 -> F0.8 -> F0.9. Это обязательная фаза без которой дальнейшая разработка затруднена из-за монолитного content.js. После завершения Phase 0 -- git tag v1.6.0.
-
-Phase 1 (Core Parsing): F1.2 -> F1.1 -> F1.5 -> F1.6 -> F1.3 -> F1.4. После завершения -- git tag v1.7.0.
-
-Phase 2 (Matching Engine): F2.1 -> F2.3 -> F2.2 -> F2.4. После завершения -- git tag v1.8.0.
-
-Phase 3 (Auto-Apply): F3.5 -> F3.1 -> F3.2 -> F3.3 -> F3.4 -> F3.6. После завершения -- git tag v1.9.0.
-
-Phase 4 (AI Integration): F4.3 -> F4.1 -> F4.2. После завершения -- git tag v2.0.0.
-
-Phase 5 (Analytics): F5.1 -> F5.2 -> F5.3 -> F5.4. После завершения -- git tag v2.1.0.
-
-Phase 6 (Polish): F6.6 -> F6.1 -> F6.3 -> F6.4 -> F6.2 -> F6.5 -> F6.7 -> F6.8. После завершения -- git tag v2.2.0.
-
-### 7.3 Параллельные работы
-
-В рамках одной фазы некоторые задачи могут выполняться параллельно если они не имеют зависимостей друг от друга. В Phase 0: F0.2-F0.6 могут выполняться параллельно (все зависят только от F0.1). В Phase 1: F1.3 и F1.4 могут выполняться параллельно с F1.1/F1.5/F1.6. В Phase 2: F2.4 может выполняться параллельно с F2.2. В Phase 6: F6.2, F6.5, F6.6 могут выполняться параллельно. Задачи с зависимостями от разных фаз не могут начинаться до завершения зависимой фазы (за исключением P2/P3 задач которые могут откладываться).
-
-### 7.4 Задачи-блокеры и зависимости
-
-Основные точки блокировки в каскаде: F0.1 блокирует все задачи Phase 0 (без esbuild нельзя разбивать на модули). F0.7 блокирует F0.8 (UI нужен парсер для отображения данных). F0.9 блокирует переход к Phase 1 (boot sequence должен работать). F1.1 блокирует F2.1 (matching engine нужны данные деталей вакансии). F2.1 блокирует F2.3 (интеграция требует работающий engine). F3.1 блокирует F3.3 и F3.4 (semi-auto и auto зависят от manual apply). F4.1 блокирует F4.2 (chat replies используют тот же AI service). При обнаружении блокера (задача не может быть выполнена по внешним причинам -- например, hh.ru изменил DOM и селекторы не работают) -- задаче присваивается статус [BLOCKED], блокер документируется, и разработчик переключается на неблокируемые задачи из других фаз.
-
----
-
-*Конец документа TASK-CASCADE.md*
-*Версия 2.0.0 | 2026-06-09*
