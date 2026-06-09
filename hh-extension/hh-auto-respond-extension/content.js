@@ -679,7 +679,7 @@ function parseResumeList() {
 
 const panelLog = createLogger('Panel');
 let fabEl = null, sidebarEl = null, backdropEl = null, shadowRoot = null;
-const panelState = { isOpen: false, isLoggedIn: null, status: 'idle', vacancies: [], stats: {} };
+const panelState = { isOpen: false, isLoggedIn: null, status: 'idle', vacancies: [], stats: {}, resume: null, resumeList: [], activeTab: null };
 
 // AUTH CHECK
 // NOTE: offsetParent === null для position:fixed элементов, поэтому НЕ проверяем его.
@@ -898,13 +898,62 @@ function bindTabEvents(container) {
   });
 }
 
+/**
+ * Определяет тип текущей страницы для резюме-логики.
+ */
+function getResumePageType() {
+  const path = window.location.pathname;
+  if (/\/resume\/[a-f0-9]+/.test(path)) return 'resume';
+  if (path.includes('/applicant/resumes')) return 'resume-list';
+  return 'other';
+}
+
+/**
+ * Показывает список резюме в панели (для /applicant/resumes).
+ */
+function renderResumeListPanel() {
+  const container = shadowRoot?.getElementById('har-resume-content');
+  if (!container) return;
+  const list = panelState.resumeList;
+  if (!list || list.length === 0) {
+    container.innerHTML = '<div class="har-empty">Список резюме пуст.<br>Нажмите "Загрузить" для парсинга.</div>';
+    return;
+  }
+  container.innerHTML =
+    '<div class="har-resume-list-header">Найдено резюме: ' + list.length + '</div>' +
+    list.map(r => {
+      const isActive = panelState.resume && panelState.resume.id === r.id;
+      return '<div class="har-resume-list-item ' + (isActive ? 'har-resume-list-active' : '') + '">' +
+        '<a href="' + esc(r.url) + '" target="_blank" class="har-resume-list-link">' + esc(r.title) + '</a>' +
+        (isActive ? '<span class="har-resume-loaded-badge">loaded</span>' : '') +
+        '</div>';
+    }).join('') +
+    '<div class="har-resume-list-hint">Click to open resume in new tab, then press "Load" on that page.</div>';
+
+  container.querySelectorAll('.har-resume-list-link').forEach(link => {
+    link.addEventListener('click', (e) => {
+      e.preventDefault();
+      window.open(link.getAttribute('href'), '_blank');
+    });
+  });
+}
+
 function renderResumePanel() {
   const container = shadowRoot?.getElementById('har-resume-content');
   if (!container) return;
 
   const r = panelState.resume;
   if (!r || !r.id) {
-    container.innerHTML = '<div class="har-empty">Резюме ещё не загружено.<br>Перейдите на страницу резюме на hh.ru<br>и нажмите "Загрузить с текущей страницы".</div>';
+    if (panelState.resumeList && panelState.resumeList.length > 0) {
+      renderResumeListPanel();
+      return;
+    }
+    const pageType = getResumePageType();
+    let hint = 'Go to your resume page on hh.ru<br>and click "Load from current page".';
+    if (pageType === 'resume-list') {
+      hint = 'Click "Load" to see your resumes listed on this page.';
+    }
+    container.innerHTML = '<div class="har-empty">Resume not loaded yet.<br>' + hint + '</div>';
     return;
   }
 
@@ -956,6 +1005,7 @@ function renderResumePanel() {
       ${r.additionalInfo ? '<div class="har-resume-section"><div class="har-section-subtitle">Доп. информация</div><div style="font-size:12px;color:#475569;padding:4px 0">' + esc(r.additionalInfo).substring(0, 300) + '</div></div>' : ''}
       ${debugHtml}
       <div style="font-size:10px;color:#94a3b8;padding:8px 0">Parsed: ${r.parsedAt}</div>
+      <a href="${esc(r.url)}" target="_blank" class="har-btn har-btn-secondary" style="display:block;text-align:center;text-decoration:none;margin-top:8px">Open on hh.ru</a>
     </div>`;
 }
 
@@ -998,11 +1048,11 @@ function bindSidebarEvents(container) {
 }
 
 function getSidebarCSS() {
-  return '@keyframes har-spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}@keyframes har-pulse{0%,100%{opacity:1}50%{opacity:.5}}::-webkit-scrollbar{width:5px}::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:3px}.har-sidebar{height:100%;display:flex;flex-direction:column;background:#fff;box-shadow:-4px 0 24px rgba(0,0,0,.12);font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;font-size:13px;color:#1a1a1a}.har-header{padding:16px 20px;background:linear-gradient(135deg,#2964FF,#6366f1);color:#fff;flex-shrink:0;display:flex;align-items:center;justify-content:space-between}.har-header h3{margin:0;font-size:16px;font-weight:700}.har-version{font-size:10px;opacity:.7}.har-content{flex:1;overflow-y:auto}.har-user-bar{display:flex;align-items:center;gap:12px;padding:12px 20px;background:#f8fafc;border-bottom:1px solid #e2e8f0}.har-avatar{width:36px;height:36px;border-radius:50%;background:#2964FF;display:flex;align-items:center;justify-content:center}.har-user-info{flex:1}.har-user-name{font-size:13px;font-weight:600}.har-user-status{font-size:11px;color:#22c55e}.har-dot{width:8px;height:8px;border-radius:50%;background:#9ca3af}.har-dot-idle{background:#9ca3af}.har-dot-running{background:#22c55e;animation:har-pulse 1.5s infinite}.har-dot-paused{background:#f59e0b}.har-dot-error{background:#ef4444}.har-auth-box{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 32px;text-align:center}.har-spinner{width:40px;height:40px;border:3px solid #e2e8f0;border-top-color:#2964FF;border-radius:50%;animation:har-spin .8s linear infinite;margin-bottom:20px}.har-lock-icon{margin-bottom:20px}.har-auth-box h3{font-size:18px;font-weight:700;margin:0 0 12px}.har-auth-box p{font-size:13px;color:#64748b;line-height:1.6;margin:0 0 24px}.har-stats{display:flex;padding:12px 20px;background:#f8fafc;border-bottom:1px solid #e2e8f0;gap:12px}.har-stat{text-align:center;flex:1}.har-stat-val{display:block;font-weight:800;font-size:22px;color:#2964FF}.har-stat-lbl{display:block;font-size:10px;color:#64748b;text-transform:uppercase;margin-top:2px}.har-progress{padding:8px 20px;background:#f8fafc;border-bottom:1px solid #e2e8f0}.har-progress-bar{height:4px;background:#e2e8f0;border-radius:2px;overflow:hidden}.har-progress-fill{height:100%;background:linear-gradient(90deg,#2964FF,#6366f1);border-radius:2px;transition:width .5s}.har-progress-text{font-size:10px;color:#94a3b8;text-align:right;margin-top:4px}.har-actions{padding:12px 20px;display:flex;flex-direction:column;gap:8px;border-bottom:1px solid #e2e8f0}.har-btn{padding:10px 16px;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;transition:background .15s;text-align:center}.har-btn-primary{background:#2964FF;color:#fff}.har-btn-primary:hover{background:#1d4ed8}.har-btn-secondary{background:#f1f5f9;color:#475569}.har-btn-secondary:hover{background:#e2e8f0}.har-btn-block{width:100%;display:block;margin:6px 0}.har-section-title{padding:10px 20px 6px;font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px}.har-vacancy-list{flex:1;overflow-y:auto}.har-vcard{padding:10px 20px;border-bottom:1px solid #f1f5f9;transition:background .15s}.har-vcard:hover{background:#f8fafc}.har-vcard.applied{opacity:.5}.har-vcard.blacklisted{opacity:.3}.har-vhead{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px}.har-vtitle{font-weight:600;color:#2964FF;text-decoration:none;font-size:13px;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}.har-vtitle:hover{text-decoration:underline}.har-score{padding:2px 7px;border-radius:4px;font-size:11px;font-weight:700;white-space:nowrap}.sc-high{background:#dcfce7;color:#166534}.sc-medium{background:#fef9c3;color:#854d0e}.sc-low{background:#fee2e2;color:#991b1b}.har-vmeta{display:flex;gap:10px;font-size:12px;color:#64748b;margin-bottom:6px}.har-vsalary{color:#1a1a1a;font-weight:500}.har-vfoot{display:flex;align-items:center;justify-content:space-between}.har-vfoot>span:first-child{font-size:11px;color:#94a3b8}.har-btn-apply{padding:4px 12px;background:#2964FF;color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer}.har-btn-apply:hover{background:#1d4ed8}.har-badge{padding:3px 8px;border-radius:4px;font-size:10px;font-weight:600}.ba{background:#dbeafe;color:#1d4ed8}.bb{background:#fee2e2;color:#991b1b}.har-empty{padding:24px 20px;text-align:center;color:#94a3b8;font-size:12px;line-height:1.6}.har-tabs{display:flex;border-bottom:1px solid #e2e8f0;background:#f8fafc}.har-tab{flex:1;padding:10px 16px;border:none;background:none;font-size:13px;font-weight:600;color:#64748b;cursor:pointer;border-bottom:2px solid transparent;transition:all .15s}.har-tab:hover{color:#1a1a1a;background:#f1f5f9}.har-tab-active{color:#2964FF;border-bottom-color:#2964FF;background:#fff}.har-tab-content{flex:1;overflow-y:auto}.har-resume-card{padding:16px 20px}.har-resume-header{margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid #e2e8f0}.har-resume-title{font-size:17px;font-weight:700;color:#1a1a1a;margin-bottom:4px}.har-resume-salary{font-size:14px;font-weight:600;color:#2964FF;margin-bottom:4px}.har-resume-meta{font-size:12px;color:#64748b}.har-resume-section{margin-bottom:12px}.har-section-subtitle{font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}.har-tag-list{display:flex;flex-wrap:wrap;gap:4px}.har-tag{display:inline-block;padding:3px 8px;background:#eff6ff;color:#2964FF;border-radius:4px;font-size:11px;font-weight:500}.har-tag-lang{background:#f0fdf4;color:#166534}.har-exp-item{padding:8px 0;border-bottom:1px solid #f1f5f9}.har-exp-pos{font-size:13px;font-weight:600;color:#1a1a1a}.har-exp-meta{font-size:11px;color:#64748b;margin-top:2px}.har-exp-desc{font-size:11px;color:#475569;margin-top:4px;line-height:1.4}.har-edu-item{font-size:12px;color:#475569;padding:4px 0}.har-edu-year{color:#94a3b8;font-size:11px}.har-debug{margin-top:12px;padding-top:8px;border-top:1px solid #f1f5f9}.har-debug summary{font-size:10px;color:#94a3b8;cursor:pointer;padding:4px 0}.har-debug-body{font-size:10px;font-family:monospace;padding:8px 0;line-height:1.8}';
+  return '@keyframes har-spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}@keyframes har-pulse{0%,100%{opacity:1}50%{opacity:.5}}::-webkit-scrollbar{width:5px}::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:3px}.har-sidebar{height:100%;display:flex;flex-direction:column;background:#fff;box-shadow:-4px 0 24px rgba(0,0,0,.12);font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;font-size:13px;color:#1a1a1a}.har-header{padding:16px 20px;background:linear-gradient(135deg,#2964FF,#6366f1);color:#fff;flex-shrink:0;display:flex;align-items:center;justify-content:space-between}.har-header h3{margin:0;font-size:16px;font-weight:700}.har-version{font-size:10px;opacity:.7}.har-content{flex:1;overflow-y:auto}.har-user-bar{display:flex;align-items:center;gap:12px;padding:12px 20px;background:#f8fafc;border-bottom:1px solid #e2e8f0}.har-avatar{width:36px;height:36px;border-radius:50%;background:#2964FF;display:flex;align-items:center;justify-content:center}.har-user-info{flex:1}.har-user-name{font-size:13px;font-weight:600}.har-user-status{font-size:11px;color:#22c55e}.har-dot{width:8px;height:8px;border-radius:50%;background:#9ca3af}.har-dot-idle{background:#9ca3af}.har-dot-running{background:#22c55e;animation:har-pulse 1.5s infinite}.har-dot-paused{background:#f59e0b}.har-dot-error{background:#ef4444}.har-auth-box{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 32px;text-align:center}.har-spinner{width:40px;height:40px;border:3px solid #e2e8f0;border-top-color:#2964FF;border-radius:50%;animation:har-spin .8s linear infinite;margin-bottom:20px}.har-lock-icon{margin-bottom:20px}.har-auth-box h3{font-size:18px;font-weight:700;margin:0 0 12px}.har-auth-box p{font-size:13px;color:#64748b;line-height:1.6;margin:0 0 24px}.har-stats{display:flex;padding:12px 20px;background:#f8fafc;border-bottom:1px solid #e2e8f0;gap:12px}.har-stat{text-align:center;flex:1}.har-stat-val{display:block;font-weight:800;font-size:22px;color:#2964FF}.har-stat-lbl{display:block;font-size:10px;color:#64748b;text-transform:uppercase;margin-top:2px}.har-progress{padding:8px 20px;background:#f8fafc;border-bottom:1px solid #e2e8f0}.har-progress-bar{height:4px;background:#e2e8f0;border-radius:2px;overflow:hidden}.har-progress-fill{height:100%;background:linear-gradient(90deg,#2964FF,#6366f1);border-radius:2px;transition:width .5s}.har-progress-text{font-size:10px;color:#94a3b8;text-align:right;margin-top:4px}.har-actions{padding:12px 20px;display:flex;flex-direction:column;gap:8px;border-bottom:1px solid #e2e8f0}.har-btn{padding:10px 16px;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;transition:background .15s;text-align:center}.har-btn-primary{background:#2964FF;color:#fff}.har-btn-primary:hover{background:#1d4ed8}.har-btn-secondary{background:#f1f5f9;color:#475569}.har-btn-secondary:hover{background:#e2e8f0}.har-btn-block{width:100%;display:block;margin:6px 0}.har-section-title{padding:10px 20px 6px;font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px}.har-vacancy-list{flex:1;overflow-y:auto}.har-vcard{padding:10px 20px;border-bottom:1px solid #f1f5f9;transition:background .15s}.har-vcard:hover{background:#f8fafc}.har-vcard.applied{opacity:.5}.har-vcard.blacklisted{opacity:.3}.har-vhead{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px}.har-vtitle{font-weight:600;color:#2964FF;text-decoration:none;font-size:13px;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}.har-vtitle:hover{text-decoration:underline}.har-score{padding:2px 7px;border-radius:4px;font-size:11px;font-weight:700;white-space:nowrap}.sc-high{background:#dcfce7;color:#166534}.sc-medium{background:#fef9c3;color:#854d0e}.sc-low{background:#fee2e2;color:#991b1b}.har-vmeta{display:flex;gap:10px;font-size:12px;color:#64748b;margin-bottom:6px}.har-vsalary{color:#1a1a1a;font-weight:500}.har-vfoot{display:flex;align-items:center;justify-content:space-between}.har-vfoot>span:first-child{font-size:11px;color:#94a3b8}.har-btn-apply{padding:4px 12px;background:#2964FF;color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer}.har-btn-apply:hover{background:#1d4ed8}.har-badge{padding:3px 8px;border-radius:4px;font-size:10px;font-weight:600}.ba{background:#dbeafe;color:#1d4ed8}.bb{background:#fee2e2;color:#991b1b}.har-empty{padding:24px 20px;text-align:center;color:#94a3b8;font-size:12px;line-height:1.6}.har-tabs{display:flex;border-bottom:1px solid #e2e8f0;background:#f8fafc}.har-tab{flex:1;padding:10px 16px;border:none;background:none;font-size:13px;font-weight:600;color:#64748b;cursor:pointer;border-bottom:2px solid transparent;transition:all .15s}.har-tab:hover{color:#1a1a1a;background:#f1f5f9}.har-tab-active{color:#2964FF;border-bottom-color:#2964FF;background:#fff}.har-tab-content{flex:1;overflow-y:auto}.har-resume-card{padding:16px 20px}.har-resume-header{margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid #e2e8f0}.har-resume-title{font-size:17px;font-weight:700;color:#1a1a1a;margin-bottom:4px}.har-resume-salary{font-size:14px;font-weight:600;color:#2964FF;margin-bottom:4px}.har-resume-meta{font-size:12px;color:#64748b}.har-resume-section{margin-bottom:12px}.har-section-subtitle{font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}.har-tag-list{display:flex;flex-wrap:wrap;gap:4px}.har-tag{display:inline-block;padding:3px 8px;background:#eff6ff;color:#2964FF;border-radius:4px;font-size:11px;font-weight:500}.har-tag-lang{background:#f0fdf4;color:#166534}.har-exp-item{padding:8px 0;border-bottom:1px solid #f1f5f9}.har-exp-pos{font-size:13px;font-weight:600;color:#1a1a1a}.har-exp-meta{font-size:11px;color:#64748b;margin-top:2px}.har-exp-desc{font-size:11px;color:#475569;margin-top:4px;line-height:1.4}.har-edu-item{font-size:12px;color:#475569;padding:4px 0}.har-edu-year{color:#94a3b8;font-size:11px}.har-debug{margin-top:12px;padding-top:8px;border-top:1px solid #f1f5f9}.har-debug summary{font-size:10px;color:#94a3b8;cursor:pointer;padding:4px 0}.har-debug-body{font-size:10px;font-family:monospace;padding:8px 0;line-height:1.8}.har-resume-list-header{padding:10px 20px;font-size:12px;font-weight:700;color:#475569;background:#f8fafc;border-bottom:1px solid #e2e8f0}.har-resume-list-item{padding:8px 20px;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;gap:8px;transition:background .15s}.har-resume-list-item:hover{background:#f8fafc}.har-resume-list-active{background:#eff6ff;border-left:3px solid #2964FF}.har-resume-list-link{flex:1;font-size:13px;font-weight:500;color:#2964FF;text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.har-resume-list-link:hover{text-decoration:underline}.har-resume-loaded-badge{font-size:9px;padding:2px 6px;background:#dcfce7;color:#166534;border-radius:4px;font-weight:600;white-space:nowrap}.har-resume-list-hint{padding:10px 20px;font-size:11px;color:#94a3b8;line-height:1.5}';
 }
 
 function getSidebarHTML() {
-  return '<div class="har-header"><h3>HH Auto-Respond</h3><span class="har-version">v1.1.0</span></div><div class="har-content"><div class="har-auth-box"><div class="har-spinner"></div><h3>Проверяем авторизацию...</h3><p>Определяем статус на hh.ru</p></div></div>';
+  return '<div class="har-header"><h3>HH Auto-Respond</h3><span class="har-version">v1.2.0</span></div><div class="har-content"><div class="har-auth-box"><div class="har-spinner"></div><h3>Проверяем авторизацию...</h3><p>Определяем статус на hh.ru</p></div></div>';
 }
 
 function esc(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
@@ -1112,15 +1162,31 @@ async function init() {
   // Resume events
   window.addEventListener('hh-ar-load-resume', async () => {
     if (!panelState.isLoggedIn) return;
-    const resume = parseResume();
-    if (resume.id) {
-      panelState.resume = resume;
-      // Сохранить в storage для использования между страницами
-      await chrome.storage.local.set({ myResume: resume });
-      panelLog.info('Resume loaded and saved');
-      if (panelState.activeTab === 'resume') renderResumePanel();
+    const path = window.location.pathname;
+
+    if (/\/resume\/[a-f0-9]+/.test(path)) {
+      // На странице конкретного резюме — парсим его
+      const resume = parseResume();
+      if (resume.id) {
+        panelState.resume = resume;
+        await chrome.storage.local.set({ myResume: resume });
+        panelLog.info('Resume loaded and saved');
+        renderResumePanel();
+      } else {
+        panelLog.warn('Could not parse resume from current page (no id)');
+      }
+    } else if (path.includes('/applicant/resumes')) {
+      // На странице списка резюме — парсим и показываем список
+      const list = parseResumeList();
+      if (list.length > 0) {
+        panelState.resumeList = list;
+        renderResumeListPanel();
+        panelLog.info('Resume list loaded: ' + list.length + ' resumes');
+      } else {
+        panelLog.warn('No resumes found on list page');
+      }
     } else {
-      panelLog.warn('Could not parse resume from current page');
+      panelLog.warn('Cannot parse resume from this page (' + path + '). Go to /resume/{hash} or /applicant/resumes');
     }
   });
 }
@@ -1180,8 +1246,9 @@ async function initPageLogic() {
     }
 
   } else if (path.startsWith('/applicant/resumes')) {
-    // Список резюме
+    // Список резюме — парсим и сохраняем для панели
     const resumeList = parseResumeList();
+    panelState.resumeList = resumeList;
     mainLog.info('Resume list page: ' + resumeList.length + ' resumes');
   } else if (/^\/vacancy\/\d+/.test(path)) {
     const { pendingApply } = await chrome.storage.local.get('pendingApply');
