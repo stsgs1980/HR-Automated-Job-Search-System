@@ -3,6 +3,10 @@
  * ===================================
  * Creates and manages the FAB overlay button.
  * Green gradient (#059669 -> #10B981), pulse animation when panel closed.
+ *
+ * NOTE: FAB lives in the MAIN document (not Shadow DOM), so hh.ru CSS
+ * can override inline styles. All visual properties use setProperty(..., 'important')
+ * to prevent external CSS conflicts.
  */
 
 import { panelState, refs } from './state.js';
@@ -14,55 +18,79 @@ const FAB_ICONS = {
   close: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>',
 };
 
+/* Helper: set CSS property with !important to prevent hh.ru overrides */
+function fabStyle(el, prop, value) {
+  el.style.setProperty(prop, value, 'important');
+}
+
 export function createFab(onClick) {
   if (refs.fabEl) return;
   refs.fabEl = document.createElement('div');
   refs.fabEl.id = 'hh-ar-fab';
   refs.fabEl.setAttribute('role', 'button');
   refs.fabEl.setAttribute('aria-label', 'Открыть HH Copilot');
-  refs.fabEl.style.cssText =
-    'position:fixed;bottom:24px;right:24px;width:56px;height:56px;border-radius:50%;' +
-    'cursor:pointer;z-index:999999;display:flex;align-items:center;justify-content:center;' +
-    'background:linear-gradient(135deg,#059669,#10B981);' +
-    'box-shadow:0 4px 20px rgba(5,150,105,0.4);' +
-    'transition:right 0.3s cubic-bezier(0.4,0,0.2,1),transform 0.2s,opacity 0.3s;' +
-    'animation:fabPulse 2.5s ease-in-out infinite;';
+  /* Use setProperty for all visual props to resist hh.ru CSS overrides */
+  const s = refs.fabEl.style;
+  fabStyle(s, 'position', 'fixed');
+  fabStyle(s, 'bottom', '24px');
+  fabStyle(s, 'right', '24px');
+  fabStyle(s, 'width', '56px');
+  fabStyle(s, 'height', '56px');
+  fabStyle(s, 'border-radius', '50%');
+  fabStyle(s, 'cursor', 'pointer');
+  fabStyle(s, 'z-index', '999999');
+  fabStyle(s, 'display', 'flex');
+  fabStyle(s, 'align-items', 'center');
+  fabStyle(s, 'justify-content', 'center');
+  fabStyle(s, 'background', 'linear-gradient(135deg,#059669,#10B981)');
+  fabStyle(s, 'box-shadow', '0 4px 20px rgba(5,150,105,0.4)');
+  fabStyle(s, 'transition', 'right 0.3s cubic-bezier(0.4,0,0.2,1),transform 0.2s,opacity 0.3s');
+  fabStyle(s, 'animation', 'fabPulse 2.5s ease-in-out infinite');
+  s.border = 'none';
   refs.fabEl.innerHTML = FAB_ICONS.briefcase;
-  refs.fabEl.addEventListener('mouseenter', () => { refs.fabEl.style.transform = 'scale(1.1)'; });
-  refs.fabEl.addEventListener('mouseleave', () => { refs.fabEl.style.transform = 'scale(1)'; });
+  refs.fabEl.addEventListener('mouseenter', () => { s.setProperty('transform', 'scale(1.1)', 'important'); });
+  refs.fabEl.addEventListener('mouseleave', () => { s.setProperty('transform', 'scale(1)', 'important'); });
   refs.fabEl.addEventListener('click', onClick);
   document.body.appendChild(refs.fabEl);
 }
 
 export function updateFabIcon() {
   if (!refs.fabEl) return;
+  const s = refs.fabEl.style;
+
   if (panelState.isLoggedIn === null) {
-    refs.fabEl.style.background = '#94a3b8';
-    refs.fabEl.style.boxShadow = '0 4px 20px rgba(148,163,184,0.3)';
-    refs.fabEl.style.animation = 'none';
+    fabStyle(s, 'background', '#94a3b8');
+    fabStyle(s, 'box-shadow', '0 4px 20px rgba(148,163,184,0.3)');
+    fabStyle(s, 'animation', 'none');
+    fabStyle(s, 'opacity', '1');
+    fabStyle(s, 'transform', 'scale(1)');
+    fabStyle(s, 'pointer-events', 'auto');
     refs.fabEl.innerHTML = FAB_ICONS.loading;
     refs.fabEl.setAttribute('title', 'HH Copilot: проверяем авторизацию...');
     refs.fabEl.setAttribute('aria-label', 'HH Copilot: проверяем авторизацию');
   } else if (!panelState.isLoggedIn) {
-    refs.fabEl.style.background = '#ef4444';
-    refs.fabEl.style.boxShadow = '0 4px 20px rgba(239,68,68,0.4)';
-    refs.fabEl.style.animation = 'none';
+    fabStyle(s, 'background', '#ef4444');
+    fabStyle(s, 'box-shadow', '0 4px 20px rgba(239,68,68,0.4)');
+    fabStyle(s, 'animation', 'none');
+    fabStyle(s, 'opacity', '1');
+    fabStyle(s, 'transform', 'scale(1)');
+    fabStyle(s, 'pointer-events', 'auto');
     refs.fabEl.innerHTML = FAB_ICONS.locked;
     refs.fabEl.setAttribute('title', 'HH Copilot: НЕ авторизован на hh.ru');
     refs.fabEl.setAttribute('aria-label', 'HH Copilot: не авторизован');
   } else if (panelState.isOpen) {
-    refs.fabEl.style.background = '#059669';
-    refs.fabEl.style.opacity = '0';
-    refs.fabEl.style.transform = 'scale(0) rotate(180deg)';
-    refs.fabEl.style.pointerEvents = 'none';
+    fabStyle(s, 'background', '#059669');
+    fabStyle(s, 'opacity', '0');
+    fabStyle(s, 'transform', 'scale(0) rotate(180deg)');
+    fabStyle(s, 'pointer-events', 'none');
     refs.fabEl.setAttribute('title', 'HH Copilot: закрыть панель');
   } else {
-    refs.fabEl.style.background = 'linear-gradient(135deg,#059669,#10B981)';
-    refs.fabEl.style.boxShadow = '0 4px 20px rgba(5,150,105,0.4)';
-    refs.fabEl.style.opacity = '1';
-    refs.fabEl.style.transform = 'scale(1)';
-    refs.fabEl.style.pointerEvents = 'auto';
-    refs.fabEl.style.animation = 'fabPulse 2.5s ease-in-out infinite';
+    fabStyle(s, 'background', 'linear-gradient(135deg,#059669,#10B981)');
+    fabStyle(s, 'box-shadow', '0 4px 20px rgba(5,150,105,0.4)');
+    fabStyle(s, 'opacity', '1');
+    fabStyle(s, 'transform', 'scale(1)');
+    fabStyle(s, 'pointer-events', 'auto');
+    fabStyle(s, 'animation', 'fabPulse 2.5s ease-in-out infinite');
     refs.fabEl.innerHTML = FAB_ICONS.briefcase;
     refs.fabEl.setAttribute('title', 'HH Copilot: авторизован. Нажмите для открытия.');
     refs.fabEl.setAttribute('aria-label', 'HH Copilot: открыть панель');

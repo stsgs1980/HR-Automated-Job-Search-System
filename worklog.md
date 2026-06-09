@@ -442,3 +442,24 @@ Stage Summary:
 - No more confusion between old popup and new 6-tab sidebar
 ---
 
+
+---
+Task ID: 19
+Agent: main
+Task: Auth UX fixes + FAB CSS isolation v1.7.1-v1.7.2
+
+Work Log:
+- Fixed authIndicator badge click handler (was dead element with cursor:pointer but no event)
+- Fixed renderSidebarContent null state: broken regex replace -> proper spinner HTML
+- Added tooltip/title on FAB for each auth state (loading/not-logged/logged)
+- Show username in header and auth badge when logged in (getUserName() now actually called)
+- v1.7.2: Fixed FAB CSS override by hh.ru page styles
+  - Root cause: FAB lives in main document (not Shadow DOM), hh.ru CSS overrides background
+  - All FAB visual properties now use setProperty(prop, value, 'important')
+  - Green stays green, red stays red, gray stays gray
+
+Stage Summary:
+- FAB colors now resist external CSS overrides via !important inline styles
+- Auth status clearly visible: gray=loading, red=not logged in, green=logged in
+- Username displayed in header auth badge and FAB tooltip
+- v1.7.2 committed and pushed
