@@ -282,3 +282,31 @@ Stage Summary:
 - 1 file added to imports: resume-constants.js (VISIBILITY_UNKNOWN, VISIBILITY_VISIBLE) in resume-fetch.js
 - Hidden resumes should now correctly show "Скрыто" badge after sync
 - Visibility priority: HIDDEN > VISIBLE > UNKNOWN (UNKNOWN→VISIBLE only as last resort in syncAllResumes)
+
+---
+Task ID: vis-diag-dump
+Agent: main
+Task: Add hard diagnostic dump for visibility detection path
+
+Work Log:
+- Added [VIS-DIAG] prefixed logs throughout entire visibility pipeline
+- detectVisibilityFromResumePage(): each strategy logs its step and result
+  - S1: data-qa selectors tried
+  - S2: button text search with all matching buttons listed (including partial "скрыть"/"видим")
+  - S3: body text indicator position
+  - S4: raw HTML indicator position
+  - S5: script JSON patterns found
+  - S6: hide-link data-qa
+  - EXTRA: all [data-qa*="hide"] elements on page
+  - Final: which strategy returned what
+- fetchAndParseResume(): logs both sources (page + list) and final decision
+  - Shows page=VISIBLE/UNKNOWN, list=VISIBLE/UNKNOWN/hidden
+  - Shows which branch won and why
+- extractVisibilityStatus(): lists each resume's UNKNOWN status
+- syncAllResumes(): shows each resume's final fallback (UNKNOWN→VISIBLE) and FINAL SUMMARY
+- All diagnostic lines prefixed with [VIS-DIAG] for easy filtering in DevTools
+- Build: 327.8kb
+
+Stage Summary:
+- 3 files modified: resume-fetch-resume.js, resume-fetch.js, resume-fetch-helpers.js
+- Filter console by [VIS-DIAG] to see full visibility decision path for every resume

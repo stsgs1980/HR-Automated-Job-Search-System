@@ -390,7 +390,10 @@ export function extractVisibilityStatus(doc, resumes, html) {
   // each resume's detail page has been checked by detectVisibilityFromResumePage().
   const unknownAfterAll = resumes.filter(r => r.visibility === VISIBILITY_UNKNOWN);
   if (unknownAfterAll.length > 0) {
-    helperLog.info('List visibility: ' + unknownAfterAll.length + ' resumes still UNKNOWN — will be resolved by detail page detection');
+    helperLog.info('[VIS-DIAG] List: ' + unknownAfterAll.length + ' resumes still UNKNOWN — will be resolved by detail page detection');
+    unknownAfterAll.forEach(r => {
+      helperLog.info('[VIS-DIAG]   List: ' + r.id.substring(0, 8) + ' "' + (r.title || '').substring(0, 30) + '" → ' + r.visibility);
+    });
   }
 
   // ═══ SUMMARY ═══

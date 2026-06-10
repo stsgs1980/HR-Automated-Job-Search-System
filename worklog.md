@@ -828,6 +828,20 @@ Stage Summary:
 - Hidden resumes should now correctly show "Скрыто" after sync
 
 ---
+Task ID: vis-diag-dump
+Agent: main
+Task: Add hard diagnostic dump for visibility detection path
+
+Work Log:
+- Added [VIS-DIAG] prefixed console logs throughout entire visibility pipeline
+- Every strategy step, every button found, every decision branch — all logged
+- Filter DevTools console by [VIS-DIAG] to see the full path
+
+Stage Summary:
+- 3 files modified, 327.8kb build
+- User can now see exactly where/why a resume gets marked VISIBLE or HIDDEN
+
+---
 Task ID: v1.9.8-audit
 Agent: main
 Task: Code audit — fix getResumePageType() bug, add JSDoc, fix docs gaps, v1.9.8

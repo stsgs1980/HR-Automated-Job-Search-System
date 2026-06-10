@@ -97,35 +97,39 @@ export async function fetchAndParseResume(resumeUrl, listMeta) {
   //   - List VISIBLE wins over Page UNKNOWN
   //   - Both UNKNOWN → UNKNOWN (resolved later in syncAllResumes)
   const pageVis = detectVisibilityFromResumePage(doc, html);
-  0 && fetchLog.info('Visibility sources: page=' + pageVis + ', list=' + (listMeta ? listMeta.visibility : 'no-list-meta'));
+  const listVis = listMeta ? listMeta.visibility : 'no-list-meta';
+  const listHidden = listMeta ? listMeta.hidden : undefined;
+
+  fetchLog.info('[VIS-DIAG] === Visibility decision for ' + (id ? id.substring(0, 8) : 'unknown') + ' ===');
+  fetchLog.info('[VIS-DIAG] Sources: page=' + pageVis + ', list=' + listVis + ', listHidden=' + listHidden);
 
   if (pageVis === VISIBILITY_HIDDEN) {
     // Page says HIDDEN — most reliable, always wins
     resume.visibility = VISIBILITY_HIDDEN;
     resume.hidden = true;
-    fetchLog.info('Final visibility: HIDDEN (page detected)');
+    fetchLog.info('[VIS-DIAG] Decision: HIDDEN (page detected)');
   } else if (listMeta && listMeta.visibility === VISIBILITY_HIDDEN) {
     // List says HIDDEN, page didn't detect HIDDEN → trust the list
     // (page detection can miss hidden indicators in SSR HTML, but if the
     // list page saw "Многие не видят" in link text, that's authoritative)
     resume.visibility = VISIBILITY_HIDDEN;
     resume.hidden = true;
-    fetchLog.info('Final visibility: HIDDEN (list detected, page=' + pageVis + ')');
+    fetchLog.info('[VIS-DIAG] Decision: HIDDEN (list detected, page=' + pageVis + ')');
   } else if (pageVis === VISIBILITY_VISIBLE) {
     // Page says VISIBLE, list doesn't say HIDDEN → trust page
     resume.visibility = VISIBILITY_VISIBLE;
     resume.hidden = false;
-    fetchLog.info('Final visibility: VISIBLE (page detected)');
+    fetchLog.info('[VIS-DIAG] Decision: VISIBLE (page detected)');
   } else if (listMeta && listMeta.visibility === VISIBILITY_VISIBLE) {
     // List says VISIBLE, page is UNKNOWN → trust list
     resume.visibility = VISIBILITY_VISIBLE;
     resume.hidden = false;
-    fetchLog.info('Final visibility: VISIBLE (list detected, page=UNKNOWN)');
+    fetchLog.info('[VIS-DIAG] Decision: VISIBLE (list detected, page=UNKNOWN)');
   } else {
     // Both UNKNOWN — will be resolved later in syncAllResumes()
     resume.visibility = VISIBILITY_UNKNOWN;
     resume.hidden = false;
-    fetchLog.info('Final visibility: UNKNOWN (both sources unknown)');
+    fetchLog.info('[VIS-DIAG] Decision: UNKNOWN (both sources unknown)');
   }
   // Always carry over list title
   if (listMeta && listMeta.title && listMeta.title !== 'Untitled') {
@@ -302,70 +306,123 @@ async function parseExperienceFromDoc(doc, dbg, resume, html, resumeUrl) {
  * @returns {string} VISIBILITY_VISIBLE, VISIBILITY_HIDDEN, or VISIBILITY_UNKNOWN
  */
 function detectVisibilityFromResumePage(doc, html) {
-  // Strategy 1: Check for hidden-specific data-qa attributes
+  const diag = []; // diagnostic trace — every step logged
+
+  // ═══ Strategy 1: Check for hidden-specific data-qa attributes ═══
   for (const sel of VISIBILITY_HIDDEN_DATA_QA) {
     const found = doc.querySelector(sel);
     if (found) {
-      fetchLog.info('PageVis: found hidden via data-qa: ' + sel);
+      diag.push('S1:data-qa=' + sel + ' → HIDDEN');
+      fetchLog.info('[VIS-DIAG] ' + diag.join(' | '));
       return VISIBILITY_HIDDEN;
     }
   }
+  diag.push('S1:no-data-qa-hidden');
 
-  // Strategy 2: Check for "Сделать видимым" button or link
-  // This button appears on hidden resumes in the owner's view
+  // ═══ Strategy 2: Check for "Сделать видимым" / "Скрыть резюме" buttons ═══
   const allButtons = doc.querySelectorAll('button, a');
+  let btnDetails = [];
   for (const btn of allButtons) {
     const text = normalizeWs((btn.textContent || '')).toLowerCase();
+    const qa = (btn.getAttribute('data-qa') || '').toLowerCase();
+    // Collect all buttons with "скрыть" or "видим" for diagnostic
+    if (text.includes('скрыть') || text.includes('видим')) {
+      btnDetails.push('"' + text.substring(0, 40) + '"' + (qa ? '[qa=' + qa + ']' : ''));
+    }
     if (text.includes('сделать видимым')) {
-      fetchLog.info('PageVis: found "Сделать видимым" button → HIDDEN');
+      diag.push('S2:btn="сделать видимым" → HIDDEN');
+      fetchLog.info('[VIS-DIAG] ' + diag.join(' | '));
+      fetchLog.info('[VIS-DIAG] All vis-related buttons: ' + JSON.stringify(btnDetails));
       return VISIBILITY_HIDDEN;
     }
-    // "Скрыть резюме" button means the resume IS currently visible
-    // CRITICAL: Only match "скрыть резюме" EXACTLY — not just "скрыть"
-    // ("скрыть" alone matches random UI elements like "скрыть контакты", "скрыть раздел")
     if (text.includes('скрыть резюме')) {
-      fetchLog.info('PageVis: found "Скрыть резюме" button → VISIBLE');
+      diag.push('S2:btn="скрыть резюме" → VISIBLE');
+      fetchLog.info('[VIS-DIAG] ' + diag.join(' | '));
+      fetchLog.info('[VIS-DIAG] All vis-related buttons: ' + JSON.stringify(btnDetails));
       return VISIBILITY_VISIBLE;
     }
   }
+  diag.push('S2:no-key-buttons' + (btnDetails.length ? '(saw:' + btnDetails.length + ' partial)' : ''));
 
-  // Strategy 3: Check page text for hidden indicators (in body, not scripts)
+  // ═══ Strategy 3: Check page body text for hidden indicators ═══
   const bodyText = doc.body ? normalizeWs(doc.body.textContent || '') : '';
   if (hasHiddenIndicator(bodyText)) {
-    fetchLog.info('PageVis: found hidden indicator in body text');
+    // Find which indicator and where
+    const lower = bodyText.toLowerCase();
+    for (const ind of ['многие не видят', 'сделать видимым']) {
+      const pos = lower.indexOf(ind);
+      if (pos !== -1) {
+        diag.push('S3:body has "' + ind + '" @' + pos + ' → HIDDEN');
+        break;
+      }
+    }
+    fetchLog.info('[VIS-DIAG] ' + diag.join(' | '));
     return VISIBILITY_HIDDEN;
   }
+  diag.push('S3:body-no-indicators');
 
-  // Strategy 4: Check raw HTML for hidden indicators (with &nbsp; normalization)
+  // ═══ Strategy 4: Check raw HTML for hidden indicators (with &nbsp; normalization) ═══
   const htmlForSearch = html.replace(/&nbsp;/g, ' ').toLowerCase();
   const htmlNorm = normalizeWs(htmlForSearch);
   if (hasHiddenIndicator(htmlNorm)) {
-    fetchLog.info('PageVis: found hidden indicator in raw HTML');
+    const lower = htmlNorm.toLowerCase();
+    for (const ind of ['многие не видят', 'сделать видимым']) {
+      const pos = lower.indexOf(ind);
+      if (pos !== -1) {
+        diag.push('S4:html has "' + ind + '" @' + pos + ' → HIDDEN');
+        break;
+      }
+    }
+    fetchLog.info('[VIS-DIAG] ' + diag.join(' | '));
     return VISIBILITY_HIDDEN;
   }
+  diag.push('S4:html-no-indicators');
 
-  // Strategy 5: Check script/hydration JSON for hidden status
+  // ═══ Strategy 5: Check script/hydration JSON for hidden status ═══
   const scriptEls = doc.querySelectorAll('script:not([src])');
+  let scriptPatterns = [];
   for (const script of scriptEls) {
     const t = script.textContent || '';
     if (t.length < 50) continue;
-    // Look for visibility-related JSON near resume data
-    if (/"hidden"\s*:\s*true/.test(t) || /"isHidden"\s*:\s*true/.test(t) ||
-        /"visibility"\s*:\s*"hidden"/.test(t) || /"status"\s*:\s*"hidden"/.test(t)) {
-      // Verify this is about the current resume, not something else
-      // For now, presence of these patterns in resume page scripts is a strong signal
-      fetchLog.info('PageVis: found hidden pattern in script JSON');
-      return VISIBILITY_HIDDEN;
+    // Collect all visibility-related patterns found in scripts
+    const patterns = [
+      { re: /"hidden"\s*:\s*true/, name: '"hidden":true' },
+      { re: /"isHidden"\s*:\s*true/, name: '"isHidden":true' },
+      { re: /"visibility"\s*:\s*"hidden"/, name: '"visibility":"hidden"' },
+      { re: /"status"\s*:\s*"hidden"/, name: '"status":"hidden"' },
+    ];
+    for (const p of patterns) {
+      if (p.re.test(t)) {
+        scriptPatterns.push(p.name);
+      }
     }
   }
+  if (scriptPatterns.length > 0) {
+    diag.push('S5:script=' + scriptPatterns.join(',') + ' → HIDDEN');
+    fetchLog.info('[VIS-DIAG] ' + diag.join(' | '));
+    return VISIBILITY_HIDDEN;
+  }
+  diag.push('S5:no-script-patterns');
 
-  // Strategy 6: If we find a "Скрыть" action link/button specific to this resume
+  // ═══ Strategy 6: If we find a "Скрыть" action link/button specific to this resume ═══
   const hideLink = doc.querySelector('[data-qa="resume-action-hide"], [data-qa*="resume-hide"], a[data-qa*="hide-resume"]');
   if (hideLink) {
-    fetchLog.info('PageVis: found "hide resume" action → resume is VISIBLE');
+    const hideQa = hideLink.getAttribute('data-qa') || '';
+    diag.push('S6:hide-link qa=' + hideQa + ' → VISIBLE');
+    fetchLog.info('[VIS-DIAG] ' + diag.join(' | '));
     return VISIBILITY_VISIBLE;
   }
+  diag.push('S6:no-hide-link');
 
-  fetchLog.info('PageVis: no visibility indicators found → UNKNOWN');
+  // ═══ Also check: any "скрыть" buttons with data-qa containing "hide" ═══
+  // Dump all buttons with "скрыть" for diagnostic
+  const allHideBtns = doc.querySelectorAll('[data-qa*="hide"], [data-qa*="hidden"]');
+  if (allHideBtns.length > 0) {
+    const hideQas = Array.from(allHideBtns).map(b => b.getAttribute('data-qa')).filter(Boolean);
+    diag.push('EXTRA:hide-qa=' + hideQas.join(','));
+  }
+
+  diag.push('→ UNKNOWN');
+  fetchLog.info('[VIS-DIAG] ' + diag.join(' | '));
   return VISIBILITY_UNKNOWN;
 }

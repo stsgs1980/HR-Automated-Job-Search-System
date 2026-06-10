@@ -85,12 +85,19 @@ export async function syncAllResumes({ onProgress, onComplete, onError } = {}) {
     // it's reasonable to assume it's visible.
     const stillUnknown = results.filter(r => r.visibility === VISIBILITY_UNKNOWN);
     if (stillUnknown.length > 0) {
-      fetchLog.info('Final fallback: ' + stillUnknown.length + ' resumes still UNKNOWN after all detection → defaulting to VISIBLE');
+      fetchLog.info('[VIS-DIAG] Final fallback: ' + stillUnknown.length + ' resumes still UNKNOWN after all detection → defaulting to VISIBLE');
       stillUnknown.forEach(r => {
+        fetchLog.info('[VIS-DIAG]   ' + (r.id ? r.id.substring(0, 8) : '?') + ' "' + (r.title || '').substring(0, 30) + '" UNKNOWN→VISIBLE');
         r.visibility = VISIBILITY_VISIBLE;
         r.hidden = false;
       });
     }
+
+    // ═══ VISIBILITY SUMMARY ═══
+    fetchLog.info('[VIS-DIAG] ═══ FINAL VISIBILITY SUMMARY ═══');
+    results.forEach(r => {
+      fetchLog.info('[VIS-DIAG]   ' + (r.id ? r.id.substring(0, 8) : '?') + ' "' + (r.title || '').substring(0, 30) + '" → ' + r.visibility);
+    });
 
     fetchLog.info('Done. ' + results.length + '/' + list.length + ' parsed');
     if (onProgress) onProgress(list.length, list.length, 'Готово');
