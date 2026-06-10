@@ -58,7 +58,7 @@ function updateAccordionHeader(resume) {
     // No selector trigger in header anymore — selection is in "Все резюме" list below
   } else {
     if (titleEl) titleEl.textContent = 'Действующее резюме';
-    if (subtitleEl) subtitleEl.textContent = 'Нажмите «Загрузить» для выбора резюме';
+    if (subtitleEl) subtitleEl.textContent = 'Выберите резюме из списка ниже';
     if (badgeEl) {
       badgeEl.textContent = 'не выбрано';
       badgeEl.className = 'badge badge-zinc';
@@ -119,17 +119,13 @@ export function renderResumePanel() {
       return;
     }
     const pageType = getResumePageType();
-    let hint = 'Нажмите кнопку ниже или перейдите на страницу резюме.';
+    let hint = 'Выберите резюме ниже или перейдите на страницу резюме.';
     if (pageType === 'resume-list') {
-      hint = 'Нажмите кнопку ниже или «Синхронизировать».';
+      hint = 'Нажмите «Синхронизировать все» ниже.';
+    } else if (pageType === 'resume-detail') {
+      hint = 'Нажмите «Взять со страницы» ниже.';
     }
-    container.innerHTML = '<div class="har-empty">Действующее резюме не выбрано.<br>' + hint + '</div>' +
-      '<div style="padding-top:12px;padding-left:24px;">' +
-        '<button class="btn btn-primary btn-sm" data-action="load-resume" style="width:100%;">' +
-          '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 105.64-11.36L1 10"/></svg>' +
-          ' Взять со страницы' +
-        '</button>' +
-      '</div>';
+    container.innerHTML = '<div class="har-empty">Действующее резюме не выбрано.<br>' + hint + '</div>';
     updateAccordionHeader(null);
     return;
   }
@@ -145,19 +141,8 @@ export function renderResumePanel() {
   }
 
   // Build 6 accordion sections matching wireframe
+  // NOTE: Reparse button removed from here — now inline on active resume card in "Все резюме"
   const vis = r.visibility || (r.hidden ? 'hidden' : 'unknown');
-  const isActiveHidden = vis === 'hidden';
-  const reparseBtn = isActiveHidden
-    ? '<button class="btn btn-outline btn-sm" data-action="load-resume" style="width:100%;color:#b45309;border-color:#fbbf24;">' +
-        '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 105.64-11.36L1 10"/></svg>' +
-        ' Перепарсить (скрытое)' +
-      '</button>' +
-      '<div style="font-size:10px;color:#92400e;margin-top:4px;padding-left:4px;">Скрытое резюме не видно работодателям — мэтчинг недоступен</div>'
-    : '<button class="btn btn-primary btn-sm" data-action="load-resume" style="width:100%;">' +
-        '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 105.64-11.36L1 10"/></svg>' +
-        ' Перепарсить действующее' +
-      '</button>';
-
   container.innerHTML =
     '<div class="tl-item">' + buildPersonalSection(r) + '</div>' +
     '<div class="tl-item">' + buildSalarySection(r) + '</div>' +
@@ -165,8 +150,10 @@ export function renderResumePanel() {
     '<div class="tl-item">' + buildEducationSection(r) + '</div>' +
     '<div class="tl-item">' + buildLanguagesSection(r) + '</div>' +
     '<div class="tl-item">' + buildContactsSection(r) + '</div>' +
-    // Reparse button (context-aware)
-    '<div style="padding-top:12px;padding-left:24px;">' + reparseBtn + '</div>';
+    // Hidden resume warning (no button, just info)
+    (vis === 'hidden'
+      ? '<div style="font-size:10px;color:#92400e;padding:6px 4px 0 28px;">Скрытое резюме не видно работодателям — мэтчинг недоступен</div>'
+      : '');
 
   // Attach sub-accordion toggle listeners
   attachSubToggle('subPersonal', 'chevPersonal');

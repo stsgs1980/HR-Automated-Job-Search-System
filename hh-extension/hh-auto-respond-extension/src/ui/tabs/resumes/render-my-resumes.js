@@ -8,6 +8,7 @@
 import { panelState, refs } from '../../state.js';
 import { esc } from '../../html.js';
 import { renderResumePanel } from './render-resume-panel.js';
+import { getResumePageType } from '../../../parsers/resume-detail.js';
 
 // ═══════════════════════════════════════════════
 // MY RESUMES PANEL
@@ -40,6 +41,15 @@ export function renderMyResumesPanel() {
     if (hiddenCountEl) hiddenCountEl.style.display = 'none';
   }
 
+  // Show/hide "Взять со страницы" CTA based on page type and active resume
+  const ctaLoadEl = refs.shadowRoot?.getElementById('res-cta-load');
+  if (ctaLoadEl) {
+    const pageType = getResumePageType();
+    const hasActive = panelState.resume && panelState.resume.id;
+    // Show CTA when on a resume detail page AND no active resume yet
+    ctaLoadEl.style.display = (pageType === 'resume-detail' && !hasActive) ? 'block' : 'none';
+  }
+
   if (resumes.length === 0) {
     listEl.innerHTML = '<div style="padding:8px;text-align:center;">Нажмите «Синхронизировать все» для загрузки резюме</div>';
     return;
@@ -60,6 +70,12 @@ export function renderMyResumesPanel() {
     const radio = isActive
       ? '<span style="width:16px;height:16px;border-radius:50%;border:2px solid #059669;display:flex;align-items:center;justify-content:center;flex-shrink:0;"><span style="width:8px;height:8px;border-radius:50%;background:#059669;"></span></span>'
       : '<span style="width:16px;height:16px;border-radius:50%;border:2px solid #d4d4d8;display:flex;align-items:center;justify-content:center;flex-shrink:0;"></span>';
+    // Reparse icon (↻) only on active resume card — replaces standalone reparse button
+    const reparseIcon = isActive
+      ? '<button class="btn btn-outline btn-sm" data-action="load-resume" title="' + (vis === 'hidden' ? 'Перепарсить скрытое' : 'Перепарсить') + '" ' +
+        'style="padding:2px 6px;font-size:13px;line-height:1;' + (vis === 'hidden' ? 'color:#b45309;border-color:#fbbf24;' : '') + '">' +
+        '↻</button>'
+      : '';
     return '<div class="har-my-resume-item" data-resume-idx="' + idx + '" style="padding:8px;border-bottom:1px solid #e4e4e7;cursor:pointer;display:flex;align-items:flex-start;gap:8px;' +
       (isActive ? 'background:#f0fdf4;border-radius:6px;' : '') +
       (vis === 'hidden' && !isActive ? 'opacity:0.6;' : '') +
@@ -74,11 +90,14 @@ export function renderMyResumesPanel() {
           skillCount + ' нав., ' + expCount + ' зап. опыта' +
         '</div>' +
       '</div>' +
+      reparseIcon +
     '</div>';
   }).join('');
 
   listEl.querySelectorAll('.har-my-resume-item').forEach(item => {
-    item.addEventListener('click', () => {
+    item.addEventListener('click', (e) => {
+      // If ↻ reparse button was clicked, don't switch active resume — let event delegation handle load-resume
+      if (e.target.closest('[data-action="load-resume"]')) return;
       const idx = parseInt(item.getAttribute('data-resume-idx'), 10);
       const resume = resumes[idx];
       if (!resume) return;

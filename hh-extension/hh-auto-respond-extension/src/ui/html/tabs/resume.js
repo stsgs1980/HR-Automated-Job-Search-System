@@ -13,7 +13,7 @@ export function getResumeSection() {
             <div style="display:flex;align-items:center;gap:6px;">
               <div id="res-title" style="font-size:13px;font-weight:600;">Действующее резюме</div>
             </div>
-            <div id="res-subtitle" style="font-size:11px;color:#71717a;margin-top:1px;">Нажмите «Загрузить» для выбора резюме</div>
+            <div id="res-subtitle" style="font-size:11px;color:#71717a;margin-top:1px;">Выберите резюме из списка ниже</div>
           </div>
         </div>
         <div style="display:flex;align-items:center;gap:6px;">
@@ -39,9 +39,14 @@ export function getResumeSection() {
       <div id="res-sync-list" style="font-size:11px;color:#71717a;">
         Нажмите «Синхронизировать все» для загрузки резюме
       </div>
-      <div style="padding-top:10px;">
-        <button class="btn btn-primary btn-sm" data-action="sync-resumes" style="width:100%;">
-          ${ICONS.refresh} Синхронизировать все резюме
+      <div id="res-cta-load" style="padding-top:6px;display:none;">
+        <button class="btn btn-primary btn-sm" data-action="load-resume" style="width:100%;">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 105.64-11.36L1 10"/></svg> Взять со страницы
+        </button>
+      </div>
+      <div style="padding-top:6px;">
+        <button class="btn btn-outline btn-sm" data-action="sync-resumes" style="width:100%;">
+          ${ICONS.refresh} Синхронизировать все
         </button>
       </div>
     </div>
@@ -105,14 +110,19 @@ export function getResumeSection() {
         <span id="res-gap-recommendation-text" style="font-size:11px;color:#92400E;line-height:1.5;"></span>
       </div>
     </div>
-    <!-- Diagnostic tools -->
+    <!-- Diagnostic tools (collapsed by default) -->
     <div class="card fade-in" style="margin-bottom:12px;">
-      <div style="font-size:12px;font-weight:600;margin-bottom:8px;">Диагностика</div>
-      <div id="res-status-line" style="font-size:11px;color:#71717a;margin-bottom:8px;">Готово</div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;">
-        <button class="btn btn-outline btn-sm" data-action="clear-resume">Очистить резюме</button>
-        <button class="btn btn-outline btn-sm" data-action="dump-resume">Дамп в консоль</button>
-        <button class="btn btn-outline btn-sm" data-action="test-parse">Тест парсинга</button>
+      <div class="timeline-toggle" style="display:flex;align-items:center;justify-content:space-between;" data-timeline="diag-tools">
+        <span style="font-size:12px;font-weight:600;">Диагностика</span>
+        ${ICONS.chevronDown}
+      </div>
+      <div class="timeline-body" id="diag-tools-body" style="margin-top:8px;">
+        <div id="res-status-line" style="font-size:11px;color:#71717a;margin-bottom:8px;">Готово</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <button class="btn btn-outline btn-sm" data-action="clear-resume">Очистить</button>
+          <button class="btn btn-outline btn-sm" data-action="dump-resume">Дамп</button>
+          <button class="btn btn-outline btn-sm" data-action="test-parse">Тест</button>
+        </div>
       </div>
     </div>
   </div>`;
