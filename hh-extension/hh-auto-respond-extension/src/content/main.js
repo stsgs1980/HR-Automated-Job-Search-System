@@ -186,9 +186,15 @@ async function handleSyncResumes() {
     renderMyResumesPanel();
 
     if (results.length > 0) {
-      panelState.resume = results[0];
+      // Prefer first visible resume as the active one
+      const firstVisible = results.find(r => {
+        const vis = r.visibility || (r.hidden ? 'hidden' : 'unknown');
+        return vis !== 'hidden';
+      });
+      const active = firstVisible || results[0];
+      panelState.resume = active;
       panelState._resumeCleared = false;
-      await chrome.storage.local.set({ myResume: results[0] });
+      await chrome.storage.local.set({ myResume: active });
       renderResumePanel();
     }
 

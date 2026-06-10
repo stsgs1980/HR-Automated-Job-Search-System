@@ -43,28 +43,23 @@ export async function syncAllResumes({ onProgress, onComplete, onError } = {}) {
       return [];
     }
 
-    // Filter out hidden resumes — only parse visible ones for matching
-    const visibleList = list.filter(r => {
+    const visibleCount = list.filter(r => {
       const vis = r.visibility || (r.hidden ? 'hidden' : 'unknown');
       return vis !== 'hidden';
-    });
-    const hiddenCount = list.length - visibleList.length;
+    }).length;
+    const hiddenCount = list.length - visibleCount;
     if (hiddenCount > 0) {
-      fetchLog.info('syncAllResumes: skipping ' + hiddenCount + ' hidden resume(s)');
+      fetchLog.info('syncAllResumes: ' + visibleCount + ' visible, ' + hiddenCount + ' hidden');
     }
 
-    if (visibleList.length === 0) {
-      fetchLog.warn('syncAllResumes: no visible resumes found');
-      if (onComplete) onComplete([]);
-      return [];
-    }
-
-    if (onProgress) onProgress(0, visibleList.length, 'Загрузка списка резюме...');
+    if (onProgress) onProgress(0, list.length, 'Загрузка списка резюме...');
 
     const results = [];
-    for (let i = 0; i < visibleList.length; i++) {
-      const item = visibleList[i];
-      if (onProgress) onProgress(i, visibleList.length, 'Парсинг: ' + item.title);
+    for (let i = 0; i < list.length; i++) {
+      const item = list[i];
+      const vis = item.visibility || (item.hidden ? 'hidden' : 'unknown');
+      const label = vis === 'hidden' ? 'Парсинг (скрыто): ' : 'Парсинг: ';
+      if (onProgress) onProgress(i, list.length, label + item.title);
 
       try {
         const resume = await fetchAndParseResume(item.url, item);
@@ -80,11 +75,11 @@ export async function syncAllResumes({ onProgress, onComplete, onError } = {}) {
         if (onError) onError(item, err);
       }
 
-      if (i < visibleList.length - 1) await gaussianDelay(2000, 5000);
+      if (i < list.length - 1) await gaussianDelay(2000, 5000);
     }
 
-    fetchLog.info('Done. ' + results.length + '/' + visibleList.length + ' parsed (' + hiddenCount + ' hidden skipped)');
-    if (onProgress) onProgress(visibleList.length, visibleList.length, 'Готово');
+    fetchLog.info('Done. ' + results.length + '/' + list.length + ' parsed');
+    if (onProgress) onProgress(list.length, list.length, 'Готово');
     if (onComplete) onComplete(results);
     return results;
   } catch (err) {

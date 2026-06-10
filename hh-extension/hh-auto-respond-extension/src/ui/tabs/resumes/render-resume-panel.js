@@ -43,8 +43,14 @@ function updateAccordionHeader(resume) {
       subtitleEl.textContent = parts.join(' • ') || 'Резюме загружено';
     }
     if (badgeEl) {
-      badgeEl.textContent = 'действующее';
-      badgeEl.className = 'badge badge-green';
+      const vis = resume.visibility || (resume.hidden ? 'hidden' : 'unknown');
+      if (vis === 'hidden') {
+        badgeEl.textContent = 'действующее (скрыто)';
+        badgeEl.className = 'badge badge-amber';
+      } else {
+        badgeEl.textContent = 'действующее';
+        badgeEl.className = 'badge badge-green';
+      }
       badgeEl.style.fontSize = '11px';
     }
     if (avatarEl) {
@@ -211,15 +217,17 @@ function updateResumeSelector() {
     dropdown.innerHTML = allResumes.map((r, idx) => {
       const isActive = r.id === activeId;
       const vis = r.visibility || (r.hidden ? 'hidden' : 'unknown');
+      const isHidden = vis === 'hidden';
       const visBadge = vis === 'visible'
         ? '<span class="badge badge-green" style="font-size:9px;margin-left:4px;">Видимо</span>'
-        : vis === 'hidden'
+        : isHidden
           ? '<span class="badge badge-amber" style="font-size:9px;margin-left:4px;">Скрыто</span>'
           : '';
       return '<div data-select-resume-idx="' + idx + '" style="padding:8px 10px;cursor:pointer;display:flex;align-items:center;gap:8px;' +
         (isActive ? 'background:#f0fdf4;font-weight:600;' : '') +
+        (isHidden && !isActive ? 'opacity:0.6;' : '') +
         'border-bottom:1px solid #f4f4f5;font-size:12px;">' +
-        '<span style="width:6px;height:6px;border-radius:50%;flex-shrink:0;background:' + (isActive ? '#059669' : '#d4d4d8') + ';"></span>' +
+        '<span style="width:6px;height:6px;border-radius:50%;flex-shrink:0;background:' + (isActive ? '#059669' : isHidden ? '#f59e0b' : '#d4d4d8') + ';"></span>' +
         '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(r.title || 'Без названия') + '</span>' +
         visBadge +
       '</div>';
