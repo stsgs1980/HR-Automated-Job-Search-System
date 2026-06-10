@@ -197,3 +197,25 @@ Stage Summary:
 - Version bumped: 1.7.7 → 1.7.8
 - Migration added: old stored data gets visibility field backfilled at boot
 - User needs to: (1) reload extension in chrome://extensions, (2) re-sync resumes
+
+---
+Task ID: 1
+Agent: main
+Task: Fix "Загрузить с текущей страницы" button and top resume card not working
+
+Work Log:
+- Diagnosed root cause: renderResumePanel() and renderResumeListPanel() used getElementById('har-resume-content') which does not exist in DOM
+- HTML template (html/tabs/resume.js) uses id="res-parsed-data" — IDs did not match
+- Both render functions silently returned null, so load-resume handler appeared to do nothing
+- Changed both functions to use 'res-parsed-data' instead of 'har-resume-content'
+- Added updateAccordionHeader() to update title/subtitle/badge when resume loads
+- Added auto-expand of accordion when resume is loaded
+- Added setStatus() calls in load-resume handler for UI feedback
+- Added renderResumeListPanel import and call in main.js
+- Added rules 11-12 to AGENT_RULES.md (verify before done, check before start)
+- Build passed, Grep verified: har-resume-content=0, res-parsed-data=3 in bundle
+
+Stage Summary:
+- Root cause: wrong container ID (har-resume-content vs res-parsed-data)
+- All 3 files committed: AGENT_RULES.md, main.js, resumes.js
+- "Синхронизировать все" worked because it used #res-sync-list (correct ID)
