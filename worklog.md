@@ -685,3 +685,25 @@ Date: Wed Jun 10 21:03:45 UTC 2026
 Task ID: 3 Wed Jun 10 21:20:52 UTC 2026
 Task ID: 4 Wed Jun 10 21:27:19 UTC 2026
 // Updated 2026-06-10T21:43
+
+---
+Task ID: 2
+Agent: main
+Task: UX fix — remove hidden dropdown, add radio selector in resume list, rename button
+
+Work Log:
+- Removed dropdown selector from top block header (was hidden as green badge, accidental clicks)
+- Removed res-selector-trigger, res-selector-dropdown, res-selector-label HTML elements
+- Removed updateResumeSelector() function entirely from render-resume-panel.js
+- Removed selector trigger/label references from updateAccordionHeader()
+- Added radio-style indicator (◉ filled / ○ empty) to each resume in "Все резюме" list
+- Removed "Действующее" text badge from list items — radio dot replaces it
+- Removed "Статус неизвестен" badge from list — no longer needed
+- Renamed button "Сделать текущее действующим" → "Взять со страницы" (less confusing)
+- Updated hint text to reference new button name
+- Build successful: 208.3kb
+
+Stage Summary:
+- Selection is now in ONE place: "Все резюме" list with explicit radio buttons
+- Top block is informational only — shows which resume is active, no hidden click actions
+- Button wording clearer — no "текущее/действующее" confusion

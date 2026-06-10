@@ -42,9 +42,6 @@ export function renderMyResumesPanel() {
 
   if (resumes.length === 0) {
     listEl.innerHTML = '<div style="padding:8px;text-align:center;">Нажмите «Синхронизировать все» для загрузки резюме</div>';
-    // Also update the selector trigger
-    const selectorTrigger = refs.shadowRoot?.getElementById('res-selector-trigger');
-    if (selectorTrigger) selectorTrigger.style.display = 'none';
     return;
   }
 
@@ -58,19 +55,24 @@ export function renderMyResumesPanel() {
       visBadge = '<span class="badge badge-amber" style="font-size:9px;margin-left:4px;">Скрыто</span>';
     } else if (vis === 'visible') {
       visBadge = '<span class="badge badge-green" style="font-size:9px;margin-left:4px;">Видимо</span>';
-    } else {
-      visBadge = '<span class="badge badge-zinc" style="font-size:9px;margin-left:4px;">Статус неизвестен</span>';
     }
-    const activeBadge = isActive ? '<span class="badge badge-green" style="font-size:9px;margin-left:4px;">Действующее</span>' : '';
-    return '<div class="har-my-resume-item" data-resume-idx="' + idx + '" style="padding:8px 0;border-bottom:1px solid #e4e4e7;cursor:pointer;' +
-      (isActive ? 'background:#f0fdf4;border-radius:6px;padding:8px;' : '') +
+    // Radio-style indicator: filled circle for active, empty for others
+    const radio = isActive
+      ? '<span style="width:16px;height:16px;border-radius:50%;border:2px solid #059669;display:flex;align-items:center;justify-content:center;flex-shrink:0;"><span style="width:8px;height:8px;border-radius:50%;background:#059669;"></span></span>'
+      : '<span style="width:16px;height:16px;border-radius:50%;border:2px solid #d4d4d8;display:flex;align-items:center;justify-content:center;flex-shrink:0;"></span>';
+    return '<div class="har-my-resume-item" data-resume-idx="' + idx + '" style="padding:8px;border-bottom:1px solid #e4e4e7;cursor:pointer;display:flex;align-items:flex-start;gap:8px;' +
+      (isActive ? 'background:#f0fdf4;border-radius:6px;' : '') +
+      (vis === 'hidden' && !isActive ? 'opacity:0.6;' : '') +
       '">' +
-      '<div style="font-weight:600;font-size:12px;display:flex;align-items:center;flex-wrap:wrap;gap:2px;">' +
-        '<span>' + esc(r.title || 'Без названия') + '</span>' + visBadge + activeBadge +
-      '</div>' +
-      (r.salary ? '<div style="font-size:11px;color:#059669;">' + esc(r.salary) + '</div>' : '') +
-      '<div style="font-size:10px;color:#71717a;">' +
-        skillCount + ' нав., ' + expCount + ' зап. опыта' +
+      radio +
+      '<div style="flex:1;min-width:0;">' +
+        '<div style="font-weight:600;font-size:12px;display:flex;align-items:center;flex-wrap:wrap;gap:2px;">' +
+          '<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(r.title || 'Без названия') + '</span>' + visBadge +
+        '</div>' +
+        (r.salary ? '<div style="font-size:11px;color:#059669;">' + esc(r.salary) + '</div>' : '') +
+        '<div style="font-size:10px;color:#71717a;">' +
+          skillCount + ' нав., ' + expCount + ' зап. опыта' +
+        '</div>' +
       '</div>' +
     '</div>';
   }).join('');

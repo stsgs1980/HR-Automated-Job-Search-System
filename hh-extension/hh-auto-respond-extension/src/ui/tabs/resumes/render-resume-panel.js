@@ -27,8 +27,6 @@ function updateAccordionHeader(resume) {
   const subtitleEl = refs.shadowRoot?.getElementById('res-subtitle');
   const badgeEl = refs.shadowRoot?.getElementById('res-parsed-badge');
   const avatarEl = refs.shadowRoot?.getElementById('res-avatar');
-  const selectorTrigger = refs.shadowRoot?.getElementById('res-selector-trigger');
-  const selectorLabel = refs.shadowRoot?.getElementById('res-selector-label');
 
   if (resume && resume.id) {
     if (titleEl) titleEl.textContent = 'Действующее резюме';
@@ -57,16 +55,7 @@ function updateAccordionHeader(resume) {
       const initials = getInitials(resume.name || resume.title || resume.gender || '?');
       avatarEl.textContent = initials;
     }
-    // Show selector trigger if multiple resumes available
-    const allResumes = panelState.myResumes || [];
-    if (selectorTrigger && selectorLabel) {
-      if (allResumes.length > 1) {
-        selectorTrigger.style.display = 'inline-flex';
-        selectorLabel.textContent = resume.title || 'Без названия';
-      } else {
-        selectorTrigger.style.display = 'none';
-      }
-    }
+    // No selector trigger in header anymore — selection is in "Все резюме" list below
   } else {
     if (titleEl) titleEl.textContent = 'Действующее резюме';
     if (subtitleEl) subtitleEl.textContent = 'Нажмите «Загрузить» для выбора резюме';
@@ -76,7 +65,7 @@ function updateAccordionHeader(resume) {
       badgeEl.style.fontSize = '11px';
     }
     if (avatarEl) avatarEl.textContent = '?';
-    if (selectorTrigger) selectorTrigger.style.display = 'none';
+    // No selector trigger in header anymore
   }
 }
 
@@ -130,7 +119,7 @@ export function renderResumePanel() {
       return;
     }
     const pageType = getResumePageType();
-    let hint = 'Перейдите на страницу резюме на hh.ru<br>и нажмите «Загрузить с текущей страницы».';
+    let hint = 'Перейдите на страницу резюме на hh.ru<br>и нажмите «Взять со страницы».';
     if (pageType === 'resume-list') {
       hint = 'Нажмите «Загрузить», чтобы увидеть резюме на этой странице.';
     }
@@ -140,7 +129,6 @@ export function renderResumePanel() {
   }
 
   updateAccordionHeader(r);
-  updateResumeSelector();
 
   // Auto-expand the main accordion
   const body = refs.shadowRoot?.getElementById('res-parsing-body');
@@ -184,84 +172,4 @@ export function renderResumePanel() {
   renderMyResumesPanel();
 }
 
-// ═══════════════════════════════════════════════
-// RESUME SELECTOR DROPDOWN
-// ═══════════════════════════════════════════════
 
-function updateResumeSelector() {
-  const allResumes = panelState.myResumes || [];
-  const trigger = refs.shadowRoot?.getElementById('res-selector-trigger');
-  const dropdown = refs.shadowRoot?.getElementById('res-selector-dropdown');
-  if (!trigger || !dropdown) return;
-
-  // Show trigger only if 2+ resumes
-  if (allResumes.length <= 1) {
-    trigger.style.display = 'none';
-    return;
-  }
-  trigger.style.display = 'inline-flex';
-
-  // Remove old listeners by replacing node
-  const newTrigger = trigger.cloneNode(true);
-  trigger.parentNode.replaceChild(newTrigger, trigger);
-
-  newTrigger.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const isOpen = dropdown.style.display !== 'none';
-    if (isOpen) {
-      dropdown.style.display = 'none';
-      return;
-    }
-    // Build dropdown items
-    const activeId = panelState.resume?.id;
-    dropdown.innerHTML = allResumes.map((r, idx) => {
-      const isActive = r.id === activeId;
-      const vis = r.visibility || (r.hidden ? 'hidden' : 'unknown');
-      const isHidden = vis === 'hidden';
-      const visBadge = vis === 'visible'
-        ? '<span class="badge badge-green" style="font-size:9px;margin-left:4px;">Видимо</span>'
-        : isHidden
-          ? '<span class="badge badge-amber" style="font-size:9px;margin-left:4px;">Скрыто</span>'
-          : '';
-      return '<div data-select-resume-idx="' + idx + '" style="padding:8px 10px;cursor:pointer;display:flex;align-items:center;gap:8px;' +
-        (isActive ? 'background:#f0fdf4;font-weight:600;' : '') +
-        (isHidden && !isActive ? 'opacity:0.6;' : '') +
-        'border-bottom:1px solid #f4f4f5;font-size:12px;">' +
-        '<span style="width:6px;height:6px;border-radius:50%;flex-shrink:0;background:' + (isActive ? '#059669' : isHidden ? '#f59e0b' : '#d4d4d8') + ';"></span>' +
-        '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(r.title || 'Без названия') + '</span>' +
-        visBadge +
-      '</div>';
-    }).join('');
-    dropdown.style.display = 'block';
-
-    // Bind item clicks
-    dropdown.querySelectorAll('[data-select-resume-idx]').forEach(item => {
-      item.addEventListener('click', (ev) => {
-        ev.stopPropagation();
-        const idx = parseInt(item.getAttribute('data-select-resume-idx'), 10);
-        const resume = allResumes[idx];
-        if (!resume) return;
-        panelState.resume = resume;
-        panelState._resumeCleared = false;
-        chrome.storage.local.set({ myResume: resume });
-        dropdown.style.display = 'none';
-        renderResumePanel();
-        renderMyResumesPanel();
-      });
-    });
-  });
-
-  // Close dropdown on outside click (within shadow root)
-  const sr = refs.shadowRoot;
-  if (sr) {
-    const closeDropdown = (e) => {
-      if (!dropdown.contains(e.target) && !newTrigger.contains(e.target)) {
-        dropdown.style.display = 'none';
-      }
-    };
-    sr.addEventListener('click', closeDropdown, true);
-    // Also close on scroll
-    const closeOnScroll = () => { dropdown.style.display = 'none'; };
-    sr.addEventListener('scroll', closeOnScroll, true);
-  }
-}

@@ -9,17 +9,11 @@ export function getResumeSection() {
       <div class="timeline-toggle" style="display:flex;align-items:center;justify-content:space-between;" data-timeline="resume-parsing">
         <div style="display:flex;align-items:center;gap:10px;">
           <div id="res-avatar" style="width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,#059669,#10B981);display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px;font-weight:700;flex-shrink:0;">?</div>
-          <div style="position:relative;">
+          <div>
             <div style="display:flex;align-items:center;gap:6px;">
               <div id="res-title" style="font-size:13px;font-weight:600;">Действующее резюме</div>
-              <div id="res-selector-trigger" class="res-selector-trigger" style="display:none;cursor:pointer;padding:2px 8px;border-radius:6px;background:#f0fdf4;border:1px solid #bbf7d0;font-size:10px;font-weight:600;color:#059669;white-space:nowrap;max-width:120px;overflow:hidden;text-overflow:ellipsis;" title="Выбрать другое резюме">
-                <span id="res-selector-label">?</span>
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2.5" style="margin-left:2px;vertical-align:middle;"><polyline points="6 9 12 15 18 9"/></svg>
-              </div>
             </div>
             <div id="res-subtitle" style="font-size:11px;color:#71717a;margin-top:1px;">Нажмите «Загрузить» для выбора резюме</div>
-            <!-- Dropdown list for resume selection -->
-            <div id="res-selector-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:100;background:#fff;border:1px solid #e4e4e7;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.1);max-height:200px;overflow-y:auto;margin-top:4px;"></div>
           </div>
         </div>
         <div style="display:flex;align-items:center;gap:6px;">
@@ -33,7 +27,7 @@ export function getResumeSection() {
         </div>
         <div style="padding-top:12px;padding-left:24px;">
           <button class="btn btn-primary btn-sm" data-action="load-resume" style="width:100%;">
-            ${ICONS.refresh} Сделать текущее действующим
+            ${ICONS.refresh} Взять со страницы
           </button>
         </div>
       </div>
