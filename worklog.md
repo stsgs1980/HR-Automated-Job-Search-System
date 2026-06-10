@@ -417,3 +417,22 @@ Stage Summary:
 - Resume parsing works correctly on both /resume/{hash} (VIEW) and /resume/edit/{id} (EDIT) pages
 - Clear button properly clears without auto-restore
 - Empty parse results no longer overwrite good data
+
+---
+Task ID: R0.10
+Agent: main
+Task: Fix "Загрузить" on non-resume pages, add experience debug logging (v1.8.8)
+
+Work Log:
+- User reported: "Загрузить с текущей страницы" does nothing on hh.ru main page (/)
+- User reported: On /applicant/resumes, button shows list but doesn't load resume details
+- User reported: All synced resumes show Exp: 3 (investigating)
+- Fix 1: On non-resume pages, "Загрузить" now loads first resume from myResumes[]
+- Fix 2: On /applicant/resumes, button loads list AND auto-selects first synced resume
+- Fix 3: Added stepper fallback in parseExperienceFromDoc()
+- Fix 4: Added debug logging for pre-parse experience card count
+
+Stage Summary:
+- "Загрузить с текущей страницы" now works on ALL pages
+- 2 files modified: main.js, resume-fetch.js
+- Debug logging added for experience count investigation

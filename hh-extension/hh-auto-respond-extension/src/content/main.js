@@ -342,19 +342,41 @@ async function init() {
           JSON.stringify(resume._debug?.missing));
       }
     } else if (path.includes('/applicant/resumes')) {
+      // Resume list page: load the list AND auto-select first resume from synced data
       const list = parseResumeList();
       if (list.length > 0) {
         panelState.resumeList = list;
         renderResumeListPanel();
-        setStatus('Найдено резюме: ' + list.length);
         mainLog.info('Resume list loaded: ' + list.length + ' resumes');
+      }
+
+      // Also load the first synced resume into the detail panel
+      const synced = panelState.myResumes || [];
+      if (synced.length > 0 && synced[0].id) {
+        panelState.resume = synced[0];
+        panelState._resumeCleared = false;
+        chrome.storage.local.set({ myResume: synced[0] });
+        renderResumePanel();
+        setStatus('Найдено резюме: ' + list.length + '. Показано: ' + (synced[0].title || 'Без названия'));
       } else {
-        setStatus('Резюме не найдены на этой странице');
-        mainLog.warn('No resumes found on list page');
+        setStatus('Найдено резюме: ' + list.length + '. Нажмите «Синхронизировать» для загрузки');
       }
     } else {
-      setStatus('Откройте страницу резюме (/resume/...) для загрузки');
-      mainLog.warn('Cannot parse resume from this page (' + path + '). Go to /resume/{hash} or /applicant/resumes');
+      // Not on a resume page (main page, vacancy page, etc.)
+      // Load the first synced resume if available, otherwise suggest syncing
+      const synced = panelState.myResumes || [];
+      if (synced.length > 0 && synced[0].id) {
+        panelState.resume = synced[0];
+        panelState._resumeCleared = false;
+        chrome.storage.local.set({ myResume: synced[0] });
+        renderResumePanel();
+        renderMyResumesPanel();
+        setStatus('Загружено из синхронизации: ' + (synced[0].title || 'Без названия'));
+        mainLog.info('Loaded resume from synced data: ' + synced[0].title);
+      } else {
+        setStatus('Нет сохранённых резюме. Используйте «Синхронизировать все»');
+        mainLog.info('No synced resumes available on non-resume page');
+      }
     }
   });
 

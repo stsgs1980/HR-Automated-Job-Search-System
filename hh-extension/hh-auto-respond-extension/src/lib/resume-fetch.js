@@ -78,6 +78,16 @@ export async function fetchAndParseResume(resumeUrl, listMeta) {
   const doc = htmlToDoc(html);
 
   fetchLog.info('Resume HTML: ' + html.length + ' chars');
+
+  // Debug: count experience cards and stepper items in fetched HTML
+  const preDoc = htmlToDoc(html);
+  const preExpCards = preDoc.querySelectorAll('[data-qa="profile-experience-company-card"]');
+  const preStepperItems = preDoc.querySelectorAll('[data-qa="magritte-stepper-step-content"]');
+  const preShowAll = html.match(/Показать все|показать ещё|Посмотреть всё|Развернуть/gi);
+  fetchLog.info('Pre-parse: ' + preExpCards.length + ' company-cards, ' +
+    preStepperItems.length + ' stepper-items, ' +
+    (preShowAll ? preShowAll.length : 0) + ' "show all" buttons in HTML');
+
   // Extract id from URL: /resume/{hex} or ?resume={hex}
   let hashMatch = resumeUrl.match(/\/resume\/([a-f0-9]+)/);
   if (!hashMatch) hashMatch = resumeUrl.match(/[?&]resume=([a-f0-9]+)/);
@@ -185,6 +195,24 @@ function parseExperienceFromDoc(doc, dbg, resume) {
   const expCard = doc.querySelector('[data-qa="resume-list-card-experience"]');
   if (expCard) {
     resume._debug.found.push('experienceBlock');
+
+    // Fallback: if fewer than expected cards, try parsing stepper items inside expCard
+    // hh.ru sometimes renders all experience data in stepper items without data-qa company-card
+    if (uniqueCards.length === 0) {
+      const stepperItems = expCard.querySelectorAll('[data-qa="magritte-stepper-step-content"]');
+      stepperItems.forEach(step => {
+        const cellLeft = step.querySelector('[data-qa="cell-left-side"]');
+        if (!cellLeft) return;
+        const texts = cellLeft.querySelectorAll('[data-qa="cell-text-content"]');
+        const job = {};
+        if (texts.length >= 1) job.position = (texts[0].textContent || '').trim();
+        if (texts.length >= 2) job.period = (texts[1].textContent || '').trim().replace(/\s*\(\d[^)]+\)$/, '').trim();
+        if (job.position) entries.push(job);
+      });
+      if (entries.length > 0) {
+        resume._debug.found.push('experience (stepper fallback): ' + entries.length);
+      }
+    }
   } else {
     resume._debug.missing.push('experienceBlock (no container, ' + uniqueCards.length + ' cards)');
   }
