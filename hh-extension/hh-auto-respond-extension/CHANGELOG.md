@@ -18,6 +18,17 @@
   - Существующие подходы (API endpoints, query params) оставлены как fallback
 
 ### Изменено
+- **Anti-monolith рефакторинг resume-fetch.js** — файл 1481 строк разбит на 8 модулей:
+  - `resume-fetch.js` (~45 строк) — тонкий оркестратор (импорты + реэкспорты + syncAllResumes)
+  - `resume-fetch-list.js` (~65 строк) — fetchResumeList()
+  - `resume-fetch-resume.js` (~150 строк) — fetchAndParseResume() + парсеры хедера/скиллов + опыт-оркестратор
+  - `resume-fetch-experience.js` (~95 строк) — стратегии 1-3 (DOM-based опыт)
+  - `resume-fetch-strategy4-text.js` (~145 строк) — стратегия 4 (текстовый поиск) + stripHtmlTags
+  - `resume-fetch-strategy5-scripts.js` (~190 строк) — стратегия 5 (script JSON)
+  - `resume-fetch-strategy6-expand.js` (~370 строк) — стратегия 6 (iframe, API, URL)
+  - `resume-fetch-json-utils.js` (~130 строк) — JSON-утилиты (extractJsonArray, buildEntryFromApiItem, findExperienceInObject)
+  - `resume-fetch-education-languages.js` (~50 строк) — образование + языки + о себе
+- Публичный API не изменён: `fetchResumeList`, `fetchAndParseResume`, `syncAllResumes` реэкспортятся из resume-fetch.js
 - Версия: 1.9.4 → 1.9.5
 
 ---
