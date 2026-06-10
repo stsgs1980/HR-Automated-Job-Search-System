@@ -22,6 +22,11 @@ import {
 // ACCORDION HEADER UPDATE
 // ═══════════════════════════════════════════════
 
+/**
+ * Update the accordion header with resume info (title, subtitle, badge, avatar).
+ * Called after loading or selecting a resume.
+ * @param {object|null} resume - Active resume object, or null if none selected
+ */
 function updateAccordionHeader(resume) {
   const titleEl = refs.shadowRoot?.getElementById('res-title');
   const subtitleEl = refs.shadowRoot?.getElementById('res-subtitle');
@@ -73,6 +78,12 @@ function updateAccordionHeader(resume) {
 // EXPERIENCE YEARS CALC
 // ═══════════════════════════════════════════════
 
+/**
+ * Calculate total years of experience from resume.experience array.
+ * NOTE: Overlapping periods are counted multiple times (simplified calculation).
+ * @param {object} resume - Resume object with experience array
+ * @returns {number} Total years of experience (rounded)
+ */
 function calcExperienceYears(resume) {
   if (!resume.experience || resume.experience.length === 0) return 0;
   let totalMonths = 0;
@@ -87,6 +98,12 @@ function calcExperienceYears(resume) {
   return Math.round(totalMonths / 12);
 }
 
+/**
+ * Return the correct Russian grammatical form of "year" for a number.
+ * E.g. 1 год, 2 года, 5 лет, 21 год, 22 года, 25 лет.
+ * @param {number} n - Number
+ * @returns {string} 'год' | 'года' | 'лет'
+ */
 function yearWord(n) {
   const mod10 = n % 10;
   const mod100 = n % 100;
@@ -100,6 +117,17 @@ function yearWord(n) {
 // MAIN RESUME PANEL RENDER
 // ═══════════════════════════════════════════════
 
+/**
+ * Render the main resume panel in the sidebar.
+ *
+ * Shows either:
+ *   - Empty state with contextual hint (based on page type)
+ *   - Auto-selected first resume from synced list (if _resumeCleared is false)
+ *   - Full resume display with 6 accordion sections + visibility warning
+ *   - Resume list panel (if on /applicant/resumes with no active resume)
+ *
+ * Also triggers rendering of the "My Resumes" sync section.
+ */
 export function renderResumePanel() {
   const container = refs.shadowRoot?.getElementById('res-parsed-data');
   if (!container) return;

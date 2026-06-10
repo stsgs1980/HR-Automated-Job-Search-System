@@ -29,9 +29,19 @@ const resumeLog = createLogger('Resume');
 // PAGE TYPE DETECTION
 // ═══════════════════════════════════════════════
 
+/**
+ * Determines the type of the current page based on URL pathname.
+ * Used by UI renderers to show contextual hints and CTA buttons.
+ *
+ * @returns {'resume-detail' | 'resume-list' | 'other'}
+ *   - 'resume-detail' — user is on /resume/{hex} (a specific resume view page)
+ *   - 'resume-list'   — user is on /applicant/resumes (list of their resumes)
+ *   - 'other'         — any other page
+ */
 export function getResumePageType() {
   const path = window.location.pathname;
-  if (/\/resume\/[a-f0-9]+/.test(path)) return 'resume';
+  // /resume/{hex} = resume detail view page (was returning 'resume' — BUG: consumers compared to 'resume-detail')
+  if (/\/resume\/[a-f0-9]+/.test(path)) return 'resume-detail';
   if (path.includes('/applicant/resumes')) return 'resume-list';
   return 'other';
 }
@@ -40,6 +50,16 @@ export function getResumePageType() {
 // EXPAND HIDDEN SECTIONS
 // ═══════════════════════════════════════════════
 
+/**
+ * Clicks "Развернуть" / "Показать все" buttons on the resume page to reveal
+ * hidden experience entries, then waits for React hydration to complete.
+ *
+ * Side effects:
+ *   - Clicks DOM buttons (triggers React state changes)
+ *   - Waits 1500ms after each click for content to load
+ *
+ * @returns {Promise<void>}
+ */
 export async function expandHiddenSections() {
   const expandButtons = document.querySelectorAll('[data-qa="profile-experience-viewAll"], button');
   const clicked = [];

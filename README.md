@@ -1,6 +1,6 @@
 # HH Copilot -- Chrome Extension
 
-**Версия:** 1.9.7
+**Версия:** 1.9.8
 **Тип:** Расширение для Chrome (Manifest V3)
 **Целевая платформа:** hh.ru (Magritte дизайн-система)
 **Лицензия:** Приватный проект. Все права защищены.
@@ -16,7 +16,7 @@ HH Copilot -- это браузерное расширение для автом
 
 Целевая аудитория -- соискатели, которые рассылают десятки откликов в день и хотят ускорить этот процесс без потери качества. Расширение не заменяет человека полностью, а автоматизирует механическую часть: поиск, фильтрацию, заполнение полей, отправку отклика. Решение о том, на какие вакансии откликаться, принимает пользователь (ручной режим) или алгоритм скоринга (полуавтоматический и автоматический режимы).
 
-Текущая версия (1.9.7+) -- модульная архитектура на базе esbuild. Content script собран из 65+ JS-модулей в каталоге src/, все файлы не превышают 250 строк. Парсинг резюме (13 полей: имя, должность, зарплата, пол, возраст, город, навыки с уровнями, опыт, образование, языки, контакты, доп. информация), парсинг вакансий со страницы поиска, FAB-кнопка с зелёной пульсацией, Shadow DOM sidebar (720px, 6 вкладок), авторизация, MutationObserver для SPA-навигации, двухуровневое определение видимости резюме (список + детальная страница, 6 стратегий), радио-кнопки для выбора действующего резюме, консолидированный UI (↻ для перепарсинга, контекстная CTA «Взять со страницы»), многостратегийный парсинг опыта (6 стратегий: DOM company-cards, stepper supplement, stepper fallback, текстовый поиск, script JSON, скрытый iframe для полного раскрытия) -- всё это работает стабильно. UI вкладки «Резюме» приведён к wireframe (6 accordion-секций, структурированные образование и языки, имя, опыт в подзаголовке). Движок скоринга, auto-apply, AI-интеграция и парсинг деталей вакансии -- заглушки, планируются в следующих фазах.
+Текущая версия (1.9.8) -- модульная архитектура на базе esbuild. Content script собран из 65+ JS-модулей в каталоге src/, все файлы не превышают 250 строк. Парсинг резюме (13 полей: имя, должность, зарплата, пол, возраст, город, навыки с уровнями, опыт, образование, языки, контакты, доп. информация), парсинг вакансий со страницы поиска, FAB-кнопка с зелёной пульсацией, Shadow DOM sidebar (720px, 6 вкладок), авторизация, MutationObserver для SPA-навигации, двухуровневое определение видимости резюме (список + детальная страница, 6 стратегий), радио-кнопки для выбора действующего резюме, консолидированный UI (↻ для перепарсинга, контекстная CTA «Взять со страницы»), многостратегийный парсинг опыта (6 стратегий: DOM company-cards, stepper supplement, stepper fallback, текстовый поиск, script JSON, скрытый iframe для полного раскрытия) -- всё это работает стабильно. UI вкладки «Резюме» приведён к wireframe (6 accordion-секций, структурированные образование и языки, имя, опыт в подзаголовке). Движок скоринга, auto-apply, AI-интеграция и парсинг деталей вакансии -- заглушки, планируются в следующих фазах.
 
 
 ## 2. Возможности
@@ -49,7 +49,7 @@ HH Copilot -- это браузерное расширение для автом
 
 **Rate Limiter.** Token bucket с адаптивным замедлением: 200 откликов/день, 30/час, минимум 30 секунд между действиями, максимум 5 подряд с паузой 2 минуты. При получении 429/капчи/замедленного ответа адаптивный фактор увеличивается (x2 при 429, x1.5 при slow, x1.3 при captcha). Модуль src/lib/rate-limiter.js.
 
-**Version sync.** Версия синхронизирована между manifest.json, package.json, popup/index.html и src/ui/html/shell.js. Единый источник истины -- manifest.json. Модуль src/lib/version.js.
+**Version sync.** Версия синхронизирована между manifest.json, package.json, popup/index.html и src/ui/html/shell.js. Единый источник истины -- manifest.json (esbuild читает его и инжектит process.env.VERSION). Модуль src/lib/version.js содержит константу для справки, но не импортируется никаким модулем.
 
 ### Что НЕ работает (заглушки, планируются в следующих фазах)
 
@@ -103,7 +103,7 @@ npm run watch
 
 Шаг 4. В открывшемся диалоге выберите папку hh-auto-respond-extension (ту, что содержит manifest.json).
 
-Шаг 5. Расширение появится в списке с названием "HH Copilot" и версией 1.9.7. Убедитесь, что тумблер включён.
+Шаг 5. Расширение появится в списке с названием "HH Copilot" и версией 1.9.8. Убедитесь, что тумблер включён.
 
 ### Проверка работоспособности
 
@@ -170,12 +170,13 @@ src/                           -- исходные модули (65+ JS файл
     storage.js                  -- chrome.storage.local, DEFAULT_SETTINGS, DEFAULT_STATS
     timing.js                   -- gaussianRandom, randomDelay, simulateReading, simulateTyping
     rate-limiter.js             -- rateLimiter (check, recordAction, adaptiveSlowdown, resetBurst)
-    version.js                  -- getVersion(), единый источник версии из manifest.json
+    version.js                  -- VERSION constant (NOT source of truth — manifest.json is; kept for reference)
     resume-constants.js         -- shared constants: UI_NOISE, TITLE_SUFFIX_NOISE, cleanResumeTitle(),
                                    VISIBILITY_*, detectVisibilityFromCard(), hasHiddenIndicator(), normalizeWs()
+    resume-fetch-helpers.js     -- fetchHtml(), htmlToDoc(), extractResumeLinks(), extractVisibilityStatus()
     resume-fetch.js             -- thin orchestrator (imports + re-exports + syncAllResumes)
     resume-fetch-list.js        -- fetchResumeList()
-    resume-fetch-resume.js      -- fetchAndParseResume() + header/skills parsers + experience orchestrator
+    resume-fetch-resume.js      -- fetchAndParseResume() + header/skills parsers + experience orchestrator + detectVisibilityFromResumePage()
     resume-fetch-experience.js  -- strategies 1-3 (DOM-based experience)
     resume-fetch-strategy4-text.js   -- strategy 4 (text pattern search) + stripHtmlTags
     resume-fetch-strategy5-scripts.js -- strategy 5 (script JSON parsing)
@@ -272,7 +273,7 @@ hh.ru использует Magritte -- собственную CSS-in-JS диза
 
 Единственный стабильный API для обращения к DOM-элементов hh.ru -- это атрибуты data-qa. Они созданы разработчиками hh.ru для внутреннего тестирования и не меняются между деплоями. Стратегия парсинга резюме строится исключительно на data-qa атрибутах, а там где они отсутствуют -- на текстовом анализе содержимого и BEM-классах библиотеки Bloko (бесхэшовые).
 
-### Извлекаемые поля (12 из 12)
+### Извлекаемые поля (13)
 
 Поле "Должность" извлекается из data-qa="resume-block-title-position". Fallback -- тег h1 на странице. Это самое надёжное поле, присутствует на всех резюме.
 

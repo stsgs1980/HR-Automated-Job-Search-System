@@ -143,6 +143,13 @@ export async function fetchAndParseResume(resumeUrl, listMeta) {
 
 // ── Section parsers ──
 
+/**
+ * Parse resume header (title + salary) from the document.
+ * Modifies `resume` object in-place.
+ * @param {Document} doc - Parsed document
+ * @param {Function} dbg - Debug logger callback
+ * @param {object} resume - Resume object to populate
+ */
 function parseHeader(doc, dbg, resume) {
   const titleEl = doc.querySelector('[data-qa="resume-block-title-position"]');
   if (titleEl) resume.title = dbg('resumeTitle (data-qa)', safeGetText(titleEl));
@@ -154,6 +161,17 @@ function parseHeader(doc, dbg, resume) {
   if (salaryEl) resume.salary = dbg('resumeSalary (data-qa)', safeGetText(salaryEl));
 }
 
+/**
+ * Parse skills section from the resume document.
+ * Extracts skill levels (hh.ru codes: 3=Продвинутый, 2=Средний, 1=Начальный)
+ * and individual skill tags. Uses .bloko-tag__text as fallback for tags
+ * (this legacy class is still stable in Magritte for skill tags).
+ *
+ * Modifies `resume` object in-place.
+ * @param {Document} doc - Parsed document
+ * @param {Function} dbg - Debug logger callback
+ * @param {object} resume - Resume object to populate
+ */
 function parseSkillsFromDoc(doc, dbg, resume) {
   const skillsCard = doc.querySelector('[data-qa="skills-card"]');
   if (!skillsCard) {
@@ -185,6 +203,24 @@ function parseSkillsFromDoc(doc, dbg, resume) {
 
 // ── Experience orchestrator (Strategies 1-6) ──
 
+/**
+ * Orchestrate experience parsing using all 6 strategies in sequence.
+ * Each strategy can supplement or replace entries found by previous strategies.
+ *
+ * Strategy 1-3: DOM-based (company-cards, stepper supplement, stepper fallback)
+ * Strategy 4: Raw HTML text pattern search for date ranges
+ * Strategy 5: Magritte script/hydration JSON parsing
+ * Strategy 6: Fetch expanded experience via iframe/API/AJAX
+ *
+ * Only replaces entries if a later strategy finds MORE entries.
+ * Modifies `resume` object in-place.
+ *
+ * @param {Document} doc - Parsed document
+ * @param {Function} dbg - Debug logger callback
+ * @param {object} resume - Resume object to populate
+ * @param {string} html - Raw HTML string
+ * @param {string} resumeUrl - Resume page URL (for Strategy 6)
+ */
 async function parseExperienceFromDoc(doc, dbg, resume, html, resumeUrl) {
   // Strategies 1-3: DOM-based parsing
   const entries = parseExperienceFromDocStrategies1to3(doc, resume);

@@ -214,3 +214,36 @@ Stage Summary:
 - CHANGELOG: 3 new version entries (1.9.6, 1.9.7, 1.9.7+)
 - README: updated with all recent changes
 - worklog: complete from v1.9.5 to present
+
+---
+Task ID: v1.9.8-audit-fix
+Agent: main
+Task: Full code audit — fix getResumePageType() bug, add JSDoc, fix documentation gaps, bump to v1.9.8
+
+Work Log:
+- Audited all resume-related files for documentation gaps (27 issues found by sub-agent)
+- **CRITICAL BUG FIXED**: getResumePageType() returned 'resume' but consumers checked for 'resume-detail'
+  - This meant: hint "Нажмите «Взять со страницы» ниже" NEVER showed on resume detail pages
+  - CTA button "Взять со страницы" NEVER appeared on resume detail pages
+  - Fixed: now returns 'resume-detail' (matching both consumers: render-resume-panel.js, render-my-resumes.js)
+- Added JSDoc to 17 undocumented functions across 5 files:
+  - resume-fetch-helpers.js: fetchHtml, htmlToDoc, safeGetText, extractResumeLinks, extractFromScripts
+  - resume-fetch-resume.js: parseHeader, parseSkillsFromDoc, parseExperienceFromDoc
+  - render-resume-panel.js: updateAccordionHeader, calcExperienceYears, yearWord, renderResumePanel
+  - render-my-resumes.js: renderMyResumesPanel, renderResumeListPanel
+  - resume-detail/index.js: getResumePageType, expandHiddenSections
+- Documented magic numbers: {32,} vs MIN_HASH_LEN (30), SEARCH_RADIUS=5000, skill level codes
+- Fixed version.js: comment now says "NOT the single source of truth — manifest.json is"
+- Added resume-fetch-helpers.js to README file structure
+- Fixed README field count: "12 из 12" → "13 полей"
+- Fixed README version: 1.9.7 → 1.9.8
+- Bumped version to 1.9.8: manifest.json, package.json, version.js, CHANGELOG
+- CHANGELOG [1.9.7+] → [1.9.8] with bug fix entry added
+- Build verified: 324.1kb, 0 errors
+
+Stage Summary:
+- Critical bug fixed: getResumePageType() return value mismatch
+- 17 functions now have JSDoc documentation
+- README consistent: v1.9.8, 13 fields, resume-fetch-helpers.js listed
+- version.js correctly documented as NOT the source of truth
+- No TODO/FIXME/HACK comments in codebase

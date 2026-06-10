@@ -14,6 +14,15 @@ import { getResumePageType } from '../../../parsers/resume-detail.js';
 // MY RESUMES PANEL
 // ═══════════════════════════════════════════════
 
+/**
+ * Render the "My Resumes" sync section in the sidebar.
+ * Shows list of synced resumes with:
+ *   - Radio-style indicator (◉ active, ○ inactive)
+ *   - Visibility badges (Видимо/Скрыто)
+ *   - ↻ reparse button on active resume (amber for hidden)
+ *   - Visible/hidden counter badges
+ *   - Contextual "Взять со страницы" CTA (only on resume detail pages when no active resume)
+ */
 export function renderMyResumesPanel() {
   const listEl = refs.shadowRoot?.getElementById('res-sync-list');
   const countEl = refs.shadowRoot?.getElementById('res-sync-count');
@@ -114,6 +123,10 @@ export function renderMyResumesPanel() {
 // RESUME LIST PANEL (from page scan)
 // ═══════════════════════════════════════════════
 
+/**
+ * Render the resume list panel (from page scan on /applicant/resumes).
+ * Shows clickable links to each resume found on the page.
+ */
 export function renderResumeListPanel() {
   const container = refs.shadowRoot?.getElementById('res-parsed-data');
   if (!container) return;

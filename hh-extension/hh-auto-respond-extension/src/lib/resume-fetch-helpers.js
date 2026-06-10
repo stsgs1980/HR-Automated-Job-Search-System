@@ -25,6 +25,12 @@ const helperLog = createLogger('ResumeFetchH');
 // FETCH HELPERS
 // ═══════════════════════════════════════════════
 
+/**
+ * Fetch HTML content from a URL with credentials (for hh.ru authenticated pages).
+ * @param {string} url - Full URL to fetch
+ * @returns {Promise<string>} HTML text content
+ * @throws {Error} If fetch fails or returns non-OK status
+ */
 export async function fetchHtml(url) {
   const resp = await fetch(url, {
     credentials: 'include',
@@ -34,11 +40,22 @@ export async function fetchHtml(url) {
   return resp.text();
 }
 
+/**
+ * Parse an HTML string into a Document using DOMParser.
+ * @param {string} html - Raw HTML string
+ * @returns {Document} Parsed DOM document
+ */
 export function htmlToDoc(html) {
   const parser = new DOMParser();
   return parser.parseFromString(html, 'text/html');
 }
 
+/**
+ * Safely extract text content from a DOM element.
+ * @param {Element|null} el - DOM element
+ * @param {string} [fallback=''] - Fallback value if element is null or empty
+ * @returns {string} Trimmed text content or fallback
+ */
 export function safeGetText(el, fallback) {
   fallback = fallback || '';
   if (!el || !(el instanceof Element)) return fallback;
@@ -50,6 +67,19 @@ export function safeGetText(el, fallback) {
 // RESUME LINK EXTRACTORS
 // ═══════════════════════════════════════════════
 
+/**
+ * Extract resume links from a list of anchor elements on /applicant/resumes page.
+ *
+ * Matches two URL patterns:
+ *   - /resume/{hex} — public/employer view
+ *   - ?resume={hex} — applicant's own resume list
+ *
+ * Detects visibility from link text (Strategy 0): hidden resumes include
+ * "Многие не видят ваше резюме" directly in the link's textContent.
+ *
+ * @param {NodeListOf<HTMLAnchorElement>} anchorList - Anchor elements from the page
+ * @returns {Array<{id: string, title: string, url: string, visibility: string, hidden: boolean}>}
+ */
 export function extractResumeLinks(anchorList) {
   const resumes = [];
 
@@ -90,11 +120,24 @@ export function extractResumeLinks(anchorList) {
   return resumes;
 }
 
+/**
+ * Extract resume IDs from <script> tags and JSON state patterns.
+ *
+ * Two-phase extraction:
+ *   Phase 1: Regex scan of script textContent for resume hash patterns
+ *   Phase 2: Search raw HTML for "resumeId":"HASH" JSON patterns
+ *
+ * @param {Document} doc - Parsed document
+ * @param {string} html - Raw HTML string
+ * @returns {Array<{id: string, title: string, url: string}>} Resume stubs (no visibility)
+ */
 export function extractFromScripts(doc, html) {
   const resumes = [];
   const scripts = doc.querySelectorAll('script');
   scripts.forEach(script => {
     const text = script.textContent || '';
+    // NOTE: {32,} here vs MIN_HASH_LEN (30) in constants — scripts tend to have longer hashes
+    // because they are full database IDs, not truncated URL paths
     const matches = text.matchAll(/resume[=/]\\?"?([a-f0-9]{32,})/g);
     for (const m of matches) {
       const id = m[1];
@@ -131,7 +174,7 @@ export function extractFromScripts(doc, html) {
 // VISIBILITY DETECTION (Magritte-aware)
 // ═══════════════════════════════════════════════
 
-const SEARCH_RADIUS = 5000; // chars after the resume hash to search
+const SEARCH_RADIUS = 5000; // chars after the resume hash to search for visibility indicators (empirically: indicators usually within 5K chars of card)
 
 /**
  * Extract visibility status using multiple strategies.

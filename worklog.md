@@ -807,3 +807,27 @@ Stage Summary:
 - CHANGELOG: 3 new version entries (1.9.6, 1.9.7, 1.9.7+)
 - README: updated version description, visibility detection, UI changes
 - worklog: complete from v1.9.5 to present — every commit documented
+
+---
+Task ID: v1.9.8-audit
+Agent: main
+Task: Code audit — fix getResumePageType() bug, add JSDoc, fix docs gaps, v1.9.8
+
+Work Log:
+- Full code audit found 27 documentation gaps + 1 critical bug
+- CRITICAL BUG: getResumePageType() returned 'resume' but consumers compared with 'resume-detail'
+  → hint "Нажмите «Взять со страницы» ниже" and CTA button NEVER showed on resume detail pages
+  → Fixed: now returns 'resume-detail' (matching both consumers)
+- Added JSDoc to 17 undocumented functions across 5 files
+- Documented magic numbers: {32,} vs MIN_HASH_LEN (30), SEARCH_RADIUS=5000
+- Fixed version.js: comment says "NOT the single source of truth — manifest.json is"
+- Added resume-fetch-helpers.js to README file structure
+- Fixed README: "12 из 12" → "13 полей", version 1.9.7 → 1.9.8
+- Bumped version to 1.9.8: manifest.json, package.json, version.js, CHANGELOG
+- Build verified: 324.1kb, 0 errors
+
+Stage Summary:
+- Critical bug fixed: getResumePageType() return value mismatch
+- 17 functions documented with JSDoc
+- README consistent at v1.9.8
+- No TODO/FIXME/HACK in codebase
