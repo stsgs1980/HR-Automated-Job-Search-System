@@ -96,9 +96,24 @@ export async function fetchAndParseResume(resumeUrl, listMeta) {
   //   - Page VISIBLE wins over List UNKNOWN
   //   - List VISIBLE wins over Page UNKNOWN
   //   - Both UNKNOWN → UNKNOWN (resolved later in syncAllResumes)
-  const pageVis = detectVisibilityFromResumePage(doc, html);
+  const pageVisResult = detectVisibilityFromResumePage(doc, html);
+  const pageVis = pageVisResult.visibility;
+  const pageTrace = pageVisResult.trace || [];
   const listVis = listMeta ? listMeta.visibility : 'no-list-meta';
   const listHidden = listMeta ? listMeta.hidden : undefined;
+
+  // Build structured diagnostic entry for this resume
+  const visDiagEntry = {
+    id: id || 'unknown',
+    title: '(will be set after parse)',
+    pageVis,
+    pageTrace,
+    listVis,
+    listHidden,
+    decision: null,
+    decisionReason: null,
+    timestamp: new Date().toISOString()
+  };
 
   fetchLog.info('[VIS-DIAG] === Visibility decision for ' + (id ? id.substring(0, 8) : 'unknown') + ' ===');
   fetchLog.info('[VIS-DIAG] Sources: page=' + pageVis + ', list=' + listVis + ', listHidden=' + listHidden);
@@ -107,30 +122,42 @@ export async function fetchAndParseResume(resumeUrl, listMeta) {
     // Page says HIDDEN — most reliable, always wins
     resume.visibility = VISIBILITY_HIDDEN;
     resume.hidden = true;
+    visDiagEntry.decision = VISIBILITY_HIDDEN;
+    visDiagEntry.decisionReason = 'page-detected-hidden';
     fetchLog.info('[VIS-DIAG] Decision: HIDDEN (page detected)');
   } else if (listMeta && listMeta.visibility === VISIBILITY_HIDDEN) {
     // List says HIDDEN, page didn't detect HIDDEN → trust the list
-    // (page detection can miss hidden indicators in SSR HTML, but if the
-    // list page saw "Многие не видят" in link text, that's authoritative)
     resume.visibility = VISIBILITY_HIDDEN;
     resume.hidden = true;
+    visDiagEntry.decision = VISIBILITY_HIDDEN;
+    visDiagEntry.decisionReason = 'list-detected-hidden (page=' + pageVis + ')';
     fetchLog.info('[VIS-DIAG] Decision: HIDDEN (list detected, page=' + pageVis + ')');
   } else if (pageVis === VISIBILITY_VISIBLE) {
     // Page says VISIBLE, list doesn't say HIDDEN → trust page
     resume.visibility = VISIBILITY_VISIBLE;
     resume.hidden = false;
+    visDiagEntry.decision = VISIBILITY_VISIBLE;
+    visDiagEntry.decisionReason = 'page-detected-visible';
     fetchLog.info('[VIS-DIAG] Decision: VISIBLE (page detected)');
   } else if (listMeta && listMeta.visibility === VISIBILITY_VISIBLE) {
     // List says VISIBLE, page is UNKNOWN → trust list
     resume.visibility = VISIBILITY_VISIBLE;
     resume.hidden = false;
+    visDiagEntry.decision = VISIBILITY_VISIBLE;
+    visDiagEntry.decisionReason = 'list-detected-visible (page=UNKNOWN)';
     fetchLog.info('[VIS-DIAG] Decision: VISIBLE (list detected, page=UNKNOWN)');
   } else {
     // Both UNKNOWN — will be resolved later in syncAllResumes()
     resume.visibility = VISIBILITY_UNKNOWN;
     resume.hidden = false;
+    visDiagEntry.decision = VISIBILITY_UNKNOWN;
+    visDiagEntry.decisionReason = 'both-sources-unknown';
     fetchLog.info('[VIS-DIAG] Decision: UNKNOWN (both sources unknown)');
   }
+
+  // Store diagnostic entry on the resume object
+  resume._visDiag = visDiagEntry;
+
   // Always carry over list title
   if (listMeta && listMeta.title && listMeta.title !== 'Untitled') {
     resume._listTitle = listMeta.title;
@@ -152,6 +179,11 @@ export async function fetchAndParseResume(resumeUrl, listMeta) {
   await parseExperienceFromDoc(doc, dbg, resume, html, resumeUrl);
   parseEducationFromDocSection(doc, dbg, resume);
   parseLanguagesAndAbout(doc, dbg, resume);
+
+  // Update visDiag title now that we have the parsed title
+  if (resume._visDiag) {
+    resume._visDiag.title = resume.title || '(no title)';
+  }
 
   fetchLog.info('Parsed: ' + resume.title + ' | Skills: ' + resume.skills.length +
     ' | Exp: ' + resume.experience.length + ' | Edu: ' + resume.education.length);
@@ -314,7 +346,7 @@ function detectVisibilityFromResumePage(doc, html) {
     if (found) {
       diag.push('S1:data-qa=' + sel + ' → HIDDEN');
       fetchLog.info('[VIS-DIAG] ' + diag.join(' | '));
-      return VISIBILITY_HIDDEN;
+      return { visibility: VISIBILITY_HIDDEN, trace: diag };
     }
   }
   diag.push('S1:no-data-qa-hidden');
@@ -333,13 +365,13 @@ function detectVisibilityFromResumePage(doc, html) {
       diag.push('S2:btn="сделать видимым" → HIDDEN');
       fetchLog.info('[VIS-DIAG] ' + diag.join(' | '));
       fetchLog.info('[VIS-DIAG] All vis-related buttons: ' + JSON.stringify(btnDetails));
-      return VISIBILITY_HIDDEN;
+      return { visibility: VISIBILITY_HIDDEN, trace: diag, btnDetails };
     }
     if (text.includes('скрыть резюме')) {
       diag.push('S2:btn="скрыть резюме" → VISIBLE');
       fetchLog.info('[VIS-DIAG] ' + diag.join(' | '));
       fetchLog.info('[VIS-DIAG] All vis-related buttons: ' + JSON.stringify(btnDetails));
-      return VISIBILITY_VISIBLE;
+      return { visibility: VISIBILITY_VISIBLE, trace: diag, btnDetails };
     }
   }
   diag.push('S2:no-key-buttons' + (btnDetails.length ? '(saw:' + btnDetails.length + ' partial)' : ''));
@@ -357,7 +389,7 @@ function detectVisibilityFromResumePage(doc, html) {
       }
     }
     fetchLog.info('[VIS-DIAG] ' + diag.join(' | '));
-    return VISIBILITY_HIDDEN;
+    return { visibility: VISIBILITY_HIDDEN, trace: diag };
   }
   diag.push('S3:body-no-indicators');
 
@@ -374,7 +406,7 @@ function detectVisibilityFromResumePage(doc, html) {
       }
     }
     fetchLog.info('[VIS-DIAG] ' + diag.join(' | '));
-    return VISIBILITY_HIDDEN;
+    return { visibility: VISIBILITY_HIDDEN, trace: diag };
   }
   diag.push('S4:html-no-indicators');
 
@@ -400,7 +432,7 @@ function detectVisibilityFromResumePage(doc, html) {
   if (scriptPatterns.length > 0) {
     diag.push('S5:script=' + scriptPatterns.join(',') + ' → HIDDEN');
     fetchLog.info('[VIS-DIAG] ' + diag.join(' | '));
-    return VISIBILITY_HIDDEN;
+    return { visibility: VISIBILITY_HIDDEN, trace: diag, scriptPatterns };
   }
   diag.push('S5:no-script-patterns');
 
@@ -410,7 +442,7 @@ function detectVisibilityFromResumePage(doc, html) {
     const hideQa = hideLink.getAttribute('data-qa') || '';
     diag.push('S6:hide-link qa=' + hideQa + ' → VISIBLE');
     fetchLog.info('[VIS-DIAG] ' + diag.join(' | '));
-    return VISIBILITY_VISIBLE;
+    return { visibility: VISIBILITY_VISIBLE, trace: diag };
   }
   diag.push('S6:no-hide-link');
 
@@ -424,5 +456,5 @@ function detectVisibilityFromResumePage(doc, html) {
 
   diag.push('→ UNKNOWN');
   fetchLog.info('[VIS-DIAG] ' + diag.join(' | '));
-  return VISIBILITY_UNKNOWN;
+  return { visibility: VISIBILITY_UNKNOWN, trace: diag };
 }

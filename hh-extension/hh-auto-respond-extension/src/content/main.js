@@ -28,8 +28,15 @@ let pageInitialized = false;
 let syncInProgress = false;
 
 // Expose diagnostic functions globally for console access
+// NOTE: Content scripts run in an isolated world — window.X set here is NOT
+// visible from the page's console. Console helpers (__hhVis, __hhVisTable)
+// are now provided by page-world.js (Manifest V3 "world": "MAIN" script).
+// Data is transferred via window.postMessage({ type: 'HH-AR-VISDIAG', payload: ... }).
 window.__hhDiagnose = diagnoseResumeDOM;
 window.__hhDebugVisibility = debugVisibility;
+
+// Initialize visibility diagnostic dump (will be populated after sync)
+window.__hhVisDiag = null;
 
 /**
  * Initialize page-specific logic (parsers, observers).

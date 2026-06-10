@@ -9,7 +9,7 @@ const DIST = 'dist';
 const manifest = JSON.parse(readFileSync('manifest.json', 'utf8'));
 const VERSION = manifest.version;
 
-const buildOptions = {
+const contentOptions = {
   entryPoints: ['src/content/main.js'],
   bundle: true,
   outfile: `${DIST}/content.js`,
@@ -20,8 +20,20 @@ const buildOptions = {
   logLevel: 'info',
   treeShaking: false,
   drop: isProd ? ['console', 'debugger'] : [],
-  // Inject VERSION constant into all JS modules at build time
   define: { 'process.env.VERSION': JSON.stringify(VERSION) },
+};
+
+// Page-world script: runs in MAIN world (not isolated) to expose console helpers.
+// No bundling needed — it's a standalone script with no imports.
+const pageWorldOptions = {
+  entryPoints: ['src/page-world.js'],
+  bundle: false,
+  outfile: `${DIST}/page-world.js`,
+  format: 'iife',
+  minify: isProd,
+  sourcemap: false,
+  target: 'chrome110',
+  logLevel: 'info',
 };
 
 function copyStatic() {
@@ -61,13 +73,15 @@ function copyStatic() {
 
 if (isWatch) {
   copyStatic();
-  const ctx = await esbuild.context(buildOptions);
-  await ctx.watch();
+  const ctx1 = await esbuild.context(contentOptions);
+  const ctx2 = await esbuild.context(pageWorldOptions);
+  await Promise.all([ctx1.watch(), ctx2.watch()]);
   console.log('[esbuild] Watching for changes...');
 } else {
   rmSync(DIST, { recursive: true, force: true });
   copyStatic();
-  await esbuild.build(buildOptions);
-  console.log(`[esbuild] v${VERSION} build complete -- dist/content.js (${isProd ? 'production' : 'development'})`);
+  await esbuild.build(contentOptions);
+  await esbuild.build(pageWorldOptions);
+  console.log(`[esbuild] v${VERSION} build complete -- dist/content.js + page-world.js (${isProd ? 'production' : 'development'})`);
   console.log(`[dist] Load ${DIST}/ as unpacked extension in Chrome`);
 }

@@ -36,13 +36,45 @@ export { fetchResumeList, fetchAndParseResume };
 export async function syncAllResumes({ onProgress, onComplete, onError } = {}) {
   fetchLog.info('syncAllResumes: starting ...');
 
+  // Initialize global visibility diagnostic dump
+  const visDiag = {
+    startedAt: new Date().toISOString(),
+    finishedAt: null,
+    listSource: null,
+    listRawHtmlLength: 0,
+    resumes: [],
+    summary: { total: 0, visible: 0, hidden: 0, unknown: 0, unknownFallbackToVisible: 0 }
+  };
+
   try {
     const list = await fetchResumeList();
+    visDiag.listSource = 'fetch';
+    visDiag.listRawHtmlLength = window.__hhLastFetchHtml?.length || 0;
+
     if (list.length === 0) {
       fetchLog.warn('syncAllResumes: no resumes found');
+      visDiag.summary.total = 0;
+      visDiag.finishedAt = new Date().toISOString();
+      window.__hhVisDiag = visDiag;
       if (onComplete) onComplete([]);
       return [];
     }
+
+    // Capture list-level visibility data
+    list.forEach(item => {
+      visDiag.resumes.push({
+        id: item.id,
+        title: item.title,
+        url: item.url,
+        listVis: item.visibility,
+        listHidden: item.hidden,
+        pageVis: null,
+        pageTrace: null,
+        decision: null,
+        decisionReason: null,
+        finalVisibility: null
+      });
+    });
 
     const visibleCount = list.filter(r => {
       const vis = r.visibility || (r.hidden ? 'hidden' : 'unknown');
@@ -71,9 +103,26 @@ export async function syncAllResumes({ onProgress, onComplete, onError } = {}) {
         delete resume._listTitle;
         if (resume.id) results.push(resume);
         else fetchLog.warn('No id for ' + item.url);
+
+        // Merge page-level diagnostic into our global dump
+        const diagEntry = visDiag.resumes.find(r => r.id === resume.id);
+        if (diagEntry && resume._visDiag) {
+          diagEntry.pageVis = resume._visDiag.pageVis;
+          diagEntry.pageTrace = resume._visDiag.pageTrace;
+          diagEntry.decision = resume._visDiag.decision;
+          diagEntry.decisionReason = resume._visDiag.decisionReason;
+        }
       } catch (err) {
         fetchLog.error('Failed: ' + item.url + ': ' + err.message);
         if (onError) onError(item, err);
+        // Record error in diagnostic
+        const diagEntry = visDiag.resumes.find(r => r.id === item.id);
+        if (diagEntry) {
+          diagEntry.pageVis = 'error';
+          diagEntry.pageTrace = ['ERROR: ' + err.message];
+          diagEntry.decision = 'error';
+          diagEntry.decisionReason = 'fetch-failed';
+        }
       }
 
       if (i < list.length - 1) await gaussianDelay(2000, 5000);
@@ -86,18 +135,55 @@ export async function syncAllResumes({ onProgress, onComplete, onError } = {}) {
     const stillUnknown = results.filter(r => r.visibility === VISIBILITY_UNKNOWN);
     if (stillUnknown.length > 0) {
       fetchLog.info('[VIS-DIAG] Final fallback: ' + stillUnknown.length + ' resumes still UNKNOWN after all detection → defaulting to VISIBLE');
+      visDiag.summary.unknownFallbackToVisible = stillUnknown.length;
       stillUnknown.forEach(r => {
         fetchLog.info('[VIS-DIAG]   ' + (r.id ? r.id.substring(0, 8) : '?') + ' "' + (r.title || '').substring(0, 30) + '" UNKNOWN→VISIBLE');
         r.visibility = VISIBILITY_VISIBLE;
         r.hidden = false;
+        // Update diagnostic entry
+        const diagEntry = visDiag.resumes.find(d => d.id === r.id);
+        if (diagEntry) {
+          diagEntry.finalVisibility = VISIBILITY_VISIBLE;
+          diagEntry.decisionReason += ' [FALLBACK: UNKNOWN→VISIBLE]';
+        }
       });
     }
 
+    // ═══ FINALIZE DIAGNOSTIC: set finalVisibility for all resumes ═══
+    results.forEach(r => {
+      const diagEntry = visDiag.resumes.find(d => d.id === r.id);
+      if (diagEntry && !diagEntry.finalVisibility) {
+        diagEntry.finalVisibility = r.visibility;
+      }
+    });
+
     // ═══ VISIBILITY SUMMARY ═══
+    visDiag.summary.total = results.length;
+    visDiag.summary.visible = results.filter(r => r.visibility === VISIBILITY_VISIBLE).length;
+    visDiag.summary.hidden = results.filter(r => r.visibility === VISIBILITY_HIDDEN).length;
+    visDiag.summary.unknown = results.filter(r => r.visibility === VISIBILITY_UNKNOWN).length;
+    visDiag.finishedAt = new Date().toISOString();
+
     fetchLog.info('[VIS-DIAG] ═══ FINAL VISIBILITY SUMMARY ═══');
+    fetchLog.info('[VIS-DIAG] Total: ' + visDiag.summary.total +
+      ', Visible: ' + visDiag.summary.visible +
+      ', Hidden: ' + visDiag.summary.hidden +
+      ', Unknown: ' + visDiag.summary.unknown +
+      ', Fallbacks: ' + visDiag.summary.unknownFallbackToVisible);
     results.forEach(r => {
       fetchLog.info('[VIS-DIAG]   ' + (r.id ? r.id.substring(0, 8) : '?') + ' "' + (r.title || '').substring(0, 30) + '" → ' + r.visibility);
     });
+
+    // ═══ EXPOSE GLOBAL DIAGNOSTIC ═══
+    // Content scripts run in isolated world — window.X here is NOT visible
+    // from the page console. Send data to page-world.js (MAIN world) via postMessage.
+    window.__hhVisDiag = visDiag;
+    try {
+      window.postMessage({ type: 'HH-AR-VISDIAG', payload: visDiag }, '*');
+    } catch (e) {
+      fetchLog.warn('[VIS-DIAG] Could not send to page world: ' + e.message);
+    }
+    fetchLog.info('[VIS-DIAG] Diagnostic dump available: __hhVis() / __hhVisTable() / window.__hhVisDiag');
 
     fetchLog.info('Done. ' + results.length + '/' + list.length + ' parsed');
     if (onProgress) onProgress(list.length, list.length, 'Готово');
@@ -105,6 +191,12 @@ export async function syncAllResumes({ onProgress, onComplete, onError } = {}) {
     return results;
   } catch (err) {
     fetchLog.error('Fatal: ' + err.message);
+    visDiag.finishedAt = new Date().toISOString();
+    visDiag.error = err.message;
+    window.__hhVisDiag = visDiag;
+    try {
+      window.postMessage({ type: 'HH-AR-VISDIAG', payload: visDiag }, '*');
+    } catch (e) {}
     if (onError) onError(null, err);
     throw err;
   }
