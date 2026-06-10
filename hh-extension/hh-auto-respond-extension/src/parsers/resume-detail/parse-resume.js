@@ -20,7 +20,9 @@ export function parseResume() {
   const t0 = performance.now();
   const resume = {
     id: '', url: window.location.href,
-    title: '', salary: '', gender: '', age: '', address: '',
+    name: '', title: '', salary: '', gender: '', age: '', address: '',
+    employmentType: '', workFormat: '', schedule: '', relocation: '',
+    phone: '', email: '', telegram: '',
     specializations: [], skills: [], skillLevels: {},
     experience: [], education: [], languages: [],
     additionalInfo: '', parsedAt: new Date().toISOString(),
@@ -64,10 +66,12 @@ export function parseResume() {
   // SECTION PARSERS
   // ═════════════════════════════════════════
   parsePersonalData(titleEl, dbg, resume);
+  parseSalaryConditions(dbg, resume);
   parseSkills(dbg, resume);
   parseExperience(dbg, resume);
   parseEducation(dbg, resume);
   parseLanguagesAndAbout(dbg, resume);
+  parseContacts(dbg, resume);
 
   // ═════════════════════════════════════════
   // ИТОГО

@@ -44,6 +44,8 @@ export function parseEducation(dbg, resume) {
         edu.name = t;
       } else if (!edu.description) {
         edu.description = t;
+      } else if (!edu.degree && /^(Бакалавр|Магистр|Специалист|Кандидат наук|Доктор наук|Аспирант|Среднее|Высшее)/i.test(t)) {
+        edu.degree = t;
       } else if (!edu.year && /\d{4}/.test(t)) {
         edu.year = t.match(/\d{4}/)?.[0] || t;
       }

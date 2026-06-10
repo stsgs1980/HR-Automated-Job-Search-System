@@ -12,11 +12,38 @@ import { parseCompanyCard } from './parse-company-card.js';
 const resumeLog = createLogger('Resume');
 
 // ═══════════════════════════════════════════════
-// ПЕРСОНАЛЬНЫЕ ДАННЫЕ (gender, age, address)
+// ПЕРСОНАЛЬНЫЕ ДАННЫЕ (name, gender, age, address)
 // ═══════════════════════════════════════════════
 
 export function parsePersonalData(titleEl, dbg, resume) {
   const personalText = [];
+
+  // Имя: hh.ru показывает имя вверху страницы резюме
+  // Селектор: [data-qa="resume-block-title-position"] содержит должность,
+  // но имя обычно в [data-qa="resume-personal-name"] или h2/h1 рядом
+  const nameEl = document.querySelector('[data-qa="resume-personal-name"]');
+  if (nameEl) {
+    const nameText = (nameEl.textContent || '').trim();
+    if (nameText && nameText.length > 1 && nameText.length < 100) {
+      resume.name = dbg('resumeName (data-qa)', nameText);
+    }
+  }
+  // Fallback: h2 или первый крупный текст перед position — часто содержит имя
+  if (!resume.name) {
+    const posCard = document.querySelector('[data-qa="resume-position-card"]');
+    if (posCard) {
+      // Первый span/div с русским текстом, который не совпадает с title
+      const candidates = posCard.querySelectorAll('span, div, p, h1, h2, h3');
+      for (const el of candidates) {
+        const t = (el.textContent || '').trim();
+        if (t && t.length > 2 && t.length < 80 && t !== resume.title && t !== resume.salary &&
+            /^[А-ЯЁ][а-яё]+ [А-ЯЁ]/.test(t) && !/\d/.test(t)) {
+          resume.name = dbg('resumeName (fallback)', t);
+          break;
+        }
+      }
+    }
+  }
 
   // Собираем текст из position-card и соседних блоков
   const posCard = document.querySelector('[data-qa="resume-position-card"]');
@@ -54,7 +81,8 @@ export function parsePersonalData(titleEl, dbg, resume) {
     if (!resume.address && t.length > 3) {
       const isGender = genderPatterns.some(p => p.test(t));
       const isAge = agePattern.test(t) || agePattern2.test(t);
-      if (!isGender && !isAge && !t.includes('руб') && !t.includes('USD') &&
+      const isName = resume.name && t === resume.name;
+      if (!isGender && !isAge && !isName && !t.includes('руб') && !t.includes('USD') &&
           !t.includes('з/п') && !t.includes('уровень') && !t.includes('доход') &&
           t !== resume.salary && t !== resume.title) {
         if (/[А-Яа-яЁё]{2,}/.test(t) && t.length < 80) {
@@ -175,6 +203,114 @@ export function parseLanguagesAndAbout(dbg, resume) {
     if (text.length > 10) {
       resume.additionalInfo = text;
       resume._debug.found.push('additionalBlock (data-qa="resume-about-card")');
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════
+// ЗАРПЛАТА И УСЛОВИЯ (employment, format, schedule, relocation)
+// ═══════════════════════════════════════════════
+
+export function parseSalaryConditions(dbg, resume) {
+  // hh.ru position card contains employment type, work format, schedule, relocation
+  const posCard = document.querySelector('[data-qa="resume-position-card"]');
+  if (!posCard) {
+    resume._debug.missing.push('salaryConditions (no position-card)');
+    return;
+  }
+
+  const texts = [];
+  posCard.querySelectorAll('span, p, div').forEach(el => {
+    // Only get direct/small text nodes, not deeply nested
+    if (el.children.length > 5) return;
+    const t = (el.textContent || '').trim();
+    if (t && t.length > 2 && t.length < 100) texts.push(t);
+  });
+
+  // Employment type patterns
+  const empPatterns = [
+    /\b(Полная занятость)\b/i,
+    /\b(Частичная занятость)\b/i,
+    /\b(Проектная работа)\b/i,
+    /\b(Стажировка)\b/i,
+  ];
+  // Work format patterns
+  const fmtPatterns = [
+    /\b(Удал[а-яё]+ работа)\b/i,
+    /\b(Офис)\b/i,
+    /\b(Гибрид)\b/i,
+    /\b(Смешанный формат)\b/i,
+  ];
+  // Schedule patterns
+  const schedPatterns = [
+    /\b(Гибкий график)\b/i,
+    /\b(Полный день)\b/i,
+    /\b(Сменный график)\b/i,
+    /\b(Вахтовый метод)\b/i,
+  ];
+  // Relocation patterns
+  const relocPatterns = [
+    /\b(Не готов к переезду)\b/i,
+    /\b(Готов к переезду)\b/i,
+    /\b(Хочу переехать)\b/i,
+  ];
+
+  for (const t of texts) {
+    if (!resume.employmentType) {
+      for (const p of empPatterns) { const m = t.match(p); if (m) { resume.employmentType = dbg('employmentType', m[1]); break; } }
+    }
+    if (!resume.workFormat) {
+      for (const p of fmtPatterns) { const m = t.match(p); if (m) { resume.workFormat = dbg('workFormat', m[1]); break; } }
+    }
+    if (!resume.schedule) {
+      for (const p of schedPatterns) { const m = t.match(p); if (m) { resume.schedule = dbg('schedule', m[1]); break; } }
+    }
+    if (!resume.relocation) {
+      for (const p of relocPatterns) { const m = t.match(p); if (m) { resume.relocation = dbg('relocation', m[1]); break; } }
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════
+// КОНТАКТЫ (phone, email, telegram)
+// ═══════════════════════════════════════════════
+
+export function parseContacts(dbg, resume) {
+  // Phone
+  const phoneEl = document.querySelector('[data-qa="resume-contact-phone"] a, [data-qa="resume-contact-phone"]');
+  if (phoneEl) {
+    const t = (phoneEl.textContent || '').trim();
+    if (t && /[\d+\-()]/.test(t)) {
+      resume.phone = dbg('phone', t);
+    }
+  }
+
+  // Email
+  const emailEl = document.querySelector('[data-qa="resume-contact-email"] a, [data-qa="resume-contact-email"]');
+  if (emailEl) {
+    const t = (emailEl.textContent || '').trim();
+    if (t && t.includes('@')) {
+      resume.email = dbg('email', t);
+    }
+  }
+
+  // Telegram — search for @username or t.me links
+  const allLinks = document.querySelectorAll('a[href*="t.me/"]');
+  for (const link of allLinks) {
+    const href = link.getAttribute('href') || '';
+    const match = href.match(/t\.me\/(\w+)/);
+    if (match) {
+      resume.telegram = dbg('telegram', '@' + match[1]);
+      break;
+    }
+  }
+  // Fallback: text search for @username pattern in contacts area
+  if (!resume.telegram) {
+    const contactBlock = document.querySelector('[data-qa="resume-contacts-block"], [data-qa="resume-block-contacts"]');
+    if (contactBlock) {
+      const text = (contactBlock.textContent || '');
+      const m = text.match(/@(\w{4,})/);
+      if (m) resume.telegram = dbg('telegram', '@' + m[1]);
     }
   }
 }

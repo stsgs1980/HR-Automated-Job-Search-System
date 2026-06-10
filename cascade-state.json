@@ -157,6 +157,86 @@
       ]
     },
     {
+      "id": "P0.5",
+      "name": "Resume UI Wireframe Compliance",
+      "gate": "Must be completed before P1 P0 tasks — user-visible UI defect",
+      "tasks": [
+        {
+          "id": "R0.1",
+          "title": "Anti-monolith refactor: split ui/tabs/resumes.js (407 lines → multiple files under 200 lines)",
+          "priority": "P0",
+          "size": "M",
+          "status": "completed",
+          "depends_on": [
+            "F0.8"
+          ],
+          "implements": [],
+          "acceptance": "resumes.js split into: resumes/index.js (barrel, <50 lines), resumes/render-resume-panel.js (main panel, <200 lines), resumes/render-my-resumes.js (sync section, <150 lines), resumes/resume-helpers.js (buildSubAccordion, buildGrid, getInitials, <100 lines). All imports updated. npm run build succeeds. Extension loads without errors.",
+          "anti_hallucination": "Grep for all function names — every exported function still accessible. wc -l each new file — all under 200. Build passes."
+        },
+        {
+          "id": "R0.2",
+          "title": "Fix resume accordion header subtitle to match wireframe (name • years experience • skills count)",
+          "priority": "P0",
+          "size": "S",
+          "status": "completed",
+          "depends_on": [
+            "R0.1"
+          ],
+          "implements": [
+            "F-RS-01"
+          ],
+          "acceptance": "Subtitle shows: '{Name} • {N} лет опыта • {N} навыков' matching wireframe. Avatar shows initials from name (not from position title). Badge shows 'спарсено' in green when data loaded.",
+          "anti_hallucination": "Grep for subtitle format string. Verify no 'места' or 'зап.' in subtitle. Avatar initials come from name field, not title."
+        },
+        {
+          "id": "R0.3",
+          "title": "Fix Personal Data section: add Имя field, match wireframe grid layout (Имя, Позиция, Город, Опыт)",
+          "priority": "P0",
+          "size": "S",
+          "status": "completed",
+          "depends_on": [
+            "R0.2"
+          ],
+          "implements": [
+            "F-RS-01"
+          ],
+          "acceptance": "Personal Data section shows grid: Имя → {name}, Позиция → {title}, Город → {address}, Опыт → {experience summary}. If name not parsed, show fallback from page title. Grid matches wireframe layout exactly.",
+          "anti_hallucination": "Grep for 'Имя' label in render output. Verify grid has 4 rows matching wireframe. No missing fields cause crash."
+        },
+        {
+          "id": "R0.4",
+          "title": "Fix Education rendering: structured grid (ВУЗ, Факультет, Год, Степень) matching wireframe",
+          "priority": "P1",
+          "size": "S",
+          "status": "completed",
+          "depends_on": [
+            "R0.1"
+          ],
+          "implements": [
+            "F-RS-01"
+          ],
+          "acceptance": "Education section renders as grid with labels: ВУЗ/Название, Факультет/Описание, Год, Степень. Each education entry in separate card. Matches wireframe layout.",
+          "anti_hallucination": "Grep for education grid labels. Verify entries render without crash for empty fields. Build passes."
+        },
+        {
+          "id": "R0.5",
+          "title": "Fix Languages rendering: language + level grid matching wireframe",
+          "priority": "P1",
+          "size": "S",
+          "status": "completed",
+          "depends_on": [
+            "R0.1"
+          ],
+          "implements": [
+            "F-RS-01"
+          ],
+          "acceptance": "Languages section shows grid: Language → Level. If level not available, show dash. Matches wireframe layout with pink dot.",
+          "anti_hallucination": "Grep for language rendering. Empty languages array shows placeholder. No crash on null level."
+        }
+      ]
+    },
+    {
       "id": "P1",
       "name": "Core Parsing Enhancement",
       "gate": "ALL P0 tasks COMPLETED. P1 P0 tasks can start, P1 P1 tasks wait for P0 within phase.",

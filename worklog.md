@@ -237,3 +237,45 @@ Stage Summary:
 - Repo fully restored with all extension source files, submodules, and docs
 - Wireframe files stored in docs/wireframes/ permanently
 - Extension can now be built: hh-extension/hh-auto-respond-extension/npm run build
+
+---
+Task ID: R0.1-R0.5
+Agent: main
+Task: Resume UI Wireframe Compliance — anti-monolith refactor + match wireframe design
+
+Work Log:
+- Read wireframes from docs/wireframes/hh-copilot-fab-panel.html (Resume tab section lines 614-888)
+- Compared wireframe vs current implementation — found 5 gaps:
+  1. resumes.js 407 lines (anti-monolith violation, max 200)
+  2. Subtitle showed "3 места" instead of "7 лет опыта" (wireframe format)
+  3. Personal Data section missing "Имя" field (wireframe has Имя, Позиция, Город, Опыт)
+  4. Education rendering was simple list, not structured grid (ВУЗ, Факультет, Год, Степень)
+  5. Languages rendering showed dashes, not language+level grid
+- Added P0.5 "Resume UI Wireframe Compliance" phase to cascade-state.json with tasks R0.1-R0.5
+- R0.1: Split resumes.js into 5 files under src/ui/tabs/resumes/:
+  - resumes.js (12 lines, shim for backward compat)
+  - resumes/index.js (17 lines, barrel export)
+  - resumes/resume-helpers.js (102 lines: getInitials, buildSubAccordion, buildGrid, toggleSub, attachSubToggle, updateSkillsSection)
+  - resumes/render-my-resumes.js (116 lines: renderMyResumesPanel, renderResumeListPanel)
+  - resumes/render-resume-panel.js (161 lines: updateAccordionHeader, renderResumePanel)
+  - resumes/section-builders.js (137 lines: buildPersonalSection, buildSalarySection, buildExperienceSection, buildEducationSection, buildLanguagesSection, buildContactsSection)
+- R0.2: Fixed subtitle to match wireframe: "{Name} • {N} лет опыта • {N} навыков"
+  - Added calcExperienceYears() and yearWord() helpers
+  - Avatar initials now from name (not title)
+- R0.3: Added Имя (name) field to resume parser and UI
+  - Added resume.name field to parse-resume.js default object
+  - Added name parsing in parsePersonalData() with [data-qa="resume-personal-name"] selector + fallback
+  - Personal Data section now shows: Имя, Позиция, Город, Пол, Возраст
+- R0.4: Education rendering changed to structured grid
+  - Each education entry shows: ВУЗ, Факультет, Год, Степень
+  - Added degree field parsing in parse-resume-education.js (Бакалавр, Магистр, Специалист, etc.)
+- R0.5: Languages rendering changed to language+level grid
+  - Parses "Русский — Нативный" format into separate language/level columns
+  - Fallback dash for unknown levels
+- All 5 tasks verified: build passes, all functions present in bundle, line counts under 200
+
+Stage Summary:
+- resumes.js: 407 lines → 5 files (12, 17, 102, 116, 161, 137 lines) — anti-monolith compliant
+- Resume UI now matches wireframe: 6 accordion sections, correct subtitle, name field, structured education/languages
+- Parser additions: name field, degree field in education
+- Build: v1.8.3, 246.5kb bundle, 0 errors

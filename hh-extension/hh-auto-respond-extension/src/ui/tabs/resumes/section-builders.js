@@ -1,0 +1,137 @@
+/**
+ * UI: RESUMES — Section Builders
+ * ================================
+ * Build HTML for each of the 6 accordion sections:
+ * Личные данные, Зарплата, Опыт, Образование, Языки, Контакты
+ */
+
+import { esc } from '../../html.js';
+import { buildSubAccordion, buildGrid } from './resume-helpers.js';
+
+// ═══════════════════════════════════════════════
+// PERSONAL DATA
+// ═══════════════════════════════════════════════
+
+export function buildPersonalSection(r) {
+  const count = [r.name, r.title, r.address, r.gender || r.age].filter(Boolean).length;
+  return buildSubAccordion(
+    'subPersonal', 'chevPersonal', 'Личные данные',
+    count + ' полей', '#059669',
+    buildGrid([
+      ['Имя', r.name],
+      ['Позиция', r.title],
+      ['Город', r.address],
+      ['Пол', r.gender],
+      ['Возраст', r.age],
+    ])
+  );
+}
+
+// ═══════════════════════════════════════════════
+// SALARY & CONDITIONS
+// ═══════════════════════════════════════════════
+
+export function buildSalarySection(r) {
+  const count = [r.salary, r.employmentType, r.workFormat, r.schedule, r.relocation].filter(Boolean).length;
+  return buildSubAccordion(
+    'subSalary', 'chevSalary', 'Зарплата и условия',
+    count + ' полей', '#2563EB',
+    buildGrid([
+      ['Зарплата', r.salary],
+      ['Занятость', r.employmentType],
+      ['Формат', r.workFormat],
+      ['График', r.schedule],
+      ['Перемещения', r.relocation],
+    ])
+  );
+}
+
+// ═══════════════════════════════════════════════
+// EXPERIENCE
+// ═══════════════════════════════════════════════
+
+export function buildExperienceSection(r) {
+  const expCount = (r.experience || []).length;
+  const expContent = (r.experience || []).map(j => {
+    return '<div style="margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid rgba(0,0,0,0.05);">' +
+      '<div style="font-weight:600;">' + esc(j.position || '?') + '</div>' +
+      '<div style="color:#71717a;margin-top:2px;">' + esc(j.company || '') + (j.period ? ' \u2022 ' + esc(j.period) : '') + '</div>' +
+      (j.description ? '<div style="color:#71717a;margin-top:3px;font-size:11px;">' + esc(j.description).substring(0, 200) + '</div>' : '') +
+    '</div>';
+  }).join('');
+  return buildSubAccordion(
+    'subExp', 'chevExp', 'Опыт работы',
+    expCount + ' мест', '#D97706',
+    expCount > 0
+      ? '<div style="background:#FAFAFA;border-radius:8px;padding:8px 10px;font-size:11px;">' + expContent + '</div>'
+      : '<div style="padding:8px;font-size:11px;color:#71717a;">Опыт не указан</div>'
+  );
+}
+
+// ═══════════════════════════════════════════════
+// EDUCATION (structured grid: ВУЗ, Факультет, Год, Степень)
+// ═══════════════════════════════════════════════
+
+export function buildEducationSection(r) {
+  const eduCount = (r.education || []).length;
+  const eduContent = (r.education || []).map(e => {
+    return '<div style="background:#FAFAFA;border-radius:8px;padding:8px 10px;font-size:11px;margin-bottom:6px;">' +
+      '<div style="display:grid;grid-template-columns:auto 1fr;gap:4px 12px;">' +
+        (e.name ? '<span style="color:#71717a;">ВУЗ</span><span style="font-weight:500;">' + esc(e.name) + '</span>' : '') +
+        (e.description ? '<span style="color:#71717a;">Факультет</span><span style="font-weight:500;">' + esc(e.description) + '</span>' : '') +
+        (e.year ? '<span style="color:#71717a;">Год</span><span style="font-weight:500;">' + esc(e.year) + '</span>' : '') +
+        (e.degree ? '<span style="color:#71717a;">Степень</span><span style="font-weight:500;">' + esc(e.degree) + '</span>' : '') +
+      '</div></div>';
+  }).join('');
+  return buildSubAccordion(
+    'subEdu', 'chevEdu', 'Образование',
+    eduCount + ' записей', '#7C3AED',
+    eduCount > 0
+      ? eduContent
+      : '<div style="padding:8px;font-size:11px;color:#71717a;">Образование не указано</div>'
+  );
+}
+
+// ═══════════════════════════════════════════════
+// LANGUAGES (language + level grid)
+// ═══════════════════════════════════════════════
+
+export function buildLanguagesSection(r) {
+  const langCount = (r.languages || []).length;
+  const langContent = (r.languages || []).length > 0
+    ? '<div style="background:#FAFAFA;border-radius:8px;padding:8px 10px;font-size:11px;">' +
+      '<div style="display:grid;grid-template-columns:auto 1fr;gap:4px 12px;">' +
+      (r.languages || []).map(l => {
+        if (typeof l === 'string') {
+          const parts = l.split(/\s*[—–-]\s*/);
+          const lang = parts[0] || l;
+          const level = parts[1] || '\u2014';
+          return '<span style="color:#71717a;">' + esc(lang) + '</span><span style="font-weight:500;">' + esc(level) + '</span>';
+        }
+        return '<span style="color:#71717a;">' + esc(l.name || l) + '</span><span style="font-weight:500;">' + esc(l.level || '\u2014') + '</span>';
+      }).join('') +
+      '</div></div>'
+    : '<div style="padding:8px;font-size:11px;color:#71717a;">Языки не указаны</div>';
+  return buildSubAccordion(
+    'subLang', 'chevLang', 'Языки',
+    langCount + ' языков', '#EC4899',
+    langContent
+  );
+}
+
+// ═══════════════════════════════════════════════
+// CONTACTS
+// ═══════════════════════════════════════════════
+
+export function buildContactsSection(r) {
+  const contactCount = [r.phone, r.email, r.telegram].filter(Boolean).length;
+  return buildSubAccordion(
+    'subContacts', 'chevContacts', 'Контакты',
+    contactCount + ' полей', '#71717a',
+    buildGrid([
+      ['Телефон', r.phone],
+      ['Email', r.email],
+      ['Telegram', r.telegram],
+    ])
+  );
+}
