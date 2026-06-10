@@ -160,8 +160,12 @@ export function detectVisibilityFromLinkText(linkText) {
   if (isHidden) {
     return { visibility: VISIBILITY_HIDDEN, hidden: true, method: 'link-text' };
   }
-  // If link text is clean (no hidden markers), the resume is visible
-  return { visibility: VISIBILITY_VISIBLE, hidden: false, method: 'link-text-clean' };
+  // IMPORTANT: Do NOT assume VISIBLE here!
+  // The absence of hidden indicators in the link's textContent does NOT prove
+  // the resume is visible — the indicator ("Многие не видят") may be in a
+  // sibling element outside the <a>, or in the card container.
+  // Returning UNKNOWN allows other strategies (card-based, proximity) to check.
+  return { visibility: VISIBILITY_UNKNOWN, hidden: false, method: 'link-text-no-indicator' };
 }
 
 /**

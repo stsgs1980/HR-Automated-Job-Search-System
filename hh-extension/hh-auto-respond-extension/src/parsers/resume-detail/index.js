@@ -208,6 +208,16 @@ export function parseResumeList() {
     }
   }
 
+  // ═══ FINAL FALLBACK: Default UNKNOWN → VISIBLE ═══
+  const finalFallback = resumes.filter(r => r.visibility === VISIBILITY_UNKNOWN);
+  if (finalFallback.length > 0) {
+    resumeLog.info('Final fallback: ' + finalFallback.length + ' resumes still UNKNOWN → defaulting to VISIBLE');
+    finalFallback.forEach(r => {
+      r.visibility = VISIBILITY_VISIBLE;
+      r.hidden = false;
+    });
+  }
+
   // ═══ SUMMARY ═══
   const hiddenCount = resumes.filter(r => r.visibility === VISIBILITY_HIDDEN).length;
   const visibleCount = resumes.filter(r => r.visibility === VISIBILITY_VISIBLE).length;

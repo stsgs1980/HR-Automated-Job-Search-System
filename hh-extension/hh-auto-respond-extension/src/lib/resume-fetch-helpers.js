@@ -339,6 +339,18 @@ export function extractVisibilityStatus(doc, resumes, html) {
     strategyUsed = true;
   }
 
+  // ═══ FINAL FALLBACK: Default UNKNOWN → VISIBLE ═══
+  // After all strategies, any resume still UNKNOWN is assumed visible.
+  // (If no hidden indicators were found anywhere near the resume, it's visible.)
+  const unknownAfterAll = resumes.filter(r => r.visibility === VISIBILITY_UNKNOWN);
+  if (unknownAfterAll.length > 0) {
+    helperLog.info('Final fallback: ' + unknownAfterAll.length + ' resumes still UNKNOWN → defaulting to VISIBLE');
+    unknownAfterAll.forEach(r => {
+      r.visibility = VISIBILITY_VISIBLE;
+      r.hidden = false;
+    });
+  }
+
   // ═══ SUMMARY ═══
   const summary = resumes.map(r =>
     r.id.substring(0, 8) + '=' + r.visibility
