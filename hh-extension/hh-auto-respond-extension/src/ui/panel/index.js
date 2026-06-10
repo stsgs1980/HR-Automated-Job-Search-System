@@ -14,6 +14,7 @@ import { getSidebarHTML } from '../html.js';
 import { checkAuth, checkAuthAsync } from '../auth.js';
 import { createFab, updateFabIcon } from '../fab.js';
 import { renderVacancyList, renderStatsValues } from '../tabs/vacancies.js';
+import { updateSkillGapSection } from '../tabs/resumes/resume-helpers.js';
 import { renderOverviewKPI, addTimelineEvent } from '../tabs/overview.js';
 import { renderBlacklist } from '../tabs/settings.js';
 
@@ -147,6 +148,8 @@ export function updateVacancies(vacancies) {
   panelState.vacancies = (vacancies || []).filter(v => v && v.id && v.title);
   renderVacancyList();
   updateVacancyCounts();
+  // Re-run Skill Gap Analysis when vacancies change
+  if (panelState.resume) updateSkillGapSection(panelState.resume);
 }
 
 export function updateStats(stats) {

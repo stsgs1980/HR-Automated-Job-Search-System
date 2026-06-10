@@ -52,16 +52,23 @@ export function buildSalarySection(r) {
 
 export function buildExperienceSection(r) {
   const expCount = (r.experience || []).length;
-  const expContent = (r.experience || []).map(j => {
-    return '<div style="margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid rgba(0,0,0,0.05);">' +
+  const expContent = (r.experience || []).map((j, idx) => {
+    // Build timeline period: "Компания • 2021 — н.в. (3 года)"
+    const companyParts = [];
+    if (j.company) companyParts.push(esc(j.company));
+    if (j.period) companyParts.push(esc(j.period));
+    const companyLine = companyParts.join(' \u2022 ');
+    const isLast = idx === expCount - 1;
+
+    return '<div style="margin-bottom:' + (isLast ? '0' : '8px') + ';padding-bottom:' + (isLast ? '0' : '8px') + ';' + (isLast ? '' : 'border-bottom:1px solid rgba(0,0,0,0.05);') + '">' +
       '<div style="font-weight:600;">' + esc(j.position || '?') + '</div>' +
-      '<div style="color:#71717a;margin-top:2px;">' + esc(j.company || '') + (j.period ? ' \u2022 ' + esc(j.period) : '') + '</div>' +
+      (companyLine ? '<div style="color:#71717a;margin-top:2px;">' + companyLine + '</div>' : '') +
       (j.description ? '<div style="color:#71717a;margin-top:3px;font-size:11px;">' + esc(j.description).substring(0, 200) + '</div>' : '') +
     '</div>';
   }).join('');
   return buildSubAccordion(
     'subExp', 'chevExp', 'Опыт работы',
-    expCount + ' мест', '#D97706',
+    expCount + ' мест', '#B45309',
     expCount > 0
       ? '<div style="background:#FAFAFA;border-radius:8px;padding:8px 10px;font-size:11px;">' + expContent + '</div>'
       : '<div style="padding:8px;font-size:11px;color:#71717a;">Опыт не указан</div>'

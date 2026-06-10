@@ -9,7 +9,7 @@ import { panelState, refs } from '../../state.js';
 import { esc } from '../../html.js';
 import { getResumePageType } from '../../../parsers/resume-detail.js';
 import {
-  getInitials, attachSubToggle, updateSkillsSection
+  getInitials, attachSubToggle, updateSkillsSection, updateSkillGapSection
 } from './resume-helpers.js';
 import { renderMyResumesPanel, renderResumeListPanel } from './render-my-resumes.js';
 import {
@@ -155,6 +155,9 @@ export function renderResumePanel() {
 
   // Update skills section if visible
   updateSkillsSection(r);
+
+  // Update Skill Gap Analysis section
+  updateSkillGapSection(r);
 
   // Also render myResumes list in sync section
   renderMyResumesPanel();

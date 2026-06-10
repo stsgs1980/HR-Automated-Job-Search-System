@@ -100,6 +100,7 @@ function bindSidebarClicks(container) {
     /* Resume */
     if (t.closest('[data-action="load-resume"]')) { window.dispatchEvent(new CustomEvent('hh-ar-load-resume')); return; }
     if (t.closest('[data-action="sync-resumes"]')) { window.dispatchEvent(new CustomEvent('hh-ar-sync-resumes')); return; }
+    if (t.closest('[data-action="analyze-skills"]')) { import('../tabs/resumes/resume-helpers.js').then(m => m.updateSkillGapSection(panelState.resume)); return; }
 
     /* Quick action tab switches */
     const tabSwitch = t.closest('[data-tab-switch]');

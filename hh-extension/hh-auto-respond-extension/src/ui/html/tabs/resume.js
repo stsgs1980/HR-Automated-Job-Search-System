@@ -55,9 +55,58 @@ export function getResumeSection() {
       </div>
       <div id="res-skills-list" style="display:flex;flex-wrap:wrap;gap:4px;"></div>
     </div>
-    <div id="res-gap-section" class="card fade-in" style="display:none;">
-      <div style="font-size:12px;font-weight:600;margin-bottom:10px;">Анализ разрыва в навыках</div>
-      <div id="res-gap-content" style="font-size:11px;color:#71717a;">Анализ доступен после парсинга вакансий</div>
+    <div id="res-gap-section" class="card fade-in" style="margin-bottom:12px;display:none;">
+      <!-- Header + score ring -->
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+        <div id="res-gap-ring" style="width:44px;height:44px;border-radius:50%;background:conic-gradient(#059669 0deg 280.8deg,#e4e4e7 280.8deg 360deg);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+          <div style="width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,0.95);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:#059669;">0%</div>
+        </div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:13px;font-weight:600;">Анализ навыков</div>
+          <div id="res-gap-subtitle" style="font-size:11px;color:#71717a;margin-top:1px;">Сравнение навыков с вакансиями</div>
+        </div>
+        <button class="btn btn-outline btn-sm" data-action="analyze-skills">
+          ${ICONS.ai} Анализ
+        </button>
+      </div>
+      <!-- Stacked bar -->
+      <div id="res-gap-bar" style="display:flex;height:6px;border-radius:3px;overflow:hidden;margin-bottom:12px;background:#f4f4f5;">
+        <div id="res-gap-bar-match" style="width:0%;background:linear-gradient(90deg,#059669,#34D399);border-radius:3px 0 0 3px;"></div>
+        <div id="res-gap-bar-miss" style="width:0%;background:linear-gradient(90deg,#DC2626,#F87171);"></div>
+        <div id="res-gap-bar-extra" style="width:0%;background:linear-gradient(90deg,#2563EB,#60A5FA);border-radius:0 3px 3px 0;"></div>
+      </div>
+      <!-- Row 1: Match -->
+      <div id="res-gap-match-row" style="margin-bottom:8px;display:none;">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;">
+          <span style="width:7px;height:7px;border-radius:50%;background:#059669;flex-shrink:0;"></span>
+          <span style="font-size:11px;font-weight:600;color:#059669;">Совпадают</span>
+          <span class="badge badge-green" id="res-gap-match-count" style="font-size:11px;padding:1px 6px;">0</span>
+        </div>
+        <div id="res-gap-match-list" style="display:flex;flex-wrap:wrap;gap:4px;padding-left:13px;"></div>
+      </div>
+      <!-- Row 2: Gap -->
+      <div id="res-gap-miss-row" style="margin-bottom:8px;display:none;">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;">
+          <span style="width:7px;height:7px;border-radius:50%;background:#DC2626;flex-shrink:0;"></span>
+          <span style="font-size:11px;font-weight:600;color:#DC2626;">Не хватает</span>
+          <span class="badge badge-red" id="res-gap-miss-count" style="font-size:11px;padding:1px 6px;">0</span>
+        </div>
+        <div id="res-gap-miss-list" style="display:flex;flex-wrap:wrap;gap:4px;padding-left:13px;"></div>
+      </div>
+      <!-- Row 3: Extra -->
+      <div id="res-gap-extra-row" style="margin-bottom:10px;display:none;">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;">
+          <span style="width:7px;height:7px;border-radius:50%;background:#2563EB;flex-shrink:0;"></span>
+          <span style="font-size:11px;font-weight:600;color:#2563EB;">Ваш плюс</span>
+          <span class="badge badge-blue" id="res-gap-extra-count" style="font-size:11px;padding:1px 6px;">0</span>
+        </div>
+        <div id="res-gap-extra-list" style="display:flex;flex-wrap:wrap;gap:4px;padding-left:13px;"></div>
+      </div>
+      <!-- Recommendation -->
+      <div id="res-gap-recommendation" style="display:none;background:#FFFBEB;border:1px solid rgba(217,119,6,0.15);border-radius:8px;padding:8px 10px;align-items:flex-start;gap:6px;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#D97706" stroke-width="2" style="flex-shrink:0;margin-top:1px;"><path d="M12 9v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        <span id="res-gap-recommendation-text" style="font-size:11px;color:#92400E;line-height:1.5;"></span>
+      </div>
     </div>
   </div>`;
 }

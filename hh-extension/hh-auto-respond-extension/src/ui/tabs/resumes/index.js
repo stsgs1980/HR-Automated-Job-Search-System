@@ -8,7 +8,7 @@ export { renderResumePanel } from './render-resume-panel.js';
 export { renderMyResumesPanel, renderResumeListPanel } from './render-my-resumes.js';
 export {
   getInitials, buildSubAccordion, buildGrid,
-  toggleSub, attachSubToggle, updateSkillsSection
+  toggleSub, attachSubToggle, updateSkillsSection, updateSkillGapSection
 } from './resume-helpers.js';
 export {
   buildPersonalSection, buildSalarySection,

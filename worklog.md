@@ -199,6 +199,42 @@ Stage Summary:
 - User needs to: (1) reload extension in chrome://extensions, (2) re-sync resumes
 
 ---
+Task ID: 6
+Agent: Main
+Task: Fix visibility detection — Magritte-aware multi-strategy approach
+
+Work Log:
+- User confirmed: all 3 resumes show "Видимо" when 2 should be "Скрыто"
+- User pointed out: hh.ru uses Magritte design system, code was "guessing"
+- Root cause: proximity search finds hash in <script> hydration data first, not card HTML
+- Rewrote 3 files with Magritte-aware multi-strategy visibility detection
+- Version bumped: 1.7.9 → 1.8.0, build successful
+
+Stage Summary:
+- resume-constants.js: HIDDEN_INDICATORS, RESUME_CARD_SELECTORS, detectVisibilityFromCard(), stripScripts(), findCardForLink()
+- resume-fetch-helpers.js: 3 strategies (data-qa cards, script state, proximity with script stripping)
+- resume-detail/index.js: 3 strategies (data-qa cards, DOM walk, proximity with script stripping)
+- Added debugVisibility() diagnostic (window.__hhDebugVisibility)
+
+---
+Task ID: 8
+Agent: main
+Task: Update README.md and worklog.md — fill documentation gaps per cascade discipline
+
+Work Log:
+- Updated README.md: version 1.7.3 → 1.8.3, 42→57 files, 12→13 fields, wireframes in docs/
+- Updated file structure section: added resume-constants.js, resume-fetch-helpers.js, resume-fetch.js, resume-fetch-parse.js, resumes/ directory (5 files)
+- Added version history entries for v1.7.4 through v1.8.3
+- Added docs/wireframes/ to repo root structure in README (4 files)
+- Added anti-hallucination-guard/ to repo root structure
+- Added Task ID 6 (Magritte visibility) to this worklog
+
+Stage Summary:
+- README.md now reflects actual v1.8.3 state with 57 source files
+- Version history covers v1.0.0 through v1.8.3
+- docs/wireframes/ documented in README with all 4 files
+
+---
 Task ID: 1
 Agent: main
 Task: Fix "Загрузить с текущей страницы" button and top resume card not working
@@ -279,3 +315,29 @@ Stage Summary:
 - Resume UI now matches wireframe: 6 accordion sections, correct subtitle, name field, structured education/languages
 - Parser additions: name field, degree field in education
 - Build: v1.8.3, 246.5kb bundle, 0 errors
+
+---
+Task ID: R0.6
+Agent: main
+Task: Skill Gap Analysis + Experience Timeline wireframe compliance
+
+Work Log:
+- Read wireframe HTML (docs/wireframes/hh-copilot-fab-panel.html lines 614-888) for Skill Gap section
+- Compared wireframe vs current: gap section was stub with "Анализ доступен после парсинга вакансий" text
+- Wireframe specifies: SVG ring with conic-gradient %, stacked bar (3 colors), 3 skill rows (match/miss/extra), recommendation block
+- Updated resume.js HTML template: replaced stub res-gap-section with full wireframe structure (ring, bar, 3 rows, recommendation)
+- Updated section-builders.js buildExperienceSection(): Company • Period format, no border-bottom on last item, dot color #B45309
+- Added updateSkillGapSection() in resume-helpers.js (190 lines): compares resume skills with vacancy tags, calculates match %, updates ring/bar/rows/recommendation
+- Added normalizeSkills(), collectVacancySkills(), updateGapRow(), updateGapRecommendation() helpers
+- Updated render-resume-panel.js: imports and calls updateSkillGapSection(r) after updateSkillsSection(r)
+- Updated resumes/index.js barrel export: added updateSkillGapSection
+- Updated panel/index.js updateVacancies(): triggers updateSkillGapSection() when vacancies change
+- Added data-action="analyze-skills" handler in events.js with dynamic import
+- Fixed duplicate display property in recommendation div inline style
+- Build: v1.8.3, dist/content.js 257.3kb, 0 errors
+
+Stage Summary:
+- 7 files modified: resume.js, section-builders.js, resume-helpers.js, render-resume-panel.js, index.js (resumes), panel/index.js, events.js
+- Skill Gap Analysis: full wireframe compliance — ring + stacked bar + 3 categories + recommendation
+- Experience Timeline: wireframe format (Company • Period), last item clean
+- Auto-updates when vacancies are parsed or "Анализ" button clicked
