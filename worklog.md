@@ -745,3 +745,23 @@ Stage Summary:
 - Reparse button is now context-aware based on active resume visibility
 - Hidden resume = amber outline + warning text about matching unavailability
 - Visible resume = green primary button as before
+
+---
+Task ID: 5
+Agent: main
+Task: Remove duplicate "Взять со страницы" button — one contextual button instead of two
+
+Work Log:
+- Found: static "Взять со страницы" in HTML template + dynamic "Перепарсить действующее" in renderer
+- Both used data-action="load-resume" — did the same thing, appeared simultaneously
+- Removed static button from HTML template (resume.js)
+- Empty state now shows "Взять со страницы" button dynamically
+- Loaded state shows "Перепарсить действующее" or "Перепарсить (скрытое)" contextually
+- One button, one action, no duplication
+- Build: 211.1kb
+
+Stage Summary:
+- Eliminated duplicate button — only one contextual button exists now
+- Empty state → "Взять со страницы" (green)
+- Visible resume loaded → "Перепарсить действующее" (green)
+- Hidden resume loaded → "Перепарсить (скрытое)" (amber) + warning

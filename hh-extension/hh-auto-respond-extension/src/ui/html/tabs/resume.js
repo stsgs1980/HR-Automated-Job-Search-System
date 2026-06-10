@@ -25,11 +25,6 @@ export function getResumeSection() {
         <div id="res-parsed-data">
           <div style="padding:12px;text-align:center;font-size:11px;color:#71717a;">Выберите или загрузите резюме</div>
         </div>
-        <div style="padding-top:12px;padding-left:24px;">
-          <button class="btn btn-primary btn-sm" data-action="load-resume" style="width:100%;">
-            ${ICONS.refresh} Взять со страницы
-          </button>
-        </div>
       </div>
     </div>
     <div id="res-sync-section" class="card fade-in" style="margin-bottom:12px;">

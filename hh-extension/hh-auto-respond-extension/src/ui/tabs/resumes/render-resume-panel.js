@@ -119,11 +119,17 @@ export function renderResumePanel() {
       return;
     }
     const pageType = getResumePageType();
-    let hint = 'Перейдите на страницу резюме на hh.ru<br>и нажмите «Взять со страницы».';
+    let hint = 'Нажмите кнопку ниже или перейдите на страницу резюме.';
     if (pageType === 'resume-list') {
-      hint = 'Нажмите «Загрузить», чтобы увидеть резюме на этой странице.';
+      hint = 'Нажмите кнопку ниже или «Синхронизировать».';
     }
-    container.innerHTML = '<div class="har-empty">Действующее резюме не выбрано.<br>' + hint + '</div>';
+    container.innerHTML = '<div class="har-empty">Действующее резюме не выбрано.<br>' + hint + '</div>' +
+      '<div style="padding-top:12px;padding-left:24px;">' +
+        '<button class="btn btn-primary btn-sm" data-action="load-resume" style="width:100%;">' +
+          '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 105.64-11.36L1 10"/></svg>' +
+          ' Взять со страницы' +
+        '</button>' +
+      '</div>';
     updateAccordionHeader(null);
     return;
   }
