@@ -641,3 +641,34 @@ Task ID: 3
 Agent: main
 Task: Commit v1.9.5 code changes
 
+---
+Task ID: 18
+Agent: main
+Task: Full audit — git statuses, documentation gaps, version sync, TODOs
+
+Work Log:
+- Checked git status of my-project (root) and HH-Copilot (submodule)
+- Found HH-Copilot clean, up to date with origin/main (c13372b)
+- Found root my-project has staged HH-Copilot submodule pointer change (6909291→c13372b)
+- Checked submodule status: anti-hallucination-guard (e67a2d7), cascade-guard (5f58eb5) — both clean
+- Found nested empty directory HH-Copilot/HH-Copilot/ (circular gitlink leftover)
+- Verified all version sources:
+  - version.js: 1.9.7 ✅
+  - manifest.json: 1.9.7 ✅
+  - package.json: 1.9.7 ✅
+  - popup/index.html: v1.7.3 ❌ (24 patches behind!) → FIXED to v1.9.7
+  - README.md: "Версия: 1.8.3" ❌ (14 patches behind!) → FIXED to 1.9.7
+- Verified build: npm run build passes (316.7kb, dist/content.js)
+- Found 2 TODO stubs in code: vacancy-detail.js, negotiations.js (expected — Phase 1)
+- Checked cascade-state.json: 40 tasks, 14 completed, 26 pending
+- Updated README.md file structure section: lib/ 10→20 files (reflects anti-monolith split)
+- Updated README.md description: added 6-strategy experience parsing mention
+- Updated README.md install section: version 1.7.3→1.9.7 in Step 5
+
+Stage Summary:
+- popup/index.html version sync: v1.7.3 → v1.9.7
+- README.md version sync: 1.8.3 → 1.9.7
+- README.md file structure updated to reflect current 20-file lib/ directory
+- Build verified: v1.9.7, 316.7kb
+- Known stubs: parseVacancyDetail, parseNegotiations (Phase 1 pending)
+- Pending cascade tasks: 26 (P1-P6)
