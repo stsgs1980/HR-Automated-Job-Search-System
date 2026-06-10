@@ -1,7 +1,7 @@
 #!/bin/bash
 # anti-hallucination-guard / audit.sh
-# Post-session agent audit.
-# Run: bash scripts/audit.sh
+# Аудит работы агента после завершения сессии.
+# Запуск: bash scripts/audit.sh
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WORKLOG="$PROJECT_ROOT/worklog.md"
@@ -11,86 +11,81 @@ MAX_SCORE=100
 
 mkdir -p "$(dirname "$REPORT")"
 
-# Cross-platform stat: Linux uses -c, macOS uses -f
-get_mtime() {
-    stat -c %Y "$1" 2>/dev/null || stat -f %m "$1" 2>/dev/null
-}
-
-echo "=== SESSION AUDIT ===" > "$REPORT"
-echo "Time: $(date)" >> "$REPORT"
-echo "Project: $PROJECT_ROOT" >> "$REPORT"
+echo "=== АУДИТ СЕССИИ ===" > "$REPORT"
+echo "Время: $(date)" >> "$REPORT"
+echo "Проект: $PROJECT_ROOT" >> "$REPORT"
 echo "" >> "$REPORT"
 
-# 1. Worklog exists?
+# 1. Worklog существует?
 if [ -f "$WORKLOG" ]; then
     BLOCKS=$(grep -c '^---$' "$WORKLOG" 2>/dev/null)
-    echo "[+] worklog.md: OK (${BLOCKS} blocks)" >> "$REPORT"
+    echo "[+] worklog.md: OK (${BLOCKS} блоков)" >> "$REPORT"
     SCORE=$((SCORE + 20))
 else
-    echo "[-] worklog.md: NOT FOUND -- agent did not maintain documentation" >> "$REPORT"
+    echo "[-] worklog.md: НЕ НАЙДЕН -- агент не вёл документацию" >> "$REPORT"
 fi
 
-# 2. Commit count
+# 2. Количество коммитов
 COMMITS=$(git -C "$PROJECT_ROOT" rev-list --count HEAD 2>/dev/null || echo 0)
-echo "[+] Commits: $COMMITS" >> "$REPORT"
+echo "[+] Коммитов: $COMMITS" >> "$REPORT"
 if [ "$COMMITS" -gt 3 ]; then
     SCORE=$((SCORE + 15))
 fi
 
-# 3. Changed files
+# 3. Изменённые файлы
 CHANGED=$(git -C "$PROJECT_ROOT" diff --name-only HEAD~3 2>/dev/null)
-echo "[+] Changed files (last 3 commits):" >> "$REPORT"
+echo "[+] Изменённые файлы (последние 3 коммита):" >> "$REPORT"
 echo "$CHANGED" | head -20 >> "$REPORT"
 if [ -n "$CHANGED" ]; then
     SCORE=$((SCORE + 15))
 fi
 
-# 4. Duplicate commit messages (sign of loops)
+# 4. Повторяющиеся коммит-сообщения (признак циклов)
 DUPS=$(git -C "$PROJECT_ROOT" log --oneline | sort | uniq -d | head -5)
 if [ -n "$DUPS" ]; then
-    echo "[!] Duplicate commits (possible loop):" >> "$REPORT"
+    echo "[!] Повторяющиеся коммиты (возможный цикл):" >> "$REPORT"
     echo "$DUPS" >> "$REPORT"
 else
-    echo "[+] No loops detected" >> "$REPORT"
+    echo "[+] Циклы не обнаружены" >> "$REPORT"
     SCORE=$((SCORE + 15))
 fi
 
-# 5. Worklog size
+# 5. Размер worklog
 if [ -f "$WORKLOG" ]; then
     SIZE=$(wc -c < "$WORKLOG")
     LINES=$(wc -l < "$WORKLOG")
-    echo "[+] Worklog size: ${SIZE} bytes, ${LINES} lines" >> "$REPORT"
+    echo "[+] worklog размер: ${SIZE} байт, ${LINES} строк" >> "$REPORT"
     if [ "$LINES" -gt 20 ]; then
         SCORE=$((SCORE + 15))
     fi
 fi
 
-# 6. Last activity
+# 6. Последняя активность
 if [ -f "$WORKLOG" ]; then
-    LAST=$(get_mtime "$WORKLOG")
+    LAST=$(stat -c %Y "$WORKLOG")
     NOW=$(date +%s)
     MIN_AGO=$(( (NOW - LAST) / 60 ))
-    echo "[+] Last worklog update: ${MIN_AGO} min ago" >> "$REPORT"
+    echo "[+] Последнее обновление worklog: ${MIN_AGO} мин назад" >> "$REPORT"
 fi
 
-# 7. AGENT_RULES.md exists?
+# 7. AGENT_RULES.md существует?
 if [ -f "$PROJECT_ROOT/AGENT_RULES.md" ]; then
     echo "[+] AGENT_RULES.md: OK" >> "$REPORT"
     SCORE=$((SCORE + 10))
 else
-    echo "[-] AGENT_RULES.md: MISSING" >> "$REPORT"
+    echo "[-] AGENT_RULES.md: НЕТ" >> "$REPORT"
 fi
 
-# Result
+# Итог
 echo "" >> "$REPORT"
 echo "==============================" >> "$REPORT"
-echo "SCORE: ${SCORE}/${MAX_SCORE}" >> "$REPORT"
+echo "ОЦЕНКА: ${SCORE}/${MAX_SCORE}" >> "$REPORT"
 if [ "$SCORE" -ge 70 ]; then
-    echo "VERDICT: Acceptable" >> "$REPORT"
+    echo "ВЕРДИКТ: Приемлемо" >> "$REPORT"
 elif [ "$SCORE" -ge 40 ]; then
-    echo "VERDICT: Needs improvement" >> "$REPORT"
+    echo "ВЕРДИКТ: Требует доработки" >> "$REPORT"
 else
-    echo "VERDICT: Agent was faking activity" >> "$REPORT"
+    echo "ВЕРДИКТ: Агент имитировал деятельность" >> "$REPORT"
 fi
 
 cat "$REPORT"

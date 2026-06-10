@@ -1,49 +1,44 @@
 #!/bin/bash
 # anti-hallucination-guard / check-agent.sh
-# Agent activity monitor.
-# Run: manually or via cron every 10 minutes.
+# Мониторинг активности агента.
+# Запуск: вручную или через cron каждые 10 минут.
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WORKLOG="$PROJECT_ROOT/worklog.md"
-MAX_IDLE=900  # 15 minutes idle = alert
+MAX_IDLE=900  # 15 минут бездействия = тревога
 LOG="$PROJECT_ROOT/download/agent-monitor.log"
 
 mkdir -p "$(dirname "$LOG")"
 
-# Cross-platform stat: Linux uses -c, macOS uses -f
-get_mtime() {
-    stat -c %Y "$1" 2>/dev/null || stat -f %m "$1" 2>/dev/null
-}
-
 timestamp() { date "+%Y-%m-%d %H:%M:%S"; }
 
-# Check 1: worklog exists?
+# Проверка 1: worklog существует?
 if [ ! -f "$WORKLOG" ]; then
-    echo "[$(timestamp)] ERROR: worklog.md deleted or not created!" >> "$LOG"
+    echo "[$(timestamp)] ОШИБКА: worklog.md удалён или не создан!" >> "$LOG"
     exit 1
 fi
 
-# Check 2: worklog fresh?
-LAST=$(get_mtime "$WORKLOG")
+# Проверка 2: worklog свежий?
+LAST=$(stat -c %Y "$WORKLOG" 2>/dev/null)
 NOW=$(date +%s)
 IDLE=$((NOW - LAST))
 
 if [ "$IDLE" -gt "$MAX_IDLE" ]; then
-    echo "[$(timestamp)] ALERT: worklog not updated for $((IDLE/60)) min" >> "$LOG"
-    echo "[$(timestamp)] Possible: agent stuck or faking activity" >> "$LOG"
+    echo "[$(timestamp)] ТРЕВОГА: worklog не обновлялся $((IDLE/60)) мин" >> "$LOG"
+    echo "[$(timestamp)] Possible: агент завис или имитирует деятельность" >> "$LOG"
 fi
 
-# Check 3: git activity?
+# Проверка 3: git-активность?
 LAST_COMMIT=$(git -C "$PROJECT_ROOT" log -1 --format=%ct 2>/dev/null)
 if [ -n "$LAST_COMMIT" ]; then
     COMMIT_AGE=$((NOW - LAST_COMMIT))
     if [ "$COMMIT_AGE" -gt 1800 ]; then
-        echo "[$(timestamp)] ALERT: no commits for $((COMMIT_AGE/60)) min" >> "$LOG"
+        echo "[$(timestamp)] ТРЕВОГА: нет коммитов $((COMMIT_AGE/60)) мин" >> "$LOG"
     fi
 fi
 
-# Check 4: count blocks in worklog
+# Проверка 4: подсчёт блоков в worklog
 BLOCKS=$(grep -c '^---$' "$WORKLOG" 2>/dev/null)
-echo "[$(timestamp)] Status: worklog=$BLOCKS blocks, idle=$((IDLE/60))min" >> "$LOG"
+echo "[$(timestamp)] Статус: worklog=$BLOCKS блоков, idle=$((IDLE/60))мин" >> "$LOG"
 
 exit 0
