@@ -5,6 +5,56 @@
 
 ---
 
+## [1.8.9] — 2026-06-11
+
+### Исправлено
+- **Опыт работы: 3 → 6 записей** — два корневых бага:
+  - Race condition в `initPageLogic()`: `expandHiddenSections()` вызывалась без `await`, поэтому `parseResume()` запускался до раскрытия скрытых секций (3 видимых карточки вместо 6)
+  - Stepper fallback в `parseExperienceFromDoc()` срабатывал только при `uniqueCards.length === 0` — если 3 company-card уже найдены, оставшиеся stepper-items игнорировались
+- **Stepper supplement в live DOM парсере** — `parseExperience()` теперь тоже дополняет записи из stepper-items, не покрытых company-card обёртками
+- **Шумные логи `checkAuth`** — убраны 3 `console.log()` из `checkAuth()`, спамившие каждые 5 секунд
+
+### Изменено
+- `parseExperienceFromDoc()` — 3 стратегии: company-cards → stepper supplement → full stepper fallback
+- `parseExperience()` (live DOM) — аналогичные 3 стратегии + поиск company info из родительских элементов
+- Версия: 1.8.8 → 1.8.9
+
+---
+
+## [1.8.8] — 2026-06-11
+
+### Исправлено
+- **«Загрузить с текущей страницы» на не-резюме страницах** — на главной (`/`) и `/applicant/resumes` кнопка теперь загружает первое резюме из `myResumes[]` или предлагает синхронизацию
+- **Stepper fallback** — добавлен в `parseExperienceFromDoc()` при нулевом количестве company-card
+- **Debug логирование** — предварительный подсчёт company-cards, stepper-items и «Показать все» кнопок в fetched HTML
+
+---
+
+## [1.8.7] — 2026-06-11
+
+### Исправлено
+- **Парсинг на странице редактирования** — `/resume/edit/{id}/about` не содержит `data-qa` атрибутов, теперь используется `fetchAndParseResume()` для загрузки view-страницы
+- **Кнопка «Очистить резюме»** — добавлен флаг `_resumeCleared` для предотвращения авто-восстановления из `myResumes[0]`
+- **Валидация парсинга** — пустой результат (нет title, skills, experience) не перезаписывает хорошие данные
+- **`initPageLogic()` стала async** — для поддержки `await fetchAndParseResume()`
+
+---
+
+## [1.8.5] — 2026-06-10
+
+### Исправлено
+- **`parseSalaryConditions` ReferenceError** — функция не была импортирована в `parse-resume.js`, вызов падал с ReferenceError
+- Добавлен импорт `parseSalaryConditions` из `parse-resume-sections.js`
+
+---
+
+## [1.8.4] — 2026-06-10
+
+### Исправлено
+- **Skill Gap UI wireframe compliance** — приведение в соответствие с дизайн-макетом
+
+---
+
 ## [1.7.3] — 2026-06-10
 
 ### Исправлено

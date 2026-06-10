@@ -97,3 +97,34 @@ Stage Summary:
 - Debug logging added for experience count investigation
 
 // Updated 2026-06-10
+
+---
+Task ID: 10
+Agent: Main
+Task: Fix experience parsing (3→6) + reduce auth log noise (v1.8.9)
+
+Work Log:
+- Root cause analysis: two bugs causing only 3 of 6 experiences to be parsed
+  1. Race condition: expandHiddenSections() called without await in initPageLogic()
+     parseResume() ran before hidden sections expanded → only 3 cards visible in DOM
+  2. Stepper fallback: only triggered when uniqueCards.length === 0
+     When 3 company-cards found, remaining stepper-items were ignored
+- Fix 1: Added `await` before expandHiddenSections() in initPageLogic() line 92
+- Fix 2: Rewrote parseExperienceFromDoc() with 3 strategies:
+  - Strategy 1: company-cards (as before)
+  - Strategy 2: stepper supplement — parse stepper items NOT covered by company-cards
+    Uses usedStepperElements Set to skip already-processed items
+  - Strategy 3: full stepper fallback (if still 0 entries)
+- Fix 3: Same stepper supplement logic added to live DOM parseExperience() in parse-resume-sections.js
+  Also tries to find company info from parent elements for stepper-only items
+- Fix 4: Removed 3 console.log() from checkAuth() in auth.js (was spamming every 5s)
+- Verified "Загрузить с текущей страницы" handler already works for non-resume pages (v1.8.8)
+- Updated version: 1.8.8 → 1.8.9
+- Updated CHANGELOG.md with entries for v1.8.4 through v1.8.9
+
+Stage Summary:
+- Experience parsing should now find all entries (3→6) on both live DOM and fetch paths
+- Race condition fixed with await
+- Auth log noise eliminated
+- CHANGELOG.md fully up to date (v1.7.3 → v1.8.9)
+

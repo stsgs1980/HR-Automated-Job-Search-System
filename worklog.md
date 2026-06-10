@@ -436,3 +436,24 @@ Stage Summary:
 - "Загрузить с текущей страницы" now works on ALL pages
 - 2 files modified: main.js, resume-fetch.js
 - Debug logging added for experience count investigation
+
+---
+Task ID: 10
+Agent: Main
+Task: Fix experience parsing (3→6) + reduce auth log noise (v1.8.9)
+
+Work Log:
+- Root cause analysis: two bugs causing only 3 of 6 experiences to be parsed
+  1. Race condition: expandHiddenSections() called without await in initPageLogic()
+  2. Stepper fallback only triggered when uniqueCards.length === 0
+- Fix 1: Added await before expandHiddenSections() in initPageLogic()
+- Fix 2: Rewrote parseExperienceFromDoc() with 3 strategies: company-cards → stepper supplement → full fallback
+- Fix 3: Same stepper supplement added to live DOM parseExperience()
+- Fix 4: Removed noisy console.log from checkAuth()
+- Updated CHANGELOG.md with entries for v1.8.4 through v1.8.9
+- Version: 1.8.8 → 1.8.9, built and pushed
+
+Stage Summary:
+- Experience parsing now finds all entries (3→6) on both live DOM and fetch paths
+- Auth log noise eliminated
+- CHANGELOG.md fully up to date
