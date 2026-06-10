@@ -1,6 +1,26 @@
 # Worklog — HH Bot / HH-Copilot Research
 
 ---
+Task ID: fix-resume-sync-selector
+Agent: main
+Task: Fix resume sync selector - add /applicant/resumes/view?resume= pattern
+
+Work Log:
+- Analyzed user screenshots: "My resumes" shows 0 after sync
+- Identified root cause: fetchResumeList() only matched a[href*="/resume/"] pattern
+- hh.ru uses /applicant/resumes/view?resume={hash} for applicant own resume list
+- Fixed fetchResumeList() to also match [?&]resume=([a-f0-9]+) pattern
+- Fixed fetchAndParseResume() ID extraction for both URL formats
+- Fixed parseResumeList() in resume-detail/index.js with same pattern
+- Added debug logging for HTML length and link count
+- Build successful v1.7.4
+
+Stage Summary:
+- 2 files modified: resume-fetch.js, resume-detail/index.js
+- Resume list selector now matches both /resume/{hex} and ?resume={hex}
+- Build passed, ready for live testing
+
+---
 Task ID: 1
 Agent: Main
 Task: Исследование HH-Copilot и hh.ru API для парсинга резюме
