@@ -72,8 +72,9 @@ window.__hhVisTable = function() {
       title: (r.title || '').substring(0, 35),
       listVis: r.listVis,
       pageVis: r.pageVis,
+      iframeVis: r.iframeVis || '-',
       final: r.finalVisibility,
-      reason: (r.decisionReason || '').substring(0, 50)
+      reason: (r.decisionReason || '').substring(0, 60)
     };
   }));
   return d.resumes;

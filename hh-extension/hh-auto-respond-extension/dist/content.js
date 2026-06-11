@@ -1420,13 +1420,30 @@
     parseEducation(dbg, resume);
     parseLanguagesAndAbout(dbg, resume);
     parseContacts(dbg, resume);
-    const hiddenMsg = document.querySelector('[data-qa="resume-hidden-message"], [data-qa*="resume-hidden"]');
+    const hiddenMsg = document.querySelector('[data-qa="resume-hidden-message"], [data-qa*="resume-hidden"], [data-qa="resume-make-visible"], [data-qa*="make-visible"]');
     if (hiddenMsg) {
       resume.visibility = VISIBILITY_HIDDEN;
       resume.hidden = true;
+    } else if (hasHiddenIndicator(document.body ? document.body.textContent : "")) {
+      resume.visibility = VISIBILITY_HIDDEN;
+      resume.hidden = true;
     } else {
-      resume.visibility = VISIBILITY_VISIBLE;
-      resume.hidden = false;
+      const allBtns = document.querySelectorAll("button, a");
+      let foundMakeVisible = false;
+      for (const btn of allBtns) {
+        const text = normalizeWs(btn.textContent || "").toLowerCase();
+        if (text.includes("\u0441\u0434\u0435\u043B\u0430\u0442\u044C \u0432\u0438\u0434\u0438\u043C\u044B\u043C")) {
+          foundMakeVisible = true;
+          break;
+        }
+      }
+      if (foundMakeVisible) {
+        resume.visibility = VISIBILITY_HIDDEN;
+        resume.hidden = true;
+      } else {
+        resume.visibility = VISIBILITY_VISIBLE;
+        resume.hidden = false;
+      }
     }
     const elapsed = (performance.now() - t0).toFixed(1);
     resumeLog3.info("Resume parsed in " + elapsed + "ms");
@@ -2834,6 +2851,8 @@
       if (!iframeDoc) {
         throw new Error("Cannot access iframe document (cross-origin or blocked)");
       }
+      const iframeVisResult = detectVisibilityFromIframeDoc(iframeDoc);
+      fetchLog7.info("[VIS-DIAG] iframe visibility: " + iframeVisResult.visibility + " (trace: " + iframeVisResult.trace.join(" \u2192 ") + ")");
       const preCards = iframeDoc.querySelectorAll('[data-qa="profile-experience-company-card"]');
       const preSteppers = iframeDoc.querySelectorAll('[data-qa="magritte-stepper-step-content"]');
       fetchLog7.info("Strategy 6 iframe: before expand \u2014 " + preCards.length + " company-cards, " + preSteppers.length + " stepper-items");
@@ -2858,13 +2877,51 @@
       fetchLog7.info("Strategy 6 iframe: after expand \u2014 " + postCards.length + " company-cards, " + postSteppers.length + " stepper-items");
       const entries = parseExperienceFromIframeDoc(iframeDoc);
       fetchLog7.info("Strategy 6 iframe: parsed " + entries.length + " experience entries");
-      return entries;
+      return { entries, iframeVis: iframeVisResult.visibility, iframeVisTrace: iframeVisResult.trace };
     } finally {
       try {
         if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
       } catch (e) {
       }
     }
+  }
+  function detectVisibilityFromIframeDoc(iframeDoc) {
+    const trace = [];
+    for (const sel of VISIBILITY_HIDDEN_DATA_QA) {
+      const found = iframeDoc.querySelector(sel);
+      if (found) {
+        trace.push("iframe-S1:data-qa=" + sel + " \u2192 HIDDEN");
+        return { visibility: VISIBILITY_HIDDEN, trace };
+      }
+    }
+    trace.push("iframe-S1:no-data-qa-hidden");
+    const allButtons = iframeDoc.querySelectorAll("button, a");
+    for (const btn of allButtons) {
+      const text = normalizeWs(btn.textContent || "").toLowerCase();
+      if (text.includes("\u0441\u0434\u0435\u043B\u0430\u0442\u044C \u0432\u0438\u0434\u0438\u043C\u044B\u043C")) {
+        trace.push('iframe-S2:btn="\u0441\u0434\u0435\u043B\u0430\u0442\u044C \u0432\u0438\u0434\u0438\u043C\u044B\u043C" \u2192 HIDDEN');
+        return { visibility: VISIBILITY_HIDDEN, trace };
+      }
+      if (text.includes("\u0441\u043A\u0440\u044B\u0442\u044C \u0440\u0435\u0437\u044E\u043C\u0435")) {
+        trace.push('iframe-S2:btn="\u0441\u043A\u0440\u044B\u0442\u044C \u0440\u0435\u0437\u044E\u043C\u0435" \u2192 VISIBLE');
+        return { visibility: VISIBILITY_VISIBLE, trace };
+      }
+    }
+    trace.push("iframe-S2:no-key-buttons");
+    const bodyText = iframeDoc.body ? normalizeWs(iframeDoc.body.textContent || "") : "";
+    if (hasHiddenIndicator(bodyText)) {
+      trace.push("iframe-S3:body-has-indicator \u2192 HIDDEN");
+      return { visibility: VISIBILITY_HIDDEN, trace };
+    }
+    trace.push("iframe-S3:body-no-indicators");
+    const hideLink = iframeDoc.querySelector('[data-qa="resume-action-hide"], [data-qa*="resume-hide"], a[data-qa*="hide-resume"]');
+    if (hideLink) {
+      trace.push("iframe-S4:hide-link-found \u2192 VISIBLE");
+      return { visibility: VISIBILITY_VISIBLE, trace };
+    }
+    trace.push("iframe-S4:no-hide-link");
+    trace.push("\u2192 UNKNOWN");
+    return { visibility: VISIBILITY_UNKNOWN, trace };
   }
   function parseExperienceFromIframeDoc(iframeDoc) {
     const allCards = iframeDoc.querySelectorAll('[data-qa="profile-experience-company-card"]');
@@ -2919,6 +2976,7 @@
     "src/lib/resume-fetch-strategy6-iframe.js"() {
       init_anti_hallucination();
       init_resume_fetch_parse();
+      init_resume_constants();
       fetchLog7 = createLogger("ResumeFetch");
     }
   });
@@ -3162,11 +3220,18 @@
   async function fetchExpandedExperience(doc, html, resumeId, currentCount, resumeUrl) {
     fetchLog10.info("Strategy 6: starting (currentCount=" + currentCount + ", resumeId=" + (resumeId || "none") + ")");
     try {
-      const iframeEntries = await fetchExpandedExperienceViaIframe(resumeUrl, currentCount);
-      if (iframeEntries.length > currentCount) {
-        fetchLog10.info("Strategy 6: SUCCESS via iframe \u2014 got " + iframeEntries.length + " experiences");
-        return iframeEntries;
+      const iframeResult = await fetchExpandedExperienceViaIframe(resumeUrl, currentCount);
+      const result = {
+        entries: [],
+        iframeVis: iframeResult.iframeVis,
+        iframeVisTrace: iframeResult.iframeVisTrace
+      };
+      if (iframeResult.entries.length > currentCount) {
+        fetchLog10.info("Strategy 6: SUCCESS via iframe \u2014 got " + iframeResult.entries.length + " experiences");
+        result.entries = iframeResult.entries;
+        return result;
       }
+      fetchLog10.info("Strategy 6: iframe got " + iframeResult.entries.length + " entries (not more than " + currentCount + "), but visibility=" + iframeResult.iframeVis);
     } catch (err) {
       fetchLog10.info("Strategy 6: iframe approach failed: " + err.message);
     }
@@ -3178,10 +3243,10 @@
     for (const { url, source } of expansionUrls) {
       try {
         fetchLog10.info("Strategy 6: fetching [" + source + "] " + url);
-        const result = await tryFetchExpandedUrl(url, currentCount);
-        if (result && result.length > currentCount) {
-          fetchLog10.info("Strategy 6: SUCCESS from " + source + " \u2014 got " + result.length + " experiences");
-          return result;
+        const urlEntries = await tryFetchExpandedUrl(url, currentCount);
+        if (urlEntries && urlEntries.length > currentCount) {
+          fetchLog10.info("Strategy 6: SUCCESS from " + source + " \u2014 got " + urlEntries.length + " experiences");
+          return { entries: urlEntries };
         }
       } catch (err) {
         fetchLog10.info("Strategy 6: [" + source + "] error: " + err.message);
@@ -3189,7 +3254,7 @@
     }
     const apiEntries = await tryApplicantApi(resumeId, currentCount);
     if (apiEntries.length > currentCount) {
-      return apiEntries;
+      return { entries: apiEntries };
     }
     if (resumeUrl) {
       const expandVariants = [
@@ -3210,7 +3275,7 @@
             const parsed = parseExperienceFromExpandedDoc(expandedDoc, expandedHtml, currentCount);
             if (parsed.length > currentCount) {
               fetchLog10.info("Strategy 6: SUCCESS from " + source + " \u2014 got " + parsed.length + " experiences");
-              return parsed;
+              return { entries: parsed };
             }
           }
         } catch (err) {
@@ -3219,7 +3284,7 @@
       }
     }
     fetchLog10.info("Strategy 6: all approaches exhausted, returning current count: " + currentCount);
-    return [];
+    return { entries: [] };
   }
   var fetchLog10;
   var init_resume_fetch_strategy6_expand = __esm({
@@ -3459,14 +3524,20 @@
         fetchLog11.info("Strategy 5 (script JSON): found " + scriptParsed.length + " experiences (not more than " + entries.length + ", skipping)");
       }
     }
+    let iframeVis = null;
+    let iframeVisTrace = null;
     if (html && entries.length > 0 && entries.length < 20) {
       try {
-        const expandedEntries = await fetchExpandedExperience(doc, html, resume.id, entries.length, resumeUrl);
-        if (expandedEntries.length > entries.length) {
-          fetchLog11.info("Strategy 6 (expanded fetch): found " + expandedEntries.length + " experiences (was " + entries.length + ")");
-          resume._debug.found.push("experience (expanded fetch): " + expandedEntries.length);
+        const s6result = await fetchExpandedExperience(doc, html, resume.id, entries.length, resumeUrl);
+        if (s6result.iframeVis) {
+          iframeVis = s6result.iframeVis;
+          iframeVisTrace = s6result.iframeVisTrace;
+        }
+        if (s6result.entries && s6result.entries.length > entries.length) {
+          fetchLog11.info("Strategy 6 (expanded fetch): found " + s6result.entries.length + " experiences (was " + entries.length + ")");
+          resume._debug.found.push("experience (expanded fetch): " + s6result.entries.length);
           entries.length = 0;
-          entries.push(...expandedEntries);
+          entries.push(...s6result.entries);
         }
       } catch (err) {
         fetchLog11.warn("Strategy 6 failed: " + err.message);
@@ -3475,6 +3546,34 @@
     resume.experience = entries;
     if (entries.length > 0) resume._debug.found.push("experience: " + entries.length);
     else resume._debug.missing.push("experience (0 entries)");
+    if (iframeVis) {
+      const prevVis = resume.visibility;
+      const prevReason = resume._visDiag?.decisionReason || "";
+      if (iframeVis === VISIBILITY_HIDDEN && prevVis !== VISIBILITY_HIDDEN) {
+        fetchLog11.info("[VIS-DIAG] iframe OVERRIDE: " + (resume.id ? resume.id.substring(0, 8) : "?") + " was " + prevVis + ", iframe says HIDDEN \u2192 overriding");
+        resume.visibility = VISIBILITY_HIDDEN;
+        resume.hidden = true;
+        if (resume._visDiag) {
+          resume._visDiag.decision = VISIBILITY_HIDDEN;
+          resume._visDiag.decisionReason = "iframe-detected-hidden (overrode " + prevVis + ", was: " + prevReason + ")";
+          resume._visDiag.pageTrace = (resume._visDiag.pageTrace || []).concat(iframeVisTrace || []);
+        }
+      } else if (iframeVis === VISIBILITY_VISIBLE && prevVis === VISIBILITY_UNKNOWN) {
+        fetchLog11.info("[VIS-DIAG] iframe OVERRIDE: " + (resume.id ? resume.id.substring(0, 8) : "?") + " was UNKNOWN, iframe says VISIBLE \u2192 overriding");
+        resume.visibility = VISIBILITY_VISIBLE;
+        resume.hidden = false;
+        if (resume._visDiag) {
+          resume._visDiag.decision = VISIBILITY_VISIBLE;
+          resume._visDiag.decisionReason = "iframe-detected-visible (overrode UNKNOWN, was: " + prevReason + ")";
+          resume._visDiag.pageTrace = (resume._visDiag.pageTrace || []).concat(iframeVisTrace || []);
+        }
+      } else {
+        fetchLog11.info("[VIS-DIAG] iframe CONFIRMED: " + (resume.id ? resume.id.substring(0, 8) : "?") + " is " + prevVis + ", iframe agrees (" + iframeVis + ")");
+        if (resume._visDiag && iframeVisTrace) {
+          resume._visDiag.pageTrace = (resume._visDiag.pageTrace || []).concat(iframeVisTrace);
+        }
+      }
+    }
   }
   function detectVisibilityFromResumePage(doc, html) {
     const diag = [];
@@ -3670,6 +3769,9 @@
               diagEntry.pageTrace = resume._visDiag.pageTrace;
               diagEntry.decision = resume._visDiag.decision;
               diagEntry.decisionReason = resume._visDiag.decisionReason;
+              if (resume._visDiag.iframeVis) {
+                diagEntry.iframeVis = resume._visDiag.iframeVis;
+              }
             }
           }
         } catch (err) {

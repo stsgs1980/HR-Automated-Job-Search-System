@@ -299,14 +299,22 @@ async function parseExperienceFromDoc(doc, dbg, resume, html, resumeUrl) {
   }
 
   // Strategy 6: Fetch expanded experience via AJAX/API endpoints
+  // ALSO returns iframe-based visibility detection (most reliable — from hydrated DOM)
+  let iframeVis = null;
+  let iframeVisTrace = null;
   if (html && entries.length > 0 && entries.length < 20) {
     try {
-      const expandedEntries = await fetchExpandedExperience(doc, html, resume.id, entries.length, resumeUrl);
-      if (expandedEntries.length > entries.length) {
-        fetchLog.info('Strategy 6 (expanded fetch): found ' + expandedEntries.length + ' experiences (was ' + entries.length + ')');
-        resume._debug.found.push('experience (expanded fetch): ' + expandedEntries.length);
+      const s6result = await fetchExpandedExperience(doc, html, resume.id, entries.length, resumeUrl);
+      // Always capture iframe visibility even if entries didn't increase
+      if (s6result.iframeVis) {
+        iframeVis = s6result.iframeVis;
+        iframeVisTrace = s6result.iframeVisTrace;
+      }
+      if (s6result.entries && s6result.entries.length > entries.length) {
+        fetchLog.info('Strategy 6 (expanded fetch): found ' + s6result.entries.length + ' experiences (was ' + entries.length + ')');
+        resume._debug.found.push('experience (expanded fetch): ' + s6result.entries.length);
         entries.length = 0;
-        entries.push(...expandedEntries);
+        entries.push(...s6result.entries);
       }
     } catch (err) {
       fetchLog.warn('Strategy 6 failed: ' + err.message);
@@ -316,6 +324,43 @@ async function parseExperienceFromDoc(doc, dbg, resume, html, resumeUrl) {
   resume.experience = entries;
   if (entries.length > 0) resume._debug.found.push('experience: ' + entries.length);
   else resume._debug.missing.push('experience (0 entries)');
+
+  // ═══ IFRAME VISIBILITY OVERRIDE ═══
+  // The iframe loaded the fully-hydrated React DOM, which contains visibility
+  // indicators ("Многие не видят", "Сделать видимым") that SSR HTML lacks.
+  // iframeVis is the MOST RELIABLE source — override earlier decisions.
+  if (iframeVis) {
+    const prevVis = resume.visibility;
+    const prevReason = resume._visDiag?.decisionReason || '';
+    if (iframeVis === VISIBILITY_HIDDEN && prevVis !== VISIBILITY_HIDDEN) {
+      fetchLog.info('[VIS-DIAG] iframe OVERRIDE: ' + (resume.id ? resume.id.substring(0, 8) : '?') +
+        ' was ' + prevVis + ', iframe says HIDDEN → overriding');
+      resume.visibility = VISIBILITY_HIDDEN;
+      resume.hidden = true;
+      if (resume._visDiag) {
+        resume._visDiag.decision = VISIBILITY_HIDDEN;
+        resume._visDiag.decisionReason = 'iframe-detected-hidden (overrode ' + prevVis + ', was: ' + prevReason + ')';
+        resume._visDiag.pageTrace = (resume._visDiag.pageTrace || []).concat(iframeVisTrace || []);
+      }
+    } else if (iframeVis === VISIBILITY_VISIBLE && prevVis === VISIBILITY_UNKNOWN) {
+      fetchLog.info('[VIS-DIAG] iframe OVERRIDE: ' + (resume.id ? resume.id.substring(0, 8) : '?') +
+        ' was UNKNOWN, iframe says VISIBLE → overriding');
+      resume.visibility = VISIBILITY_VISIBLE;
+      resume.hidden = false;
+      if (resume._visDiag) {
+        resume._visDiag.decision = VISIBILITY_VISIBLE;
+        resume._visDiag.decisionReason = 'iframe-detected-visible (overrode UNKNOWN, was: ' + prevReason + ')';
+        resume._visDiag.pageTrace = (resume._visDiag.pageTrace || []).concat(iframeVisTrace || []);
+      }
+    } else {
+      fetchLog.info('[VIS-DIAG] iframe CONFIRMED: ' + (resume.id ? resume.id.substring(0, 8) : '?') +
+        ' is ' + prevVis + ', iframe agrees (' + iframeVis + ')');
+      // Add iframe trace to diagnostic for completeness
+      if (resume._visDiag && iframeVisTrace) {
+        resume._visDiag.pageTrace = (resume._visDiag.pageTrace || []).concat(iframeVisTrace);
+      }
+    }
+  }
 }
 
 // ═══════════════════════════════════════════════

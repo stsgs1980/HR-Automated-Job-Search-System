@@ -4,19 +4,28 @@
  * Load the resume page in a hidden iframe, click "Развернуть" buttons
  * to expand all experience entries, then parse the fully-rendered DOM.
  *
+ * ALSO detects visibility from the fully-hydrated DOM — this is the MOST
+ * RELIABLE visibility detection because hh.ru renders "Многие не видят ваше
+ * резюме" / "Сделать видимым" client-side via React, not in SSR HTML.
+ *
  * Split from resume-fetch-strategy6-expand.js for modularity.
  */
 import { createLogger } from './anti-hallucination.js';
 import { parseCompanyCardFromDoc } from './resume-fetch-parse.js';
+import {
+  VISIBILITY_VISIBLE, VISIBILITY_HIDDEN, VISIBILITY_UNKNOWN,
+  hasHiddenIndicator, normalizeWs, VISIBILITY_HIDDEN_DATA_QA
+} from './resume-constants.js';
 
 const fetchLog = createLogger('ResumeFetch');
 
 /**
  * Load the resume page in a hidden iframe, click "Развернуть" buttons
  * to expand all experience entries, then parse the fully-rendered DOM.
+ * Also detects visibility from the hydrated DOM.
  * @param {string} resumeUrl - Full URL of the resume page
  * @param {number} currentCount - Number of experience entries already found
- * @returns {Promise<Array>} Parsed experience entries from the iframe DOM
+ * @returns {Promise<{entries: Array, iframeVis: string, iframeVisTrace: string[]}>}
  */
 export async function fetchExpandedExperienceViaIframe(resumeUrl, currentCount) {
   fetchLog.info('Strategy 6 iframe: loading ' + resumeUrl);
@@ -43,6 +52,13 @@ export async function fetchExpandedExperienceViaIframe(resumeUrl, currentCount) 
     if (!iframeDoc) {
       throw new Error('Cannot access iframe document (cross-origin or blocked)');
     }
+
+    // ═══ VISIBILITY DETECTION from fully-hydrated iframe DOM ═══
+    // This is the MOST RELIABLE method: after React hydration, the DOM
+    // contains "Многие не видят ваше резюме" / "Сделать видимым" etc.
+    const iframeVisResult = detectVisibilityFromIframeDoc(iframeDoc);
+    fetchLog.info('[VIS-DIAG] iframe visibility: ' + iframeVisResult.visibility +
+      ' (trace: ' + iframeVisResult.trace.join(' → ') + ')');
 
     // Count experience cards before expansion
     const preCards = iframeDoc.querySelectorAll('[data-qa="profile-experience-company-card"]');
@@ -73,12 +89,68 @@ export async function fetchExpandedExperienceViaIframe(resumeUrl, currentCount) 
     const entries = parseExperienceFromIframeDoc(iframeDoc);
     fetchLog.info('Strategy 6 iframe: parsed ' + entries.length + ' experience entries');
 
-    return entries;
+    return { entries, iframeVis: iframeVisResult.visibility, iframeVisTrace: iframeVisResult.trace };
   } finally {
     try {
       if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
     } catch (e) { /* ignore */ }
   }
+}
+
+/**
+ * Detect visibility from the fully-hydrated iframe DOM.
+ * This is more reliable than SSR-based detection because hh.ru renders
+ * visibility indicators ("Многие не видят", "Сделать видимым") client-side.
+ *
+ * @param {Document} iframeDoc - The iframe's contentDocument (after hydration)
+ * @returns {{ visibility: string, trace: string[] }}
+ */
+function detectVisibilityFromIframeDoc(iframeDoc) {
+  const trace = [];
+
+  // Strategy A: Check for hidden-specific data-qa attributes
+  for (const sel of VISIBILITY_HIDDEN_DATA_QA) {
+    const found = iframeDoc.querySelector(sel);
+    if (found) {
+      trace.push('iframe-S1:data-qa=' + sel + ' → HIDDEN');
+      return { visibility: VISIBILITY_HIDDEN, trace };
+    }
+  }
+  trace.push('iframe-S1:no-data-qa-hidden');
+
+  // Strategy B: Check for "Сделать видимым" button
+  const allButtons = iframeDoc.querySelectorAll('button, a');
+  for (const btn of allButtons) {
+    const text = normalizeWs((btn.textContent || '')).toLowerCase();
+    if (text.includes('сделать видимым')) {
+      trace.push('iframe-S2:btn="сделать видимым" → HIDDEN');
+      return { visibility: VISIBILITY_HIDDEN, trace };
+    }
+    if (text.includes('скрыть резюме')) {
+      trace.push('iframe-S2:btn="скрыть резюме" → VISIBLE');
+      return { visibility: VISIBILITY_VISIBLE, trace };
+    }
+  }
+  trace.push('iframe-S2:no-key-buttons');
+
+  // Strategy C: Check body text for hidden indicators
+  const bodyText = iframeDoc.body ? normalizeWs(iframeDoc.body.textContent || '') : '';
+  if (hasHiddenIndicator(bodyText)) {
+    trace.push('iframe-S3:body-has-indicator → HIDDEN');
+    return { visibility: VISIBILITY_HIDDEN, trace };
+  }
+  trace.push('iframe-S3:body-no-indicators');
+
+  // Strategy D: Check for "Скрыть" action link (means resume IS visible)
+  const hideLink = iframeDoc.querySelector('[data-qa="resume-action-hide"], [data-qa*="resume-hide"], a[data-qa*="hide-resume"]');
+  if (hideLink) {
+    trace.push('iframe-S4:hide-link-found → VISIBLE');
+    return { visibility: VISIBILITY_VISIBLE, trace };
+  }
+  trace.push('iframe-S4:no-hide-link');
+
+  trace.push('→ UNKNOWN');
+  return { visibility: VISIBILITY_UNKNOWN, trace };
 }
 
 /**

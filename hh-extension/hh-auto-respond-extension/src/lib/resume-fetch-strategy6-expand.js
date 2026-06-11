@@ -22,23 +22,33 @@ const fetchLog = createLogger('ResumeFetch');
 
 /**
  * Try to fetch full experience data when SSR only renders 3 entries.
+ * Also returns iframe-based visibility result if available.
  * @param {Document} doc - Parsed document from DOMParser
  * @param {string} html - Raw HTML string
  * @param {string} resumeId - Resume hash ID
  * @param {number} currentCount - Number of experience entries already found
  * @param {string} resumeUrl - Original resume URL (for re-fetching)
- * @returns {Promise<Array>} Experience entries (may be same count or more)
+ * @returns {Promise<{entries: Array, iframeVis?: string, iframeVisTrace?: string[]}>}
  */
 export async function fetchExpandedExperience(doc, html, resumeId, currentCount, resumeUrl) {
   fetchLog.info('Strategy 6: starting (currentCount=' + currentCount + ', resumeId=' + (resumeId || 'none') + ')');
 
   // ── Step 0 [PRIMARY]: Load resume in hidden iframe, click "Развернуть", parse DOM ──
   try {
-    const iframeEntries = await fetchExpandedExperienceViaIframe(resumeUrl, currentCount);
-    if (iframeEntries.length > currentCount) {
-      fetchLog.info('Strategy 6: SUCCESS via iframe — got ' + iframeEntries.length + ' experiences');
-      return iframeEntries;
+    const iframeResult = await fetchExpandedExperienceViaIframe(resumeUrl, currentCount);
+    // Always propagate iframe visibility, even if experience count didn't increase
+    const result = {
+      entries: [],
+      iframeVis: iframeResult.iframeVis,
+      iframeVisTrace: iframeResult.iframeVisTrace
+    };
+    if (iframeResult.entries.length > currentCount) {
+      fetchLog.info('Strategy 6: SUCCESS via iframe — got ' + iframeResult.entries.length + ' experiences');
+      result.entries = iframeResult.entries;
+      return result;
     }
+    // Even if entries didn't increase, we still have visibility data
+    fetchLog.info('Strategy 6: iframe got ' + iframeResult.entries.length + ' entries (not more than ' + currentCount + '), but visibility=' + iframeResult.iframeVis);
   } catch (err) {
     fetchLog.info('Strategy 6: iframe approach failed: ' + err.message);
   }
@@ -54,10 +64,10 @@ export async function fetchExpandedExperience(doc, html, resumeId, currentCount,
   for (const { url, source } of expansionUrls) {
     try {
       fetchLog.info('Strategy 6: fetching [' + source + '] ' + url);
-      const result = await tryFetchExpandedUrl(url, currentCount);
-      if (result && result.length > currentCount) {
-        fetchLog.info('Strategy 6: SUCCESS from ' + source + ' — got ' + result.length + ' experiences');
-        return result;
+      const urlEntries = await tryFetchExpandedUrl(url, currentCount);
+      if (urlEntries && urlEntries.length > currentCount) {
+        fetchLog.info('Strategy 6: SUCCESS from ' + source + ' — got ' + urlEntries.length + ' experiences');
+        return { entries: urlEntries };
       }
     } catch (err) {
       fetchLog.info('Strategy 6: [' + source + '] error: ' + err.message);
@@ -67,7 +77,7 @@ export async function fetchExpandedExperience(doc, html, resumeId, currentCount,
   // ── Step 3: Try applicant internal API ──
   const apiEntries = await tryApplicantApi(resumeId, currentCount);
   if (apiEntries.length > currentCount) {
-    return apiEntries;
+    return { entries: apiEntries };
   }
 
   // ── Step 4: Try re-fetching with expansion query parameters ──
@@ -94,7 +104,7 @@ export async function fetchExpandedExperience(doc, html, resumeId, currentCount,
           const parsed = parseExperienceFromExpandedDoc(expandedDoc, expandedHtml, currentCount);
           if (parsed.length > currentCount) {
             fetchLog.info('Strategy 6: SUCCESS from ' + source + ' — got ' + parsed.length + ' experiences');
-            return parsed;
+            return { entries: parsed };
           }
         }
       } catch (err) {
@@ -104,5 +114,5 @@ export async function fetchExpandedExperience(doc, html, resumeId, currentCount,
   }
 
   fetchLog.info('Strategy 6: all approaches exhausted, returning current count: ' + currentCount);
-  return [];
+  return { entries: [] };
 }

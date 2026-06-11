@@ -116,6 +116,10 @@ export async function syncAllResumes({ onProgress, onComplete, onError } = {}) {
             diagEntry.pageTrace = resume._visDiag.pageTrace;
             diagEntry.decision = resume._visDiag.decision;
             diagEntry.decisionReason = resume._visDiag.decisionReason;
+            // If iframe overrode visibility, store iframe result separately
+            if (resume._visDiag.iframeVis) {
+              diagEntry.iframeVis = resume._visDiag.iframeVis;
+            }
           }
         }
       } catch (err) {
