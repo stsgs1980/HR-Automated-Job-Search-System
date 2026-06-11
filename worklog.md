@@ -1039,3 +1039,21 @@ Work Log:
 
 Stage Summary:
 - Gap section hidden until vacancies are loaded — cleaner UI
+---
+Task ID: score-and-gap-move
+Agent: main
+Task: Move skill gap to Vacancies tab, add Resume Score to Resume tab
+
+Work Log:
+- Removed res-gap-section HTML from resume.js (Resume tab)
+- Added res-gap-section HTML to vacancies.js (Vacancies tab) with renamed title "Совпадение навыков"
+- Removed updateSkillGapSection() call from render-resume-panel.js
+- Added updateSkillGapSection() call to renderVacancyList() in vacancies.js
+- Added new "Оценка резюме" block in resume.js with ring chart + checklist
+- Added updateResumeScore() function in render-resume-panel.js with 11 weighted criteria
+- Version bumped to 1.9.14
+
+Stage Summary:
+- Skill gap analysis now lives in Vacancies tab (logical place)
+- Resume tab has new objective completeness score with visual ring + checklist
+- Version 1.9.14

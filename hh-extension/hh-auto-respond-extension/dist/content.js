@@ -2818,58 +2818,17 @@
       </div>
       <div id="res-skills-list" style="display:flex;flex-wrap:wrap;gap:4px;"></div>
     </div>
-    <div id="res-gap-section" class="card fade-in" style="margin-bottom:12px;display:none;">
-      <!-- Header + score ring -->
+    <div id="res-score-section" class="card fade-in" style="margin-bottom:12px;display:none;">
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
-        <div id="res-gap-ring" style="width:44px;height:44px;border-radius:50%;background:conic-gradient(#059669 0deg 280.8deg,#e4e4e7 280.8deg 360deg);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-          <div style="width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,0.95);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:#059669;">0%</div>
+        <div id="res-score-ring" style="width:44px;height:44px;border-radius:50%;background:conic-gradient(#059669 0deg 0deg,#e4e4e7 0deg 360deg);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+          <div style="width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,0.95);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:#059669;" id="res-score-pct">0%</div>
         </div>
         <div style="flex:1;min-width:0;">
-          <div style="font-size:13px;font-weight:600;">\u0410\u043D\u0430\u043B\u0438\u0437 \u043D\u0430\u0432\u044B\u043A\u043E\u0432</div>
-          <div id="res-gap-subtitle" style="font-size:11px;color:#71717a;margin-top:1px;">\u041C\u044D\u0442\u0447\u0438\u043D\u0433 \u043F\u043E\u0434 \u0434\u0435\u0439\u0441\u0442\u0432\u0443\u044E\u0449\u0435\u0435 \u0440\u0435\u0437\u044E\u043C\u0435</div>
+          <div style="font-size:13px;font-weight:600;">\u041E\u0446\u0435\u043D\u043A\u0430 \u0440\u0435\u0437\u044E\u043C\u0435</div>
+          <div id="res-score-subtitle" style="font-size:11px;color:#71717a;margin-top:1px;">\u041E\u0431\u044A\u0435\u043A\u0442\u0438\u0432\u043D\u0430\u044F \u043F\u043E\u043B\u043D\u043E\u0442\u0430 \u0437\u0430\u043F\u043E\u043B\u043D\u0435\u043D\u0438\u044F</div>
         </div>
-        <button class="btn btn-outline btn-sm" data-action="analyze-skills">
-          ${ICONS.ai} \u0410\u043D\u0430\u043B\u0438\u0437
-        </button>
       </div>
-      <!-- Stacked bar -->
-      <div id="res-gap-bar" style="display:flex;height:6px;border-radius:3px;overflow:hidden;margin-bottom:12px;background:#f4f4f5;">
-        <div id="res-gap-bar-match" style="width:0%;background:linear-gradient(90deg,#059669,#34D399);border-radius:3px 0 0 3px;"></div>
-        <div id="res-gap-bar-miss" style="width:0%;background:linear-gradient(90deg,#DC2626,#F87171);"></div>
-        <div id="res-gap-bar-extra" style="width:0%;background:linear-gradient(90deg,#2563EB,#60A5FA);border-radius:0 3px 3px 0;"></div>
-      </div>
-      <!-- Row 1: Match -->
-      <div id="res-gap-match-row" style="margin-bottom:8px;display:none;">
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;">
-          <span style="width:7px;height:7px;border-radius:50%;background:#059669;flex-shrink:0;"></span>
-          <span style="font-size:11px;font-weight:600;color:#059669;">\u0421\u043E\u0432\u043F\u0430\u0434\u0430\u044E\u0442</span>
-          <span class="badge badge-green" id="res-gap-match-count" style="font-size:11px;padding:1px 6px;">0</span>
-        </div>
-        <div id="res-gap-match-list" style="display:flex;flex-wrap:wrap;gap:4px;padding-left:13px;"></div>
-      </div>
-      <!-- Row 2: Gap -->
-      <div id="res-gap-miss-row" style="margin-bottom:8px;display:none;">
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;">
-          <span style="width:7px;height:7px;border-radius:50%;background:#DC2626;flex-shrink:0;"></span>
-          <span style="font-size:11px;font-weight:600;color:#DC2626;">\u041D\u0435 \u0445\u0432\u0430\u0442\u0430\u0435\u0442</span>
-          <span class="badge badge-red" id="res-gap-miss-count" style="font-size:11px;padding:1px 6px;">0</span>
-        </div>
-        <div id="res-gap-miss-list" style="display:flex;flex-wrap:wrap;gap:4px;padding-left:13px;"></div>
-      </div>
-      <!-- Row 3: Extra -->
-      <div id="res-gap-extra-row" style="margin-bottom:10px;display:none;">
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;">
-          <span style="width:7px;height:7px;border-radius:50%;background:#2563EB;flex-shrink:0;"></span>
-          <span style="font-size:11px;font-weight:600;color:#2563EB;">\u0412\u0430\u0448 \u043F\u043B\u044E\u0441</span>
-          <span class="badge badge-blue" id="res-gap-extra-count" style="font-size:11px;padding:1px 6px;">0</span>
-        </div>
-        <div id="res-gap-extra-list" style="display:flex;flex-wrap:wrap;gap:4px;padding-left:13px;"></div>
-      </div>
-      <!-- Recommendation -->
-      <div id="res-gap-recommendation" style="display:none;background:#FFFBEB;border:1px solid rgba(217,119,6,0.15);border-radius:8px;padding:8px 10px;align-items:flex-start;gap:6px;">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#D97706" stroke-width="2" style="flex-shrink:0;margin-top:1px;"><path d="M12 9v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-        <span id="res-gap-recommendation-text" style="font-size:11px;color:#92400E;line-height:1.5;"></span>
-      </div>
+      <div id="res-score-checklist" style="font-size:11px;"></div>
     </div>
     <!-- Diagnostic tools (collapsed by default) -->
     <div class="card fade-in" style="margin-bottom:12px;">
@@ -2949,6 +2908,59 @@
       <div style="display:flex;gap:8px;">
         <button id="mass-start-btn" class="btn btn-primary btn-sm" data-action="apply-all" style="flex:1;">\u041E\u0442\u043A\u043B\u0438\u043A\u043D\u0443\u0442\u044C\u0441\u044F \u043D\u0430 \u0432\u0441\u0435</button>
         <button id="mass-stop-btn" class="btn btn-danger btn-sm" data-action="pause" style="flex:1;opacity:0.5;" disabled>\u041F\u0430\u0443\u0437\u0430</button>
+      </div>
+    </div>
+    <div id="res-gap-section" class="card fade-in" style="margin-bottom:12px;display:none;">
+      <!-- Header + score ring -->
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+        <div id="res-gap-ring" style="width:44px;height:44px;border-radius:50%;background:conic-gradient(#059669 0deg 280.8deg,#e4e4e7 280.8deg 360deg);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+          <div style="width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,0.95);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:#059669;">0%</div>
+        </div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:13px;font-weight:600;">\u0421\u043E\u0432\u043F\u0430\u0434\u0435\u043D\u0438\u0435 \u043D\u0430\u0432\u044B\u043A\u043E\u0432</div>
+          <div id="res-gap-subtitle" style="font-size:11px;color:#71717a;margin-top:1px;">\u0420\u0435\u0437\u044E\u043C\u0435 vs \u0432\u0430\u043A\u0430\u043D\u0441\u0438\u0438</div>
+        </div>
+        <button class="btn btn-outline btn-sm" data-action="analyze-skills">
+          ${ICONS.ai} \u0410\u043D\u0430\u043B\u0438\u0437
+        </button>
+      </div>
+      <!-- Stacked bar -->
+      <div id="res-gap-bar" style="display:flex;height:6px;border-radius:3px;overflow:hidden;margin-bottom:12px;background:#f4f4f5;">
+        <div id="res-gap-bar-match" style="width:0%;background:linear-gradient(90deg,#059669,#34D399);border-radius:3px 0 0 3px;"></div>
+        <div id="res-gap-bar-miss" style="width:0%;background:linear-gradient(90deg,#DC2626,#F87171);"></div>
+        <div id="res-gap-bar-extra" style="width:0%;background:linear-gradient(90deg,#2563EB,#60A5FA);border-radius:0 3px 3px 0;"></div>
+      </div>
+      <!-- Row 1: Match -->
+      <div id="res-gap-match-row" style="margin-bottom:8px;display:none;">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;">
+          <span style="width:7px;height:7px;border-radius:50%;background:#059669;flex-shrink:0;"></span>
+          <span style="font-size:11px;font-weight:600;color:#059669;">\u0421\u043E\u0432\u043F\u0430\u0434\u0430\u044E\u0442</span>
+          <span class="badge badge-green" id="res-gap-match-count" style="font-size:11px;padding:1px 6px;">0</span>
+        </div>
+        <div id="res-gap-match-list" style="display:flex;flex-wrap:wrap;gap:4px;padding-left:13px;"></div>
+      </div>
+      <!-- Row 2: Gap -->
+      <div id="res-gap-miss-row" style="margin-bottom:8px;display:none;">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;">
+          <span style="width:7px;height:7px;border-radius:50%;background:#DC2626;flex-shrink:0;"></span>
+          <span style="font-size:11px;font-weight:600;color:#DC2626;">\u041D\u0435 \u0445\u0432\u0430\u0442\u0430\u0435\u0442</span>
+          <span class="badge badge-red" id="res-gap-miss-count" style="font-size:11px;padding:1px 6px;">0</span>
+        </div>
+        <div id="res-gap-miss-list" style="display:flex;flex-wrap:wrap;gap:4px;padding-left:13px;"></div>
+      </div>
+      <!-- Row 3: Extra -->
+      <div id="res-gap-extra-row" style="margin-bottom:10px;display:none;">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;">
+          <span style="width:7px;height:7px;border-radius:50%;background:#2563EB;flex-shrink:0;"></span>
+          <span style="font-size:11px;font-weight:600;color:#2563EB;">\u0412\u0430\u0448 \u043F\u043B\u044E\u0441</span>
+          <span class="badge badge-blue" id="res-gap-extra-count" style="font-size:11px;padding:1px 6px;">0</span>
+        </div>
+        <div id="res-gap-extra-list" style="display:flex;flex-wrap:wrap;gap:4px;padding-left:13px;"></div>
+      </div>
+      <!-- Recommendation -->
+      <div id="res-gap-recommendation" style="display:none;background:#FFFBEB;border:1px solid rgba(217,119,6,0.15);border-radius:8px;padding:8px 10px;align-items:flex-start;gap:6px;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#D97706" stroke-width="2" style="flex-shrink:0;margin-top:1px;"><path d="M12 9v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        <span id="res-gap-recommendation-text" style="font-size:11px;color:#92400E;line-height:1.5;"></span>
       </div>
     </div>
     <div class="card fade-in">
@@ -3215,7 +3227,7 @@
       </div>
     </div>
     <div class="har-footer">
-      <span style="font-size:11px;color:#71717a;">HH Copilot v${"1.9.13"}</span>
+      <span style="font-size:11px;color:#71717a;">HH Copilot v${"1.9.14"}</span>
       <div style="display:flex;align-items:center;gap:4px;">
         <span style="width:6px;height:6px;background:#10B981;border-radius:50%;"></span>
         <span style="font-size:11px;color:#71717a;">chrome.storage</span>
@@ -3234,7 +3246,7 @@
     ${getSettingsSection()}
     ${getStatsSection()}
     <div class="har-footer">
-      <span style="font-size:11px;color:#71717a;">HH Copilot v${"1.9.13"}</span>
+      <span style="font-size:11px;color:#71717a;">HH Copilot v${"1.9.14"}</span>
       <div style="display:flex;align-items:center;gap:4px;">
         <span style="width:6px;height:6px;background:#10B981;border-radius:50%;"></span>
         <span style="font-size:11px;color:#71717a;">chrome.storage</span>
@@ -3640,64 +3652,6 @@
     }
   });
 
-  // src/ui/tabs/vacancies.js
-  function renderVacancyList() {
-    const list = refs.shadowRoot?.getElementById("har-vlist");
-    if (!list) return;
-    if (!panelState.vacancies.length) {
-      list.innerHTML = '<div style="padding:24px;text-align:center;color:#71717a;font-size:12px;line-height:1.6;">\u041D\u0435\u0442 \u0432\u0430\u043A\u0430\u043D\u0441\u0438\u0439.<br>\u041F\u0435\u0440\u0435\u0439\u0434\u0438\u0442\u0435 \u043D\u0430 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0443 \u043F\u043E\u0438\u0441\u043A\u0430.</div>';
-      return;
-    }
-    list.innerHTML = panelState.vacancies.slice(0, 50).map((v) => {
-      const score = v.matchScore != null ? v.matchScore : 0;
-      const sc = score > 0 ? `<div class="score-ring" style="--score:${score};"><span>${score}%</span></div>` : "";
-      const applyBtn = v.hasReply && v.status === "new" ? `<button class="btn btn-primary btn-sm" data-action="apply" data-id="${esc(v.id)}">\u041E\u0442\u043A\u043B\u0438\u043A\u043D\u0443\u0442\u044C\u0441\u044F</button>` : "";
-      const badge = v.status === "applied" ? '<span class="badge badge-green">\u041E\u0442\u043A\u043B\u0438\u043A\u043D\u0443\u0442\u0430</span>' : v.status === "blacklisted" ? '<span class="badge badge-red">BL</span>' : "";
-      const shimmerClass = score >= 70 && v.status === "new" ? " shimmer" : "";
-      const opacity = v.status === "blacklisted" ? "opacity:0.4;" : v.status === "applied" ? "opacity:0.5;" : "";
-      return `<div class="vacancy-item${shimmerClass}" data-title="${esc(v.title)}" data-status="${esc(v.status || "new")}" data-score="${score}" style="${opacity}">
-      <div style="flex-shrink:0;">${sc}</div>
-      <div style="flex:1;min-width:0;">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px;">
-          <a href="${esc(v.url)}" target="_blank" style="font-weight:600;color:#059669;text-decoration:none;font-size:13px;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;">${esc(v.title)}</a>
-          ${badge}
-        </div>
-        <div style="display:flex;gap:10px;font-size:12px;color:#64748b;margin-bottom:6px;">
-          <span>${esc(v.company)}</span>
-          ${v.salary && v.salary !== "\u041D\u0435 \u0443\u043A\u0430\u0437\u0430\u043D\u0430" ? `<span style="color:#18181b;font-weight:500;">${esc(v.salary)}</span>` : ""}
-        </div>
-        <div style="display:flex;align-items:center;justify-content:space-between;">
-          <span style="font-size:11px;color:#71717a;">${esc(v.location)}</span>
-          ${applyBtn}
-        </div>
-      </div>
-    </div>`;
-    }).join("");
-  }
-  function renderStatsValues() {
-    const s = panelState.stats;
-    const el = (id) => refs.shadowRoot?.getElementById(id);
-    const applied = s.appliedToday || 0;
-    const limit = panelState.settings.dailyLimit || 200;
-    const set = (id, val) => {
-      const e = el(id);
-      if (e) e.textContent = val;
-    };
-    set("sv-applied", applied);
-    set("sv-remain", limit - applied);
-    set("sv-errors", s.errorsToday || 0);
-    const fill = el("pf");
-    if (fill) fill.style.width = Math.min(100, applied / limit * 100) + "%";
-    const text = el("pt");
-    if (text) text.textContent = applied + " / " + limit;
-  }
-  var init_vacancies2 = __esm({
-    "src/ui/tabs/vacancies.js"() {
-      init_state();
-      init_html2();
-    }
-  });
-
   // src/ui/tabs/resumes/resume-helpers-gap.js
   function updateSkillGapSection(r) {
     const section = refs.shadowRoot?.getElementById("res-gap-section");
@@ -3892,6 +3846,69 @@
       init_state();
       init_html2();
       init_resume_helpers_gap();
+    }
+  });
+
+  // src/ui/tabs/vacancies.js
+  function renderVacancyList() {
+    const list = refs.shadowRoot?.getElementById("har-vlist");
+    if (!list) return;
+    if (!panelState.vacancies.length) {
+      list.innerHTML = '<div style="padding:24px;text-align:center;color:#71717a;font-size:12px;line-height:1.6;">\u041D\u0435\u0442 \u0432\u0430\u043A\u0430\u043D\u0441\u0438\u0439.<br>\u041F\u0435\u0440\u0435\u0439\u0434\u0438\u0442\u0435 \u043D\u0430 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0443 \u043F\u043E\u0438\u0441\u043A\u0430.</div>';
+      return;
+    }
+    list.innerHTML = panelState.vacancies.slice(0, 50).map((v) => {
+      const score = v.matchScore != null ? v.matchScore : 0;
+      const sc = score > 0 ? `<div class="score-ring" style="--score:${score};"><span>${score}%</span></div>` : "";
+      const applyBtn = v.hasReply && v.status === "new" ? `<button class="btn btn-primary btn-sm" data-action="apply" data-id="${esc(v.id)}">\u041E\u0442\u043A\u043B\u0438\u043A\u043D\u0443\u0442\u044C\u0441\u044F</button>` : "";
+      const badge = v.status === "applied" ? '<span class="badge badge-green">\u041E\u0442\u043A\u043B\u0438\u043A\u043D\u0443\u0442\u0430</span>' : v.status === "blacklisted" ? '<span class="badge badge-red">BL</span>' : "";
+      const shimmerClass = score >= 70 && v.status === "new" ? " shimmer" : "";
+      const opacity = v.status === "blacklisted" ? "opacity:0.4;" : v.status === "applied" ? "opacity:0.5;" : "";
+      return `<div class="vacancy-item${shimmerClass}" data-title="${esc(v.title)}" data-status="${esc(v.status || "new")}" data-score="${score}" style="${opacity}">
+      <div style="flex-shrink:0;">${sc}</div>
+      <div style="flex:1;min-width:0;">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px;">
+          <a href="${esc(v.url)}" target="_blank" style="font-weight:600;color:#059669;text-decoration:none;font-size:13px;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;">${esc(v.title)}</a>
+          ${badge}
+        </div>
+        <div style="display:flex;gap:10px;font-size:12px;color:#64748b;margin-bottom:6px;">
+          <span>${esc(v.company)}</span>
+          ${v.salary && v.salary !== "\u041D\u0435 \u0443\u043A\u0430\u0437\u0430\u043D\u0430" ? `<span style="color:#18181b;font-weight:500;">${esc(v.salary)}</span>` : ""}
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <span style="font-size:11px;color:#71717a;">${esc(v.location)}</span>
+          ${applyBtn}
+        </div>
+      </div>
+    </div>`;
+    }).join("");
+    const r = panelState.resume;
+    if (r && r.skills && r.skills.length > 0) {
+      updateSkillGapSection(r);
+    }
+  }
+  function renderStatsValues() {
+    const s = panelState.stats;
+    const el = (id) => refs.shadowRoot?.getElementById(id);
+    const applied = s.appliedToday || 0;
+    const limit = panelState.settings.dailyLimit || 200;
+    const set = (id, val) => {
+      const e = el(id);
+      if (e) e.textContent = val;
+    };
+    set("sv-applied", applied);
+    set("sv-remain", limit - applied);
+    set("sv-errors", s.errorsToday || 0);
+    const fill = el("pf");
+    if (fill) fill.style.width = Math.min(100, applied / limit * 100) + "%";
+    const text = el("pt");
+    if (text) text.textContent = applied + " / " + limit;
+  }
+  var init_vacancies2 = __esm({
+    "src/ui/tabs/vacancies.js"() {
+      init_state();
+      init_html2();
+      init_resume_helpers();
     }
   });
 
@@ -4580,8 +4597,58 @@
     attachSubToggle("subLang", "chevLang");
     attachSubToggle("subContacts", "chevContacts");
     updateSkillsSection(r);
-    updateSkillGapSection(r);
+    updateResumeScore(r);
     renderMyResumesPanel();
+  }
+  function updateResumeScore(r) {
+    const section = refs.shadowRoot?.getElementById("res-score-section");
+    if (!section) return;
+    if (!r || !r.id) {
+      section.style.display = "none";
+      return;
+    }
+    section.style.display = "";
+    const checks = [
+      { label: "\u041F\u043E\u0437\u0438\u0446\u0438\u044F", ok: !!(r.title && r.title.length > 2), weight: 10 },
+      { label: "\u0418\u043C\u044F", ok: !!(r.name && r.name.length > 1), weight: 8 },
+      { label: "\u0417\u0430\u0440\u043F\u043B\u0430\u0442\u0430", ok: !!r.salary, weight: 8 },
+      { label: "\u0413\u043E\u0440\u043E\u0434", ok: !!r.address, weight: 6 },
+      { label: "\u041A\u043E\u043D\u0442\u0430\u043A\u0442\u044B", ok: !!(r.phone || r.email), weight: 10 },
+      { label: "\u041D\u0430\u0432\u044B\u043A\u0438 (3+)", ok: (r.skills || []).length >= 3, weight: 15 },
+      { label: "\u041E\u043F\u044B\u0442 (1+)", ok: (r.experience || []).length >= 1, weight: 15 },
+      { label: "\u041E\u0431\u0440\u0430\u0437\u043E\u0432\u0430\u043D\u0438\u0435", ok: (r.education || []).length >= 1, weight: 10 },
+      { label: "\u042F\u0437\u044B\u043A\u0438", ok: (r.languages || []).length >= 1, weight: 6 },
+      { label: "\u041E \u0441\u0435\u0431\u0435", ok: !!(r.additionalInfo && r.additionalInfo.length > 20), weight: 6 },
+      { label: "\u0417\u0430\u043D\u044F\u0442\u043E\u0441\u0442\u044C/\u0444\u043E\u0440\u043C\u0430\u0442", ok: !!(r.employmentType || r.workFormat), weight: 6 }
+    ];
+    const totalWeight = checks.reduce((s, c) => s + c.weight, 0);
+    const earnedWeight = checks.filter((c) => c.ok).reduce((s, c) => s + c.weight, 0);
+    const pct = Math.round(earnedWeight / totalWeight * 100);
+    const ring = refs.shadowRoot?.getElementById("res-score-ring");
+    if (ring) {
+      const deg = Math.round(pct * 3.6);
+      const color = pct >= 70 ? "#059669" : pct >= 40 ? "#D97706" : "#DC2626";
+      ring.style.background = "conic-gradient(" + color + " 0deg " + deg + "deg, #e4e4e7 " + deg + "deg 360deg)";
+      const inner = ring.querySelector("div");
+      if (inner) {
+        inner.textContent = pct + "%";
+        inner.style.color = color;
+      }
+    }
+    const subtitle = refs.shadowRoot?.getElementById("res-score-subtitle");
+    if (subtitle) {
+      if (pct >= 80) subtitle.textContent = "\u041E\u0442\u043B\u0438\u0447\u043D\u0430\u044F \u043F\u043E\u043B\u043D\u043E\u0442\u0430 \u2014 \u0440\u0430\u0431\u043E\u0442\u043E\u0434\u0430\u0442\u0435\u043B\u0438 \u0443\u0432\u0438\u0434\u044F\u0442 \u043A\u043B\u044E\u0447\u0435\u0432\u044B\u0435 \u0434\u0430\u043D\u043D\u044B\u0435";
+      else if (pct >= 60) subtitle.textContent = "\u0425\u043E\u0440\u043E\u0448\u0430\u044F \u043F\u043E\u043B\u043D\u043E\u0442\u0430 \u2014 \u0435\u0441\u0442\u044C \u0447\u0442\u043E \u0434\u043E\u043F\u043E\u043B\u043D\u0438\u0442\u044C";
+      else if (pct >= 40) subtitle.textContent = "\u0421\u0440\u0435\u0434\u043D\u044F\u044F \u043F\u043E\u043B\u043D\u043E\u0442\u0430 \u2014 \u0441\u0442\u043E\u0438\u0442 \u0434\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u043D\u0435\u0434\u043E\u0441\u0442\u0430\u044E\u0449\u0438\u0435 \u0440\u0430\u0437\u0434\u0435\u043B\u044B";
+      else subtitle.textContent = "\u041D\u0438\u0437\u043A\u0430\u044F \u043F\u043E\u043B\u043D\u043E\u0442\u0430 \u2014 \u0437\u0430\u043F\u043E\u043B\u043D\u0438\u0442\u0435 \u0431\u0430\u0437\u043E\u0432\u044B\u0435 \u0440\u0430\u0437\u0434\u0435\u043B\u044B";
+    }
+    const checklist = refs.shadowRoot?.getElementById("res-score-checklist");
+    if (checklist) {
+      checklist.innerHTML = checks.map((c) => {
+        const icon = c.ok ? '<span style="color:#059669;">&#10003;</span>' : '<span style="color:#DC2626;">&#10007;</span>';
+        return '<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;">' + icon + " <span" + (c.ok ? "" : ' style="color:#71717a;"') + ">" + c.label + "</span></div>";
+      }).join("");
+    }
   }
   var init_render_resume_panel = __esm({
     "src/ui/tabs/resumes/render-resume-panel.js"() {

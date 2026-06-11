@@ -7,6 +7,7 @@
 
 import { panelState, refs } from '../state.js';
 import { esc, scoreClass } from '../html.js';
+import { updateSkillGapSection } from './resumes/resume-helpers.js';
 
 export function renderVacancyList() {
   const list = refs.shadowRoot?.getElementById('har-vlist');
@@ -54,6 +55,12 @@ export function renderVacancyList() {
       </div>
     </div>`;
   }).join('');
+
+  // Update skill gap analysis after vacancy list is rendered
+  const r = panelState.resume;
+  if (r && r.skills && r.skills.length > 0) {
+    updateSkillGapSection(r);
+  }
 }
 
 export function renderStatsValues() {
