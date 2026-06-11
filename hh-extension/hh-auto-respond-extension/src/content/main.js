@@ -14,7 +14,7 @@
  */
 
 import { createLogger } from '../lib/anti-hallucination.js';
-import { checkDailyReset, getStats, getAllSettings, getMyResumes } from '../lib/storage.js';
+import { checkDailyReset, getStats, getAllSettings, getMyResumes, getActiveResume, setActiveResume, saveMyResumes } from '../lib/storage.js';
 import { parseVacanciesFromPage } from '../parsers/vacancy-list.js';
 import { diagnoseResumeDOM, debugVisibility } from '../parsers/resume-detail.js';
 import { panelState, updateAuthState, createPanel, updateVacancies } from '../ui/panel.js';
@@ -92,17 +92,16 @@ async function init() {
  */
 async function loadSavedResumes() {
   try {
-    const d = await chrome.storage.local.get('myResume');
-    if (d.myResume && d.myResume.id) {
-      const savedResume = d.myResume;
+    const savedResume = await getActiveResume();
+    if (savedResume && savedResume.id) {
       // Migrate old data: backfill visibility, clean title
       if (savedResume.visibility === undefined) {
         savedResume.visibility = savedResume.hidden ? 'hidden' : VISIBILITY_UNKNOWN;
-        await chrome.storage.local.set({ myResume: savedResume });
+        await setActiveResume(savedResume);
       }
       if (savedResume.title && TITLE_SUFFIX_NOISE.test(savedResume.title)) {
         savedResume.title = savedResume.title.replace(TITLE_SUFFIX_NOISE, '').trim();
-        await chrome.storage.local.set({ myResume: savedResume });
+        await setActiveResume(savedResume);
       }
       panelState.resume = savedResume;
       mainLog.info('Loaded saved resume: ' + savedResume.title);
@@ -126,7 +125,7 @@ async function loadSavedResumes() {
         }
       });
       if (needsSave) {
-        await chrome.storage.local.set({ myResumes: panelState.myResumes });
+        await saveMyResumes(panelState.myResumes);
         mainLog.info('Migrated resume data: added visibility, cleaned titles');
       }
       renderMyResumesPanel();

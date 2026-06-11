@@ -57,11 +57,16 @@ export async function incrementApplied() {
 // APPLIED VACANCIES TRACKING
 // ═══════════════════════════════════════════════
 
-export async function isAlreadyApplied(id) {
+export async function getAppliedVacancies() {
   try {
     const d = await chrome.storage.local.get('appliedVacancies');
-    return (d.appliedVacancies || []).includes(id);
-  } catch (e) { return false; }
+    return d.appliedVacancies || [];
+  } catch (e) { return []; }
+}
+
+export async function isAlreadyApplied(id) {
+  const appliedIds = await getAppliedVacancies();
+  return appliedIds.includes(id);
 }
 
 export async function markAsApplied(id) {
@@ -94,6 +99,10 @@ export async function saveMyResume(resume) {
   }
   await chrome.storage.local.set({ myResumes: resumes });
   return resumes;
+}
+
+export async function saveMyResumes(resumes) {
+  await chrome.storage.local.set({ myResumes: resumes });
 }
 
 export async function clearMyResumes() {

@@ -2,7 +2,8 @@
  * Resume list fetching — fetches and parses /applicant/resumes page.
  */
 import { createLogger } from './anti-hallucination.js';
-import { fetchHtml, htmlToDoc, extractResumeLinks, extractFromScripts, extractVisibilityStatus } from './resume-fetch-helpers.js';
+import { fetchHtml, htmlToDoc, extractResumeLinks, extractFromScripts } from './resume-fetch-helpers.js';
+import { extractVisibilityStatus } from './resume-fetch-list-vis.js';
 
 const fetchLog = createLogger('ResumeFetch');
 

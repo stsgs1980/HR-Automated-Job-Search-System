@@ -1,17 +1,18 @@
 /**
  * Single resume parsing — fetches and parses a resume page.
  *
- * Orchestrates all section parsers (header, skills, experience, education, languages)
- * and runs experience strategies 1-6 in sequence.
+ * Thin orchestrator — delegates to focused modules:
+ *   - resume-fetch-resume-page-vis.js — page-level visibility detection + decision
+ *   - resume-fetch-resume-exp-orch.js  — experience strategies 1-6 + iframe vis override
+ *   - resume-fetch-parse.js           — personal data parsing
+ *   - resume-fetch-education-languages.js — education, languages, about me
  */
 import { createLogger } from './anti-hallucination.js';
 import { fetchHtml, htmlToDoc, safeGetText } from './resume-fetch-helpers.js';
 import { parsePersonalDataFromDoc } from './resume-fetch-parse.js';
-import { TITLE_SUFFIX_NOISE, VISIBILITY_UNKNOWN, VISIBILITY_VISIBLE, VISIBILITY_HIDDEN, hasHiddenIndicator, hasVisibleIndicator, normalizeWs, VISIBILITY_HIDDEN_DATA_QA } from './resume-constants.js';
-import { parseExperienceFromDocStrategies1to3 } from './resume-fetch-experience.js';
-import { parseExperienceFromHtmlText } from './resume-fetch-strategy4-text.js';
-import { parseExperienceFromScripts } from './resume-fetch-strategy5-scripts.js';
-import { fetchExpandedExperience } from './resume-fetch-strategy6-expand.js';
+import { TITLE_SUFFIX_NOISE, VISIBILITY_UNKNOWN, VISIBILITY_VISIBLE, VISIBILITY_HIDDEN } from './resume-constants.js';
+import { detectVisibilityFromResumePage } from './resume-fetch-resume-page-vis.js';
+import { parseExperienceFromDoc } from './resume-fetch-resume-exp-orch.js';
 import { parseEducationFromDocSection, parseLanguagesAndAbout } from './resume-fetch-education-languages.js';
 
 const fetchLog = createLogger('ResumeFetch');
@@ -20,54 +21,16 @@ const fetchLog = createLogger('ResumeFetch');
  * Fetch and parse a single resume from its URL.
  * @param {string} resumeUrl - URL of the resume page
  * @param {object} [listMeta] - Optional metadata from the resume list
- *   (e.g. { visibility, hidden, title } from extractResumeLinks + extractVisibilityStatus)
  * @returns {object} Parsed resume object
  */
 export async function fetchAndParseResume(resumeUrl, listMeta) {
   fetchLog.info('Fetching resume: ' + resumeUrl);
   const html = await fetchHtml(resumeUrl);
   const doc = htmlToDoc(html);
-
   fetchLog.info('Resume HTML: ' + html.length + ' chars');
 
-  // Debug: count experience cards and stepper items in fetched HTML
-  const preDoc = htmlToDoc(html);
-  const preExpCards = preDoc.querySelectorAll('[data-qa="profile-experience-company-card"]');
-  const preStepperItems = preDoc.querySelectorAll('[data-qa="magritte-stepper-step-content"]');
-  const preShowAll = html.match(/Показать все|показать ещё|Посмотреть всё|Развернуть/gi);
-  fetchLog.info('Pre-parse: ' + preExpCards.length + ' company-cards, ' +
-    preStepperItems.length + ' stepper-items, ' +
-    (preShowAll ? preShowAll.length : 0) + ' "show all" buttons in HTML');
-
-  // Debug: dump experience section HTML snippet for analysis
-  const expCardHtml = preDoc.querySelector('[data-qa="resume-list-card-experience"]');
-  if (expCardHtml) {
-    const snippet = expCardHtml.outerHTML.substring(0, 2000);
-    fetchLog.info('ExpCard HTML snippet (first 2000 chars): ' + snippet);
-  }
-
-  // Debug: count ALL date-range patterns in the full HTML
-  const MONTHS_RE = /(?:январ[ьея]|феврал[ьья]|март[ае]?|апрел[ьья]|ма[йия]|июн[ьья]|июл[ьья]|август[ае]?|сентябр[ьья]|октябр[ьья]|ноябр[ьья]|декабр[ьья])\s*\d{4}\s*[—\-–]\s*(?:(?:январ[ьея]|феврал[ьья]|март[ае]?|апрел[ьья]|ма[йия]|июн[ьья]|июл[ьья]|август[ае]?|сентябр[ьья]|октябр[ьья]|ноябр[ьья]|декабр[ьья])\s*\d{4}|настоящее\s*время|по\s+настоящее\s+время|сейчас|по\s+сейчас)/gi;
-  const allDateRanges = html.match(MONTHS_RE) || [];
-  fetchLog.info('Full HTML date ranges: ' + allDateRanges.length + ' found: ' + JSON.stringify(allDateRanges));
-
-  // Debug: also check for numeric date patterns
-  const numDateRanges = html.match(/\d{2}\.\d{4}\s*[—\-–]\s*(?:\d{2}\.\d{4}|настоящее\s*время|по\s+настоящее\s*время|сейчас|по\s+сейчас)/gi) || [];
-  fetchLog.info('Numeric date ranges: ' + numDateRanges.length + ' found: ' + JSON.stringify(numDateRanges));
-
-  // Debug: search for "experience" or "работ" in script tags
-  const scripts = preDoc.querySelectorAll('script:not([src])');
-  let expScriptCount = 0;
-  scripts.forEach(s => {
-    const t = s.textContent || '';
-    if (/experience|работ[аеы]|компани|должност|career/i.test(t)) {
-      expScriptCount++;
-      if (expScriptCount <= 3) {
-        fetchLog.info('Script with experience keywords (first 500 chars): ' + t.substring(0, 500));
-      }
-    }
-  });
-  fetchLog.info('Scripts with experience keywords: ' + expScriptCount + ' of ' + scripts.length);
+  // Debug: pre-parse diagnostics
+  logPreParseDiagnostics(html, doc);
 
   // Store HTML for diagnostic access
   window.__hhLastFetchHtml = html;
@@ -90,79 +53,31 @@ export async function fetchAndParseResume(resumeUrl, listMeta) {
   };
 
   // ═══ Detect visibility from resume detail page HTML ═══
-  // Priority rules (list HIDDEN is strong — don't override it lightly):
-  //   - Page HIDDEN always wins (most reliable)
-  //   - List HIDDEN wins over Page VISIBLE (page detection can false-positive)
-  //   - Page VISIBLE wins over List UNKNOWN
-  //   - List VISIBLE wins over Page UNKNOWN
-  //   - Both UNKNOWN → UNKNOWN (resolved later in syncAllResumes)
   const pageVisResult = detectVisibilityFromResumePage(doc, html);
   const pageVis = pageVisResult.visibility;
   const pageTrace = pageVisResult.trace || [];
-  const listVis = listMeta ? listMeta.visibility : 'no-list-meta';
-  const listHidden = listMeta ? listMeta.hidden : undefined;
 
   // Build structured diagnostic entry for this resume
   const visDiagEntry = {
     id: id || 'unknown',
     title: '(will be set after parse)',
-    pageVis,
-    pageTrace,
-    listVis,
-    listHidden,
-    decision: null,
-    decisionReason: null,
+    pageVis, pageTrace,
+    listVis: listMeta ? listMeta.visibility : 'no-list-meta',
+    listHidden: listMeta ? listMeta.hidden : undefined,
+    decision: null, decisionReason: null,
     timestamp: new Date().toISOString()
   };
 
-  fetchLog.info('[VIS-DIAG] === Visibility decision for ' + (id ? id.substring(0, 8) : 'unknown') + ' ===');
-  fetchLog.info('[VIS-DIAG] Sources: page=' + pageVis + ', list=' + listVis + ', listHidden=' + listHidden);
-
-  if (pageVis === VISIBILITY_HIDDEN) {
-    // Page says HIDDEN — most reliable, always wins
-    resume.visibility = VISIBILITY_HIDDEN;
-    resume.hidden = true;
-    visDiagEntry.decision = VISIBILITY_HIDDEN;
-    visDiagEntry.decisionReason = 'page-detected-hidden';
-    fetchLog.info('[VIS-DIAG] Decision: HIDDEN (page detected)');
-  } else if (listMeta && listMeta.visibility === VISIBILITY_HIDDEN) {
-    // List says HIDDEN, page didn't detect HIDDEN → trust the list
-    resume.visibility = VISIBILITY_HIDDEN;
-    resume.hidden = true;
-    visDiagEntry.decision = VISIBILITY_HIDDEN;
-    visDiagEntry.decisionReason = 'list-detected-hidden (page=' + pageVis + ')';
-    fetchLog.info('[VIS-DIAG] Decision: HIDDEN (list detected, page=' + pageVis + ')');
-  } else if (pageVis === VISIBILITY_VISIBLE) {
-    // Page says VISIBLE, list doesn't say HIDDEN → trust page
-    resume.visibility = VISIBILITY_VISIBLE;
-    resume.hidden = false;
-    visDiagEntry.decision = VISIBILITY_VISIBLE;
-    visDiagEntry.decisionReason = 'page-detected-visible';
-    fetchLog.info('[VIS-DIAG] Decision: VISIBLE (page detected)');
-  } else if (listMeta && listMeta.visibility === VISIBILITY_VISIBLE) {
-    // List says VISIBLE, page is UNKNOWN → trust list
-    resume.visibility = VISIBILITY_VISIBLE;
-    resume.hidden = false;
-    visDiagEntry.decision = VISIBILITY_VISIBLE;
-    visDiagEntry.decisionReason = 'list-detected-visible (page=UNKNOWN)';
-    fetchLog.info('[VIS-DIAG] Decision: VISIBLE (list detected, page=UNKNOWN)');
-  } else {
-    // Both UNKNOWN — will be resolved later in syncAllResumes()
-    resume.visibility = VISIBILITY_UNKNOWN;
-    resume.hidden = false;
-    visDiagEntry.decision = VISIBILITY_UNKNOWN;
-    visDiagEntry.decisionReason = 'both-sources-unknown';
-    fetchLog.info('[VIS-DIAG] Decision: UNKNOWN (both sources unknown)');
-  }
-
-  // Store diagnostic entry on the resume object
+  // Resolve visibility from multiple sources
+  resolveVisibilityDecision(resume, pageVis, listMeta, visDiagEntry);
   resume._visDiag = visDiagEntry;
 
-  // Always carry over list title
+  // Carry over list title
   if (listMeta && listMeta.title && listMeta.title !== 'Untitled') {
     resume._listTitle = listMeta.title;
   }
 
+  // ── Parse all sections ──
   const dbg = (key, val) => {
     if (val) resume._debug.found.push(key + ': ' + (typeof val === 'string' ? '"' + val.substring(0, 60) + '"' : val));
     else resume._debug.missing.push(key);
@@ -170,10 +85,7 @@ export async function fetchAndParseResume(resumeUrl, listMeta) {
   };
 
   parseHeader(doc, dbg, resume);
-  // Clean title: remove trailing noise like "Постоянная работа" that hh.ru appends
-  if (resume.title) {
-    resume.title = resume.title.replace(TITLE_SUFFIX_NOISE, '').trim();
-  }
+  if (resume.title) resume.title = resume.title.replace(TITLE_SUFFIX_NOISE, '').trim();
   parsePersonalDataFromDoc(doc, doc.querySelector('[data-qa="resume-block-title-position"]'), dbg, resume);
   parseSkillsFromDoc(doc, dbg, resume);
   await parseExperienceFromDoc(doc, dbg, resume, html, resumeUrl);
@@ -181,24 +93,15 @@ export async function fetchAndParseResume(resumeUrl, listMeta) {
   parseLanguagesAndAbout(doc, dbg, resume);
 
   // Update visDiag title now that we have the parsed title
-  if (resume._visDiag) {
-    resume._visDiag.title = resume.title || '(no title)';
-  }
+  if (resume._visDiag) resume._visDiag.title = resume.title || '(no title)';
 
   fetchLog.info('Parsed: ' + resume.title + ' | Skills: ' + resume.skills.length +
     ' | Exp: ' + resume.experience.length + ' | Edu: ' + resume.education.length);
   return resume;
 }
 
-// ── Section parsers ──
+// ── Section parsers (small enough to stay in this file) ──
 
-/**
- * Parse resume header (title + salary) from the document.
- * Modifies `resume` object in-place.
- * @param {Document} doc - Parsed document
- * @param {Function} dbg - Debug logger callback
- * @param {object} resume - Resume object to populate
- */
 function parseHeader(doc, dbg, resume) {
   const titleEl = doc.querySelector('[data-qa="resume-block-title-position"]');
   if (titleEl) resume.title = dbg('resumeTitle (data-qa)', safeGetText(titleEl));
@@ -210,17 +113,6 @@ function parseHeader(doc, dbg, resume) {
   if (salaryEl) resume.salary = dbg('resumeSalary (data-qa)', safeGetText(salaryEl));
 }
 
-/**
- * Parse skills section from the resume document.
- * Extracts skill levels (hh.ru codes: 3=Продвинутый, 2=Средний, 1=Начальный)
- * and individual skill tags. Uses .bloko-tag__text as fallback for tags
- * (this legacy class is still stable in Magritte for skill tags).
- *
- * Modifies `resume` object in-place.
- * @param {Document} doc - Parsed document
- * @param {Function} dbg - Debug logger callback
- * @param {object} resume - Resume object to populate
- */
 function parseSkillsFromDoc(doc, dbg, resume) {
   const skillsCard = doc.querySelector('[data-qa="skills-card"]');
   if (!skillsCard) {
@@ -250,297 +142,62 @@ function parseSkillsFromDoc(doc, dbg, resume) {
   }
 }
 
-// ── Experience orchestrator (Strategies 1-6) ──
-
 /**
- * Orchestrate experience parsing using all 6 strategies in sequence.
- * Each strategy can supplement or replace entries found by previous strategies.
- *
- * Strategy 1-3: DOM-based (company-cards, stepper supplement, stepper fallback)
- * Strategy 4: Raw HTML text pattern search for date ranges
- * Strategy 5: Magritte script/hydration JSON parsing
- * Strategy 6: Fetch expanded experience via iframe/API/AJAX
- *
- * Only replaces entries if a later strategy finds MORE entries.
- * Modifies `resume` object in-place.
- *
- * @param {Document} doc - Parsed document
- * @param {Function} dbg - Debug logger callback
- * @param {object} resume - Resume object to populate
- * @param {string} html - Raw HTML string
- * @param {string} resumeUrl - Resume page URL (for Strategy 6)
+ * Log pre-parse diagnostic info (experience cards, date ranges, scripts).
  */
-async function parseExperienceFromDoc(doc, dbg, resume, html, resumeUrl) {
-  // Strategies 1-3: DOM-based parsing
-  const entries = parseExperienceFromDocStrategies1to3(doc, resume);
+function logPreParseDiagnostics(html, doc) {
+  const preExpCards = doc.querySelectorAll('[data-qa="profile-experience-company-card"]');
+  const preStepperItems = doc.querySelectorAll('[data-qa="magritte-stepper-step-content"]');
+  const preShowAll = html.match(/Показать все|показать ещё|Посмотреть всё|Развернуть/gi);
+  fetchLog.info('Pre-parse: ' + preExpCards.length + ' company-cards, ' +
+    preStepperItems.length + ' stepper-items, ' +
+    (preShowAll ? preShowAll.length : 0) + ' "show all" buttons in HTML');
 
-  // Strategy 4: Parse experience from raw HTML text patterns
-  if (html && entries.length > 0) {
-    const textParsed = parseExperienceFromHtmlText(html, entries.length);
-    if (textParsed.length > entries.length) {
-      fetchLog.info('Strategy 4 (text patterns): found ' + textParsed.length + ' experiences (was ' + entries.length + ')');
-      resume._debug.found.push('experience (text pattern supplement): ' + textParsed.length);
-      entries.length = 0;
-      entries.push(...textParsed);
-    }
+  const expCardHtml = doc.querySelector('[data-qa="resume-list-card-experience"]');
+  if (expCardHtml) {
+    fetchLog.info('ExpCard HTML snippet (first 2000 chars): ' + expCardHtml.outerHTML.substring(0, 2000));
   }
 
-  // Strategy 5: Parse experience from Magritte <script> hydration JSON
-  if (html) {
-    const scriptParsed = parseExperienceFromScripts(doc, html);
-    if (scriptParsed.length > entries.length) {
-      fetchLog.info('Strategy 5 (script JSON): found ' + scriptParsed.length + ' experiences (was ' + entries.length + ')');
-      resume._debug.found.push('experience (script JSON): ' + scriptParsed.length);
-      entries.length = 0;
-      entries.push(...scriptParsed);
-    } else if (scriptParsed.length > 0) {
-      fetchLog.info('Strategy 5 (script JSON): found ' + scriptParsed.length + ' experiences (not more than ' + entries.length + ', skipping)');
-    }
-  }
+  const MONTHS_RE = /(?:январ[ьея]|феврал[ьья]|март[ае]?|апрел[ьья]|ма[йия]|июн[ьья]|июл[ьья]|август[ае]?|сентябр[ьья]|октябр[ьья]|ноябр[ьья]|декабр[ьья])\s*\d{4}\s*[—\-–]\s*(?:(?:январ[ьея]|феврал[ьья]|март[ае]?|апрел[ьья]|ма[йия]|июн[ьья]|июл[ьья]|август[ае]?|сентябр[ьья]|октябр[ьья]|ноябр[ьья]|декабр[ьья])\s*\d{4}|настоящее\s*время|по\s+настоящее\s+время|сейчас|по\s+сейчас)/gi;
+  const allDateRanges = html.match(MONTHS_RE) || [];
+  fetchLog.info('Full HTML date ranges: ' + allDateRanges.length + ' found: ' + JSON.stringify(allDateRanges));
 
-  // Strategy 6: Fetch expanded experience via AJAX/API endpoints
-  // ALSO returns iframe-based visibility detection (most reliable — from hydrated DOM)
-  let iframeVis = null;
-  let iframeVisTrace = null;
-  let iframeDiag = null;
-  if (html && entries.length > 0 && entries.length < 20) {
-    try {
-      const s6result = await fetchExpandedExperience(doc, html, resume.id, entries.length, resumeUrl);
-      // Always capture iframe visibility even if entries didn't increase
-      if (s6result.iframeVis) {
-        iframeVis = s6result.iframeVis;
-        iframeVisTrace = s6result.iframeVisTrace;
-        iframeDiag = s6result.iframeDiag || null;
-      }
-      if (s6result.entries && s6result.entries.length > entries.length) {
-        fetchLog.info('Strategy 6 (expanded fetch): found ' + s6result.entries.length + ' experiences (was ' + entries.length + ')');
-        resume._debug.found.push('experience (expanded fetch): ' + s6result.entries.length);
-        entries.length = 0;
-        entries.push(...s6result.entries);
-      }
-    } catch (err) {
-      fetchLog.warn('Strategy 6 failed: ' + err.message);
-    }
-  }
+  const numDateRanges = html.match(/\d{2}\.\d{4}\s*[—\-–]\s*(?:\d{2}\.\d{4}|настоящее\s*время|по\s+настоящее\s*время|сейчас|по\s+сейчас)/gi) || [];
+  fetchLog.info('Numeric date ranges: ' + numDateRanges.length + ' found: ' + JSON.stringify(numDateRanges));
 
-  resume.experience = entries;
-  if (entries.length > 0) resume._debug.found.push('experience: ' + entries.length);
-  else resume._debug.missing.push('experience (0 entries)');
-
-  // ═══ IFRAME VISIBILITY OVERRIDE ═══
-  // The iframe loaded the fully-hydrated React DOM, which contains visibility
-  // indicators ("Многие не видят", "Сделать видимым") that SSR HTML lacks.
-  // iframeVis is the MOST RELIABLE source — override earlier decisions.
-  if (iframeVis) {
-    const prevVis = resume.visibility;
-    const prevReason = resume._visDiag?.decisionReason || '';
-    if (iframeVis === VISIBILITY_HIDDEN && prevVis !== VISIBILITY_HIDDEN) {
-      fetchLog.info('[VIS-DIAG] iframe OVERRIDE: ' + (resume.id ? resume.id.substring(0, 8) : '?') +
-        ' was ' + prevVis + ', iframe says HIDDEN → overriding');
-      resume.visibility = VISIBILITY_HIDDEN;
-      resume.hidden = true;
-      if (resume._visDiag) {
-        resume._visDiag.decision = VISIBILITY_HIDDEN;
-        resume._visDiag.decisionReason = 'iframe-detected-hidden (overrode ' + prevVis + ', was: ' + prevReason + ')';
-        resume._visDiag.pageTrace = (resume._visDiag.pageTrace || []).concat(iframeVisTrace || []);
-      }
-    } else if (iframeVis === VISIBILITY_VISIBLE && prevVis === VISIBILITY_UNKNOWN) {
-      fetchLog.info('[VIS-DIAG] iframe OVERRIDE: ' + (resume.id ? resume.id.substring(0, 8) : '?') +
-        ' was UNKNOWN, iframe says VISIBLE → overriding');
-      resume.visibility = VISIBILITY_VISIBLE;
-      resume.hidden = false;
-      if (resume._visDiag) {
-        resume._visDiag.decision = VISIBILITY_VISIBLE;
-        resume._visDiag.decisionReason = 'iframe-detected-visible (overrode UNKNOWN, was: ' + prevReason + ')';
-        resume._visDiag.pageTrace = (resume._visDiag.pageTrace || []).concat(iframeVisTrace || []);
-      }
-    } else {
-      fetchLog.info('[VIS-DIAG] iframe CONFIRMED: ' + (resume.id ? resume.id.substring(0, 8) : '?') +
-        ' is ' + prevVis + ', iframe agrees (' + iframeVis + ')');
-      // Add iframe trace to diagnostic for completeness
-      if (resume._visDiag && iframeVisTrace) {
-        resume._visDiag.pageTrace = (resume._visDiag.pageTrace || []).concat(iframeVisTrace);
-      }
+  const scripts = doc.querySelectorAll('script:not([src])');
+  let expScriptCount = 0;
+  scripts.forEach(s => {
+    const t = s.textContent || '';
+    if (/experience|работ[аеы]|компани|должност|career/i.test(t)) {
+      expScriptCount++;
+      if (expScriptCount <= 3) fetchLog.info('Script with experience keywords (first 500 chars): ' + t.substring(0, 500));
     }
-    // Mark that iframe was executed (used by final fallback logic)
-    if (resume._visDiag) {
-      resume._visDiag.iframeRan = true;
-      resume._visDiag.iframeVis = iframeVis;
-      // Store iframe diagnostic data (body text, data-qa list, actions)
-      if (iframeDiag) {
-        resume._visDiag.iframeDiag = iframeDiag;
-      }
-    }
-  }
+  });
+  fetchLog.info('Scripts with experience keywords: ' + expScriptCount + ' of ' + scripts.length);
 }
 
-// ═══════════════════════════════════════════════
-// VISIBILITY DETECTION FROM RESUME DETAIL PAGE
-// ═══════════════════════════════════════════════
+/** Resolve visibility decision from multiple sources. */
+function resolveVisibilityDecision(resume, pageVis, listMeta, visDiagEntry) {
+  const listVis = listMeta ? listMeta.visibility : 'no-list-meta';
+  fetchLog.info('[VIS-DIAG] === Visibility decision for ' + (resume.id ? resume.id.substring(0, 8) : 'unknown') + ' ===');
+  fetchLog.info('[VIS-DIAG] Sources: page=' + pageVis + ', list=' + listVis);
 
-/**
- * Detect visibility status from the resume detail page HTML.
- * This is MORE RELIABLE than the list page because hh.ru includes
- * visibility indicators in the resume detail SSR HTML.
- *
- * Strategies:
- * 1. data-qa attributes (e.g. data-qa="resume-make-visible")
- * 2. Text indicators in the page body (Многие не видят, Сделать видимым)
- * 3. Script/hydration JSON (hidden: true)
- * 4. Specific button text (Скрыть резюме = visible, Сделать видимым = hidden)
- *
- * @param {Document} doc - Parsed document from DOMParser
- * @param {string} html - Raw HTML string
- * @returns {string} VISIBILITY_VISIBLE, VISIBILITY_HIDDEN, or VISIBILITY_UNKNOWN
- */
-function detectVisibilityFromResumePage(doc, html) {
-  const diag = []; // diagnostic trace — every step logged
-
-  // ═══ Strategy 0: Check resume-visibility-card (PRIMARY for Magritte) ═══
-  // data-qa="resume-visibility-card" contains either "не видно никому" or "видно всем"
-  const visCard = doc.querySelector('[data-qa="resume-visibility-card"]');
-  if (visCard) {
-    const cardText = normalizeWs(visCard.textContent || '').toLowerCase();
-    if (cardText.includes('не видно никому') || cardText.includes('не\u00A0видно никому')) {
-      diag.push('S0:visibility-card="не видно никому" → HIDDEN');
-      fetchLog.info('[VIS-DIAG] ' + diag.join(' | '));
-      return { visibility: VISIBILITY_HIDDEN, trace: diag };
-    }
-    if (cardText.includes('видно всем') || cardText.includes('видно\u00A0всем')) {
-      diag.push('S0:visibility-card="видно всем" → VISIBLE');
-      fetchLog.info('[VIS-DIAG] ' + diag.join(' | '));
-      return { visibility: VISIBILITY_VISIBLE, trace: diag };
-    }
-    diag.push('S0:visibility-card-unknown="' + cardText.substring(0, 40) + '"');
+  if (pageVis === VISIBILITY_HIDDEN) {
+    resume.visibility = VISIBILITY_HIDDEN; resume.hidden = true;
+    visDiagEntry.decision = VISIBILITY_HIDDEN; visDiagEntry.decisionReason = 'page-detected-hidden';
+  } else if (listMeta && listMeta.visibility === VISIBILITY_HIDDEN) {
+    resume.visibility = VISIBILITY_HIDDEN; resume.hidden = true;
+    visDiagEntry.decision = VISIBILITY_HIDDEN; visDiagEntry.decisionReason = 'list-detected-hidden (page=' + pageVis + ')';
+  } else if (pageVis === VISIBILITY_VISIBLE) {
+    resume.visibility = VISIBILITY_VISIBLE; resume.hidden = false;
+    visDiagEntry.decision = VISIBILITY_VISIBLE; visDiagEntry.decisionReason = 'page-detected-visible';
+  } else if (listMeta && listMeta.visibility === VISIBILITY_VISIBLE) {
+    resume.visibility = VISIBILITY_VISIBLE; resume.hidden = false;
+    visDiagEntry.decision = VISIBILITY_VISIBLE; visDiagEntry.decisionReason = 'list-detected-visible (page=UNKNOWN)';
   } else {
-    diag.push('S0:no-visibility-card');
+    resume.visibility = VISIBILITY_UNKNOWN; resume.hidden = false;
+    visDiagEntry.decision = VISIBILITY_UNKNOWN; visDiagEntry.decisionReason = 'both-sources-unknown';
   }
-
-  // ═══ Strategy 1: Check for hidden-specific data-qa attributes ═══
-  for (const sel of VISIBILITY_HIDDEN_DATA_QA) {
-    const found = doc.querySelector(sel);
-    if (found) {
-      diag.push('S1:data-qa=' + sel + ' → HIDDEN');
-      fetchLog.info('[VIS-DIAG] ' + diag.join(' | '));
-      return { visibility: VISIBILITY_HIDDEN, trace: diag };
-    }
-  }
-  diag.push('S1:no-data-qa-hidden');
-
-  // ═══ Strategy 2: Check for "Сделать видимым" / "Скрыть резюме" buttons ═══
-  const allButtons = doc.querySelectorAll('button, a');
-  let btnDetails = [];
-  for (const btn of allButtons) {
-    const text = normalizeWs((btn.textContent || '')).toLowerCase();
-    const qa = (btn.getAttribute('data-qa') || '').toLowerCase();
-    // Collect all buttons with "скрыть" or "видим" for diagnostic
-    if (text.includes('скрыть') || text.includes('видим')) {
-      btnDetails.push('"' + text.substring(0, 40) + '"' + (qa ? '[qa=' + qa + ']' : ''));
-    }
-    if (text.includes('сделать видимым')) {
-      diag.push('S2:btn="сделать видимым" → HIDDEN');
-      fetchLog.info('[VIS-DIAG] ' + diag.join(' | '));
-      fetchLog.info('[VIS-DIAG] All vis-related buttons: ' + JSON.stringify(btnDetails));
-      return { visibility: VISIBILITY_HIDDEN, trace: diag, btnDetails };
-    }
-    if (text.includes('скрыть резюме')) {
-      diag.push('S2:btn="скрыть резюме" → VISIBLE');
-      fetchLog.info('[VIS-DIAG] ' + diag.join(' | '));
-      fetchLog.info('[VIS-DIAG] All vis-related buttons: ' + JSON.stringify(btnDetails));
-      return { visibility: VISIBILITY_VISIBLE, trace: diag, btnDetails };
-    }
-  }
-  diag.push('S2:no-key-buttons' + (btnDetails.length ? '(saw:' + btnDetails.length + ' partial)' : ''));
-
-  // ═══ Strategy 3: Check page body text for hidden/visible indicators ═══
-  const bodyText = doc.body ? normalizeWs(doc.body.textContent || '') : '';
-  if (hasHiddenIndicator(bodyText)) {
-    // Find which indicator and where
-    const lower = bodyText.toLowerCase();
-    for (const ind of ['многие не видят', 'сделать видимым', 'не видно']) {
-      const pos = lower.indexOf(ind);
-      if (pos !== -1) {
-        diag.push('S3:body has "' + ind + '" @' + pos + ' → HIDDEN');
-        break;
-      }
-    }
-    fetchLog.info('[VIS-DIAG] ' + diag.join(' | '));
-    return { visibility: VISIBILITY_HIDDEN, trace: diag };
-  }
-  if (hasVisibleIndicator(bodyText)) {
-    diag.push('S3:body has visible indicator → VISIBLE');
-    fetchLog.info('[VIS-DIAG] ' + diag.join(' | '));
-    return { visibility: VISIBILITY_VISIBLE, trace: diag };
-  }
-  diag.push('S3:body-no-indicators');
-
-  // ═══ Strategy 4: Check raw HTML for hidden/visible indicators (with &nbsp; normalization) ═══
-  const htmlForSearch = html.replace(/&nbsp;/g, ' ').toLowerCase();
-  const htmlNorm = normalizeWs(htmlForSearch);
-  if (hasHiddenIndicator(htmlNorm)) {
-    const lower = htmlNorm.toLowerCase();
-    for (const ind of ['многие не видят', 'сделать видимым', 'не видно']) {
-      const pos = lower.indexOf(ind);
-      if (pos !== -1) {
-        diag.push('S4:html has "' + ind + '" @' + pos + ' → HIDDEN');
-        break;
-      }
-    }
-    fetchLog.info('[VIS-DIAG] ' + diag.join(' | '));
-    return { visibility: VISIBILITY_HIDDEN, trace: diag };
-  }
-  if (hasVisibleIndicator(htmlNorm)) {
-    diag.push('S4:html has visible indicator → VISIBLE');
-    fetchLog.info('[VIS-DIAG] ' + diag.join(' | '));
-    return { visibility: VISIBILITY_VISIBLE, trace: diag };
-  }
-  diag.push('S4:html-no-indicators');
-
-  // ═══ Strategy 5: Check script/hydration JSON for hidden status ═══
-  const scriptEls = doc.querySelectorAll('script:not([src])');
-  let scriptPatterns = [];
-  for (const script of scriptEls) {
-    const t = script.textContent || '';
-    if (t.length < 50) continue;
-    // Collect all visibility-related patterns found in scripts
-    const patterns = [
-      { re: /"hidden"\s*:\s*true/, name: '"hidden":true' },
-      { re: /"isHidden"\s*:\s*true/, name: '"isHidden":true' },
-      { re: /"visibility"\s*:\s*"hidden"/, name: '"visibility":"hidden"' },
-      { re: /"status"\s*:\s*"hidden"/, name: '"status":"hidden"' },
-    ];
-    for (const p of patterns) {
-      if (p.re.test(t)) {
-        scriptPatterns.push(p.name);
-      }
-    }
-  }
-  if (scriptPatterns.length > 0) {
-    diag.push('S5:script=' + scriptPatterns.join(',') + ' → HIDDEN');
-    fetchLog.info('[VIS-DIAG] ' + diag.join(' | '));
-    return { visibility: VISIBILITY_HIDDEN, trace: diag, scriptPatterns };
-  }
-  diag.push('S5:no-script-patterns');
-
-  // ═══ Strategy 6: If we find a "Скрыть" action link/button specific to this resume ═══
-  const hideLink = doc.querySelector('[data-qa="resume-action-hide"], [data-qa*="resume-hide"], a[data-qa*="hide-resume"]');
-  if (hideLink) {
-    const hideQa = hideLink.getAttribute('data-qa') || '';
-    diag.push('S6:hide-link qa=' + hideQa + ' → VISIBLE');
-    fetchLog.info('[VIS-DIAG] ' + diag.join(' | '));
-    return { visibility: VISIBILITY_VISIBLE, trace: diag };
-  }
-  diag.push('S6:no-hide-link');
-
-  // ═══ Also check: any "скрыть" buttons with data-qa containing "hide" ═══
-  // Dump all buttons with "скрыть" for diagnostic
-  const allHideBtns = doc.querySelectorAll('[data-qa*="hide"], [data-qa*="hidden"]');
-  if (allHideBtns.length > 0) {
-    const hideQas = Array.from(allHideBtns).map(b => b.getAttribute('data-qa')).filter(Boolean);
-    diag.push('EXTRA:hide-qa=' + hideQas.join(','));
-  }
-
-  diag.push('→ UNKNOWN');
-  fetchLog.info('[VIS-DIAG] ' + diag.join(' | '));
-  return { visibility: VISIBILITY_UNKNOWN, trace: diag };
+  fetchLog.info('[VIS-DIAG] Decision: ' + visDiagEntry.decision + ' (' + visDiagEntry.decisionReason + ')');
 }

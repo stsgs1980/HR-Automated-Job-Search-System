@@ -10,6 +10,17 @@
   };
 
   // src/lib/anti-hallucination.js
+  var anti_hallucination_exports = {};
+  __export(anti_hallucination_exports, {
+    createLogger: () => createLogger,
+    extractVacancyId: () => extractVacancyId,
+    safeClick: () => safeClick,
+    safeGetAttr: () => safeGetAttr,
+    safeGetText: () => safeGetText,
+    safeInput: () => safeInput,
+    validateVacancyData: () => validateVacancyData,
+    waitForElement: () => waitForElement
+  });
   function safeGetText(el, fallback) {
     fallback = fallback || "";
     if (!el || !(el instanceof Element)) return fallback;
@@ -144,13 +155,17 @@
     await chrome.storage.local.set({ stats });
     return { allowed: true, remaining: settings.dailyLimit - stats.appliedToday };
   }
-  async function isAlreadyApplied(id) {
+  async function getAppliedVacancies() {
     try {
       const d = await chrome.storage.local.get("appliedVacancies");
-      return (d.appliedVacancies || []).includes(id);
+      return d.appliedVacancies || [];
     } catch (e) {
-      return false;
+      return [];
     }
+  }
+  async function isAlreadyApplied(id) {
+    const appliedIds = await getAppliedVacancies();
+    return appliedIds.includes(id);
   }
   async function markAsApplied(id) {
     try {
@@ -182,6 +197,9 @@
     }
     await chrome.storage.local.set({ myResumes: resumes });
     return resumes;
+  }
+  async function saveMyResumes(resumes) {
+    await chrome.storage.local.set({ myResumes: resumes });
   }
   async function clearMyResumes() {
     await chrome.storage.local.set({ myResumes: [] });
@@ -800,8 +818,7 @@
     const vacancies = [];
     let appliedIds = [], blacklisted = [];
     try {
-      const d1 = await chrome.storage.local.get("appliedVacancies");
-      appliedIds = d1.appliedVacancies || [];
+      appliedIds = await getAppliedVacancies();
       blacklisted = await getBlacklistedCompanies();
     } catch (e) {
     }
@@ -911,74 +928,6 @@
   });
 
   // src/parsers/resume-detail/parse-resume-sections.js
-  function parsePersonalData(titleEl, dbg, resume) {
-    const personalText = [];
-    const nameEl = document.querySelector('[data-qa="resume-personal-name"]');
-    if (nameEl) {
-      const nameText = (nameEl.textContent || "").trim();
-      if (nameText && nameText.length > 1 && nameText.length < 100) {
-        resume.name = dbg("resumeName (data-qa)", nameText);
-      }
-    }
-    if (!resume.name) {
-      const posCard2 = document.querySelector('[data-qa="resume-position-card"]');
-      if (posCard2) {
-        const candidates = posCard2.querySelectorAll("span, div, p, h1, h2, h3");
-        for (const el of candidates) {
-          const t = (el.textContent || "").trim();
-          if (t && t.length > 2 && t.length < 80 && t !== resume.title && t !== resume.salary && /^[А-ЯЁ][а-яё]+ [А-ЯЁ]/.test(t) && !/\d/.test(t)) {
-            resume.name = dbg("resumeName (fallback)", t);
-            break;
-          }
-        }
-      }
-    }
-    const posCard = document.querySelector('[data-qa="resume-position-card"]');
-    if (posCard) {
-      posCard.querySelectorAll("span, div, p, a").forEach((el) => {
-        const t = (el.textContent || "").trim();
-        if (t && t.length > 0 && t.length < 200) personalText.push(t);
-      });
-    }
-    const titleContainer = titleEl ? titleEl.closest("div[data-qa], section") || titleEl.parentElement : null;
-    if (titleContainer) {
-      titleContainer.querySelectorAll("span, div, p, a").forEach((el) => {
-        if (el === titleEl || titleEl.contains(el)) return;
-        const t = (el.textContent || "").trim();
-        if (t && t.length > 0 && t.length < 200 && !personalText.includes(t)) personalText.push(t);
-      });
-    }
-    const genderPatterns = [/\bмужчина\b/i, /\bженщина\b/i, /\bмужской\b/i, /\bженский\b/i, /\bmale\b/i, /\bfemale\b/i];
-    const agePattern = /(?:полных\s*)?(\d{2})\s*(?:лет|год|года)/i;
-    const agePattern2 = /(\d{2})\s*years?\s*old/i;
-    for (const t of personalText) {
-      if (!resume.gender) {
-        for (const gp of genderPatterns) {
-          const m = t.match(gp);
-          if (m) {
-            resume.gender = dbg("resumeGender", m[0]);
-            break;
-          }
-        }
-      }
-      if (!resume.age) {
-        const m = t.match(agePattern) || t.match(agePattern2);
-        if (m) {
-          resume.age = dbg("resumeAge", m[1] + " \u043B\u0435\u0442");
-        }
-      }
-      if (!resume.address && t.length > 3) {
-        const isGender = genderPatterns.some((p) => p.test(t));
-        const isAge = agePattern.test(t) || agePattern2.test(t);
-        const isName = resume.name && t === resume.name;
-        if (!isGender && !isAge && !isName && !t.includes("\u0440\u0443\u0431") && !t.includes("USD") && !t.includes("\u0437/\u043F") && !t.includes("\u0443\u0440\u043E\u0432\u0435\u043D\u044C") && !t.includes("\u0434\u043E\u0445\u043E\u0434") && t !== resume.salary && t !== resume.title) {
-          if (/[А-Яа-яЁё]{2,}/.test(t) && t.length < 80) {
-            resume.address = dbg("resumeAddress", t);
-          }
-        }
-      }
-    }
-  }
   function parseSkills(dbg, resume) {
     const skillsCard = document.querySelector('[data-qa="skills-card"]');
     if (skillsCard) {
@@ -1060,12 +1009,8 @@
           const parentCellLeft = parent.querySelector('[data-qa="cell-left-side"]');
           if (parentCellLeft && parentCellLeft !== cellLeft) {
             const parentTexts = parentCellLeft.querySelectorAll('[data-qa="cell-text-content"]');
-            if (parentTexts.length >= 1 && !job.company) {
-              job.company = (parentTexts[0].textContent || "").trim();
-            }
-            if (parentTexts.length >= 2 && !job.duration) {
-              job.duration = (parentTexts[1].textContent || "").trim();
-            }
+            if (parentTexts.length >= 1 && !job.company) job.company = (parentTexts[0].textContent || "").trim();
+            if (parentTexts.length >= 2 && !job.duration) job.duration = (parentTexts[1].textContent || "").trim();
           }
         }
         if (job.position || job.company) expEntries.push(job);
@@ -1108,6 +1053,84 @@
       }
     }
   }
+  var resumeLog;
+  var init_parse_resume_sections = __esm({
+    "src/parsers/resume-detail/parse-resume-sections.js"() {
+      init_anti_hallucination();
+      init_parse_company_card();
+      resumeLog = createLogger("Resume");
+    }
+  });
+
+  // src/parsers/resume-detail/parse-resume-personal.js
+  function parsePersonalData(titleEl, dbg, resume) {
+    const personalText = [];
+    const nameEl = document.querySelector('[data-qa="resume-personal-name"]');
+    if (nameEl) {
+      const nameText = (nameEl.textContent || "").trim();
+      if (nameText && nameText.length > 1 && nameText.length < 100) {
+        resume.name = dbg("resumeName (data-qa)", nameText);
+      }
+    }
+    if (!resume.name) {
+      const posCard2 = document.querySelector('[data-qa="resume-position-card"]');
+      if (posCard2) {
+        const candidates = posCard2.querySelectorAll("span, div, p, h1, h2, h3");
+        for (const el of candidates) {
+          const t = (el.textContent || "").trim();
+          if (t && t.length > 2 && t.length < 80 && t !== resume.title && t !== resume.salary && /^[А-ЯЁ][а-яё]+ [А-ЯЁ]/.test(t) && !/\d/.test(t)) {
+            resume.name = dbg("resumeName (fallback)", t);
+            break;
+          }
+        }
+      }
+    }
+    const posCard = document.querySelector('[data-qa="resume-position-card"]');
+    if (posCard) {
+      posCard.querySelectorAll("span, div, p, a").forEach((el) => {
+        const t = (el.textContent || "").trim();
+        if (t && t.length > 0 && t.length < 200) personalText.push(t);
+      });
+    }
+    const titleContainer = titleEl ? titleEl.closest("div[data-qa], section") || titleEl.parentElement : null;
+    if (titleContainer) {
+      titleContainer.querySelectorAll("span, div, p, a").forEach((el) => {
+        if (el === titleEl || titleEl.contains(el)) return;
+        const t = (el.textContent || "").trim();
+        if (t && t.length > 0 && t.length < 200 && !personalText.includes(t)) personalText.push(t);
+      });
+    }
+    const genderPatterns = [/\bмужчина\b/i, /\bженщина\b/i, /\bмужской\b/i, /\bженский\b/i, /\bmale\b/i, /\bfemale\b/i];
+    const agePattern = /(?:полных\s*)?(\d{2})\s*(?:лет|год|года)/i;
+    const agePattern2 = /(\d{2})\s*years?\s*old/i;
+    for (const t of personalText) {
+      if (!resume.gender) {
+        for (const gp of genderPatterns) {
+          const m = t.match(gp);
+          if (m) {
+            resume.gender = dbg("resumeGender", m[0]);
+            break;
+          }
+        }
+      }
+      if (!resume.age) {
+        const m = t.match(agePattern) || t.match(agePattern2);
+        if (m) {
+          resume.age = dbg("resumeAge", m[1] + " \u043B\u0435\u0442");
+        }
+      }
+      if (!resume.address && t.length > 3) {
+        const isGender = genderPatterns.some((p) => p.test(t));
+        const isAge = agePattern.test(t) || agePattern2.test(t);
+        const isName = resume.name && t === resume.name;
+        if (!isGender && !isAge && !isName && !t.includes("\u0440\u0443\u0431") && !t.includes("USD") && !t.includes("\u0437/\u043F") && !t.includes("\u0443\u0440\u043E\u0432\u0435\u043D\u044C") && !t.includes("\u0434\u043E\u0445\u043E\u0434") && t !== resume.salary && t !== resume.title) {
+          if (/[А-Яа-яЁё]{2,}/.test(t) && t.length < 80) {
+            resume.address = dbg("resumeAddress", t);
+          }
+        }
+      }
+    }
+  }
   function parseSalaryConditions(dbg, resume) {
     const posCard = document.querySelector('[data-qa="resume-position-card"]');
     if (!posCard) {
@@ -1120,29 +1143,10 @@
       const t = (el.textContent || "").trim();
       if (t && t.length > 2 && t.length < 100) texts.push(t);
     });
-    const empPatterns = [
-      /\b(Полная занятость)\b/i,
-      /\b(Частичная занятость)\b/i,
-      /\b(Проектная работа)\b/i,
-      /\b(Стажировка)\b/i
-    ];
-    const fmtPatterns = [
-      /\b(Удал[а-яё]+ работа)\b/i,
-      /\b(Офис)\b/i,
-      /\b(Гибрид)\b/i,
-      /\b(Смешанный формат)\b/i
-    ];
-    const schedPatterns = [
-      /\b(Гибкий график)\b/i,
-      /\b(Полный день)\b/i,
-      /\b(Сменный график)\b/i,
-      /\b(Вахтовый метод)\b/i
-    ];
-    const relocPatterns = [
-      /\b(Не готов к переезду)\b/i,
-      /\b(Готов к переезду)\b/i,
-      /\b(Хочу переехать)\b/i
-    ];
+    const empPatterns = [/\b(Полная занятость)\b/i, /\b(Частичная занятость)\b/i, /\b(Проектная работа)\b/i, /\b(Стажировка)\b/i];
+    const fmtPatterns = [/\b(Удал[а-яё]+ работа)\b/i, /\b(Офис)\b/i, /\b(Гибрид)\b/i, /\b(Смешанный формат)\b/i];
+    const schedPatterns = [/\b(Гибкий график)\b/i, /\b(Полный день)\b/i, /\b(Сменный график)\b/i, /\b(Вахтовый метод)\b/i];
+    const relocPatterns = [/\b(Не готов к переезду)\b/i, /\b(Готов к переезду)\b/i, /\b(Хочу переехать)\b/i];
     for (const t of texts) {
       if (!resume.employmentType) {
         for (const p of empPatterns) {
@@ -1186,16 +1190,12 @@
     const phoneEl = document.querySelector('[data-qa="resume-contact-phone"] a, [data-qa="resume-contact-phone"]');
     if (phoneEl) {
       const t = (phoneEl.textContent || "").trim();
-      if (t && /[\d+\-()]/.test(t)) {
-        resume.phone = dbg("phone", t);
-      }
+      if (t && /[\d+\-()]/.test(t)) resume.phone = dbg("phone", t);
     }
     const emailEl = document.querySelector('[data-qa="resume-contact-email"] a, [data-qa="resume-contact-email"]');
     if (emailEl) {
       const t = (emailEl.textContent || "").trim();
-      if (t && t.includes("@")) {
-        resume.email = dbg("email", t);
-      }
+      if (t && t.includes("@")) resume.email = dbg("email", t);
     }
     const contactBlock = document.querySelector('[data-qa="resume-contacts-block"], [data-qa="resume-block-contacts"]');
     if (contactBlock) {
@@ -1215,12 +1215,11 @@
       }
     }
   }
-  var resumeLog;
-  var init_parse_resume_sections = __esm({
-    "src/parsers/resume-detail/parse-resume-sections.js"() {
+  var resumeLog2;
+  var init_parse_resume_personal = __esm({
+    "src/parsers/resume-detail/parse-resume-personal.js"() {
       init_anti_hallucination();
-      init_parse_company_card();
-      resumeLog = createLogger("Resume");
+      resumeLog2 = createLogger("Resume");
     }
   });
 
@@ -1235,7 +1234,7 @@
     const eduEntries = [];
     const eduUiTexts = /^(посмотреть всё|редактировать|образование|доп\.? образование|высшее|среднее|среднее специальное|добавить|добавить образование|среднее профессиональное)$/i;
     const eduCells = eduCard.querySelectorAll('[data-qa="cell-left-side"]');
-    resumeLog2.info("Education: found " + eduCells.length + " cell-left-side elements");
+    resumeLog3.info("Education: found " + eduCells.length + " cell-left-side elements");
     eduCells.forEach((cell) => {
       const edu = {};
       const cellTexts = cell.querySelectorAll('[data-qa="cell-text-content"]');
@@ -1258,7 +1257,7 @@
       }
     });
     if (eduEntries.length === 0) {
-      resumeLog2.info("Education: fallback to direct children of eduCard");
+      resumeLog3.info("Education: fallback to direct children of eduCard");
       Array.from(eduCard.children).forEach((child) => {
         const edu = {};
         const linkEl = child.querySelector("a");
@@ -1290,7 +1289,7 @@
       });
     }
     if (eduEntries.length === 0) {
-      resumeLog2.info("Education: fallback to full text scan");
+      resumeLog3.info("Education: fallback to full text scan");
       const fullText = (eduCard.textContent || "").trim();
       const lines = fullText.split(/[\n\r]+/).map((l) => l.trim()).filter((l) => l.length > 3);
       for (const line of lines) {
@@ -1310,15 +1309,15 @@
       resume._debug.missing.push("education (0 entries extracted)");
     }
   }
-  var resumeLog2;
+  var resumeLog3;
   var init_parse_resume_education = __esm({
     "src/parsers/resume-detail/parse-resume-education.js"() {
       init_anti_hallucination();
-      resumeLog2 = createLogger("Resume");
+      resumeLog3 = createLogger("Resume");
     }
   });
 
-  // src/lib/resume-constants.js
+  // src/lib/resume-constants-core.js
   function normalizeWs(text) {
     if (!text) return "";
     return text.replace(/[\s\u00A0\u2000-\u200A\u202F\u205F\u3000]+/g, " ").trim();
@@ -1333,49 +1332,6 @@
     const lower = normalizeWs(text).toLowerCase();
     return HIDDEN_INDICATORS.some((ind) => lower.includes(ind));
   }
-  function cleanResumeTitle(rawText, fallback) {
-    fallback = fallback || "Untitled";
-    if (!rawText) return fallback;
-    let text = normalizeWs(rawText);
-    for (const pattern of LINE_BREAK_INJECTORS) {
-      pattern.lastIndex = 0;
-      text = text.replace(pattern, "\n$&");
-    }
-    const lines = text.split(/[\n\r]+/).map((l) => l.trim()).filter((l) => l.length > 2);
-    let title = lines.find((l) => !UI_NOISE.test(l)) || "";
-    title = title.replace(TITLE_SUFFIX_NOISE, "").trim();
-    return title || fallback;
-  }
-  function detectVisibilityFromLinkText(linkText) {
-    if (!linkText) return { visibility: VISIBILITY_UNKNOWN, hidden: false, method: "no-link-text" };
-    const isHidden = hasHiddenIndicator(linkText);
-    if (isHidden) {
-      return { visibility: VISIBILITY_HIDDEN, hidden: true, method: "link-text" };
-    }
-    return { visibility: VISIBILITY_UNKNOWN, hidden: false, method: "link-text-no-indicator" };
-  }
-  function detectVisibilityFromCardText(cardText) {
-    if (!cardText) return VISIBILITY_UNKNOWN;
-    if (hasHiddenIndicator(cardText)) return VISIBILITY_HIDDEN;
-    if (hasVisibleIndicator(cardText)) return VISIBILITY_VISIBLE;
-    return VISIBILITY_UNKNOWN;
-  }
-  function detectVisibilityFromCard(cardEl) {
-    if (!cardEl) return { visibility: VISIBILITY_UNKNOWN, hidden: false, method: "no-card" };
-    for (const sel of VISIBILITY_HIDDEN_DATA_QA) {
-      const found = cardEl.querySelector(sel);
-      if (found) {
-        return { visibility: VISIBILITY_HIDDEN, hidden: true, method: "data-qa:" + sel };
-      }
-    }
-    if (hasHiddenIndicator(cardEl.textContent || "")) {
-      return { visibility: VISIBILITY_HIDDEN, hidden: true, method: "text-indicator" };
-    }
-    if (hasVisibleIndicator(cardEl.textContent || "")) {
-      return { visibility: VISIBILITY_VISIBLE, hidden: false, method: "text-visible-indicator" };
-    }
-    return { visibility: VISIBILITY_UNKNOWN, hidden: false, method: "card-no-indicators" };
-  }
   function stripScripts(html) {
     if (!html) return "";
     return html.replace(/<script[\s\S]*?<\/script>/gi, "");
@@ -1386,9 +1342,7 @@
     for (let i = 0; i < 8; i++) {
       if (!el || el === document.body || el === document.documentElement) break;
       for (const sel of RESUME_CARD_SELECTORS) {
-        if (el.matches && el.matches(sel)) {
-          return el;
-        }
+        if (el.matches && el.matches(sel)) return el;
       }
       el = el.parentElement;
     }
@@ -1398,35 +1352,23 @@
       const parent = el.parentElement;
       if (parent) {
         const textLen = (parent.textContent || "").length;
-        if (textLen > 200) {
-          return parent;
-        }
+        if (textLen > 200) return parent;
       }
       el = parent;
     }
     return null;
   }
-  var MIN_HASH_LEN, UI_NOISE, TITLE_SUFFIX_NOISE, VISIBILITY_VISIBLE, VISIBILITY_HIDDEN, VISIBILITY_UNKNOWN, HIDDEN_INDICATORS, VISIBLE_INDICATORS, LINE_BREAK_INJECTORS, RESUME_CARD_SELECTORS, VISIBILITY_HIDDEN_DATA_QA;
-  var init_resume_constants = __esm({
-    "src/lib/resume-constants.js"() {
+  var coreLog, MIN_HASH_LEN, VISIBILITY_VISIBLE, VISIBILITY_HIDDEN, VISIBILITY_UNKNOWN, HIDDEN_INDICATORS, VISIBLE_INDICATORS, RESUME_CARD_SELECTORS, VISIBILITY_HIDDEN_DATA_QA;
+  var init_resume_constants_core = __esm({
+    "src/lib/resume-constants-core.js"() {
+      init_anti_hallucination();
+      coreLog = createLogger("ResumeConst");
       MIN_HASH_LEN = 30;
-      UI_NOISE = /^(сделать видимым|скрыть|обновить|поднять|продлить|дублировать|удалить|перейти к вакансиям|перейти|постоянная работа|многие не видят|копировать|редактировать|частичная занятость|проектная работа|стажировка|волонтёрство)/i;
-      TITLE_SUFFIX_NOISE = /\s*(Постоянная работа|Частичная занятость|Проектная работа|Стажировка|Волонтёрство)\s*$/i;
       VISIBILITY_VISIBLE = "visible";
       VISIBILITY_HIDDEN = "hidden";
       VISIBILITY_UNKNOWN = "unknown";
       HIDDEN_INDICATORS = ["\u043C\u043D\u043E\u0433\u0438\u0435 \u043D\u0435 \u0432\u0438\u0434\u044F\u0442", "\u0441\u0434\u0435\u043B\u0430\u0442\u044C \u0432\u0438\u0434\u0438\u043C\u044B\u043C", "\u043D\u0435 \u0432\u0438\u0434\u043D\u043E \u043D\u0438\u043A\u043E\u043C\u0443", "\u043D\u0435 \u0432\u0438\u0434\u043D\u043E"];
       VISIBLE_INDICATORS = ["\u0432\u0438\u0434\u043D\u043E \u0432\u0441\u0435\u043C", "\u0432\u0438\u0434\u043D\u043E \u0432\u0441\u0435\u043C \u0440\u0430\u0431\u043E\u0442\u043E\u0434\u0430\u0442\u0435\u043B\u044F\u043C"];
-      LINE_BREAK_INJECTORS = [
-        /Многие\s+не\s+видят[^\n]*/gi,
-        /Сделать\s+видимым/gi,
-        /Постоянная\s+работа/gi,
-        /Частичная\s+занятость/gi,
-        /Проектная\s+работа/gi,
-        /Стажировка/gi,
-        /Волонтёрство/gi,
-        /Перейти\s+к\s+вакансиям/gi
-      ];
       RESUME_CARD_SELECTORS = [
         '[data-qa="resume-list-item"]',
         '[data-qa="resume-list-item-wrap"]',
@@ -1442,6 +1384,81 @@
         '[data-qa*="resume-status-hidden"]',
         '[data-qa*="make-visible"]'
       ];
+    }
+  });
+
+  // src/lib/resume-constants-title.js
+  function cleanResumeTitle(rawText, fallback) {
+    fallback = fallback || "Untitled";
+    if (!rawText) return fallback;
+    let text = normalizeWs(rawText);
+    for (const pattern of LINE_BREAK_INJECTORS) {
+      pattern.lastIndex = 0;
+      text = text.replace(pattern, "\n$&");
+    }
+    const lines = text.split(/[\n\r]+/).map((l) => l.trim()).filter((l) => l.length > 2);
+    let title = lines.find((l) => !UI_NOISE.test(l)) || "";
+    title = title.replace(TITLE_SUFFIX_NOISE, "").trim();
+    return title || fallback;
+  }
+  var UI_NOISE, TITLE_SUFFIX_NOISE, LINE_BREAK_INJECTORS;
+  var init_resume_constants_title = __esm({
+    "src/lib/resume-constants-title.js"() {
+      init_resume_constants_core();
+      UI_NOISE = /^(сделать видимым|скрыть|обновить|поднять|продлить|дублировать|удалить|перейти к вакансиям|перейти|постоянная работа|многие не видят|копировать|редактировать|частичная занятость|проектная работа|стажировка|волонтёрство)/i;
+      TITLE_SUFFIX_NOISE = /\s*(Постоянная работа|Частичная занятость|Проектная работа|Стажировка|Волонтёрство)\s*$/i;
+      LINE_BREAK_INJECTORS = [
+        /Многие\s+не\s+видят[^\n]*/gi,
+        /Сделать\s+видимым/gi,
+        /Постоянная\s+работа/gi,
+        /Частичная\s+занятость/gi,
+        /Проектная\s+работа/gi,
+        /Стажировка/gi,
+        /Волонтёрство/gi,
+        /Перейти\s+к\s+вакансиям/gi
+      ];
+    }
+  });
+
+  // src/lib/resume-constants-visibility.js
+  function detectVisibilityFromLinkText(linkText) {
+    if (!linkText) return { visibility: VISIBILITY_UNKNOWN, hidden: false, method: "no-link-text" };
+    const isHidden = hasHiddenIndicator(linkText);
+    if (isHidden) return { visibility: VISIBILITY_HIDDEN, hidden: true, method: "link-text" };
+    return { visibility: VISIBILITY_UNKNOWN, hidden: false, method: "link-text-no-indicator" };
+  }
+  function detectVisibilityFromCardText(cardText) {
+    if (!cardText) return VISIBILITY_UNKNOWN;
+    if (hasHiddenIndicator(cardText)) return VISIBILITY_HIDDEN;
+    if (hasVisibleIndicator(cardText)) return VISIBILITY_VISIBLE;
+    return VISIBILITY_UNKNOWN;
+  }
+  function detectVisibilityFromCard(cardEl) {
+    if (!cardEl) return { visibility: VISIBILITY_UNKNOWN, hidden: false, method: "no-card" };
+    for (const sel of VISIBILITY_HIDDEN_DATA_QA) {
+      const found = cardEl.querySelector(sel);
+      if (found) return { visibility: VISIBILITY_HIDDEN, hidden: true, method: "data-qa:" + sel };
+    }
+    if (hasHiddenIndicator(cardEl.textContent || "")) {
+      return { visibility: VISIBILITY_HIDDEN, hidden: true, method: "text-indicator" };
+    }
+    if (hasVisibleIndicator(cardEl.textContent || "")) {
+      return { visibility: VISIBILITY_VISIBLE, hidden: false, method: "text-visible-indicator" };
+    }
+    return { visibility: VISIBILITY_UNKNOWN, hidden: false, method: "card-no-indicators" };
+  }
+  var init_resume_constants_visibility = __esm({
+    "src/lib/resume-constants-visibility.js"() {
+      init_resume_constants_core();
+    }
+  });
+
+  // src/lib/resume-constants.js
+  var init_resume_constants = __esm({
+    "src/lib/resume-constants.js"() {
+      init_resume_constants_core();
+      init_resume_constants_title();
+      init_resume_constants_visibility();
     }
   });
 
@@ -1519,7 +1536,7 @@
         resume.visibility = VISIBILITY_VISIBLE;
         resume.hidden = false;
       } else {
-        resumeLog3.info('Unknown visibility card text: "' + cardText.substring(0, 80) + '"');
+        resumeLog4.info('Unknown visibility card text: "' + cardText.substring(0, 80) + '"');
       }
     }
     if (resume.visibility === VISIBILITY_UNKNOWN) {
@@ -1565,9 +1582,9 @@
       }
     }
     const elapsed = (performance.now() - t0).toFixed(1);
-    resumeLog3.info("Resume parsed in " + elapsed + "ms");
-    resumeLog3.info("Found: " + resume._debug.found.length + " | Missing: " + resume._debug.missing.length);
-    resumeLog3.info("Skills: " + resume.skills.length + " | Experience: " + resume.experience.length + " | Education: " + resume.education.length);
+    resumeLog4.info("Resume parsed in " + elapsed + "ms");
+    resumeLog4.info("Found: " + resume._debug.found.length + " | Missing: " + resume._debug.missing.length);
+    resumeLog4.info("Skills: " + resume.skills.length + " | Experience: " + resume.experience.length + " | Education: " + resume.education.length);
     console.log("[HH-AR][Resume] Parsed resume:", JSON.stringify({
       id: resume.id,
       title: resume.title,
@@ -1580,14 +1597,15 @@
     }, null, 2));
     return resume;
   }
-  var resumeLog3;
+  var resumeLog4;
   var init_parse_resume = __esm({
     "src/parsers/resume-detail/parse-resume.js"() {
       init_anti_hallucination();
       init_parse_resume_sections();
+      init_parse_resume_personal();
       init_parse_resume_education();
       init_resume_constants();
-      resumeLog3 = createLogger("Resume");
+      resumeLog4 = createLogger("Resume");
     }
   });
 
@@ -1733,6 +1751,227 @@
     }
   });
 
+  // src/parsers/resume-detail/resume-detail-list-parser.js
+  function parseResumeList() {
+    const resumes = [];
+    const links = document.querySelectorAll("a[href]");
+    const seen = /* @__PURE__ */ new Set();
+    links.forEach((link) => {
+      const href = link.getAttribute("href") || "";
+      let hashMatch = href.match(/\/resume\/([a-f0-9]+)/);
+      if (!hashMatch) hashMatch = href.match(/[?&]resume=([a-f0-9]+)/);
+      if (!hashMatch) return;
+      const id = hashMatch[1];
+      if (id.length < MIN_HASH_LEN) return;
+      if (seen.has(id)) return;
+      seen.add(id);
+      const rawLinkText = link.textContent || "";
+      const title = cleanResumeTitle(rawLinkText, "\u0411\u0435\u0437 \u043D\u0430\u0437\u0432\u0430\u043D\u0438\u044F");
+      const vis = detectVisibilityFromLinkText(rawLinkText);
+      resumes.push({ id, title, url: href.startsWith("http") ? href : "https://hh.ru" + href, visibility: vis.visibility, hidden: vis.hidden });
+      resumeLog5.info("  Link: " + id.substring(0, 8) + '="' + title.substring(0, 30) + '"=' + vis.visibility + " (method=" + vis.method + ")");
+    });
+    const allDetected = resumes.every((r) => r.visibility === VISIBILITY_HIDDEN || r.visibility === VISIBILITY_VISIBLE);
+    if (allDetected && resumes.length > 0) {
+      resumeLog5.info("Strategy 0: all " + resumes.length + " resumes detected from link text");
+    } else {
+      const unknownResumes = resumes.filter((r) => r.visibility === VISIBILITY_UNKNOWN);
+      resumeLog5.info("Strategy 0: " + (resumes.length - unknownResumes.length) + " detected, " + unknownResumes.length + " unknown \u2014 trying data-qa cards");
+      let filled = 0;
+      for (const sel of RESUME_CARD_SELECTORS) {
+        const cards = document.querySelectorAll(sel);
+        if (cards.length === 0) continue;
+        resumeLog5.info("Strategy 1: Found " + cards.length + " cards with selector: " + sel);
+        cards.forEach((card) => {
+          const cardLink = card.querySelector('a[href*="/resume/"], a[href*="resume="]');
+          if (!cardLink) return;
+          const cardHref = cardLink.getAttribute("href") || "";
+          let cardHashMatch = cardHref.match(/\/resume\/([a-f0-9]+)/);
+          if (!cardHashMatch) cardHashMatch = cardHref.match(/[?&]resume=([a-f0-9]+)/);
+          if (!cardHashMatch) return;
+          const cardId = cardHashMatch[1];
+          const resume = resumes.find((r) => r.id === cardId);
+          if (!resume || resume.visibility !== VISIBILITY_UNKNOWN) return;
+          const result = detectVisibilityFromCard(card);
+          resume.visibility = result.visibility;
+          resume.hidden = result.hidden;
+          filled++;
+          resumeLog5.info("  Card: " + cardId.substring(0, 8) + "=" + result.visibility + " (method=" + result.method + ")");
+        });
+        if (filled > 0) break;
+      }
+      const stillUnknown2 = resumes.filter((r) => r.visibility === VISIBILITY_UNKNOWN);
+      if (stillUnknown2.length > 0) {
+        resumeLog5.info("Strategy 2: DOM walking for " + stillUnknown2.length + " unknown resumes");
+        stillUnknown2.forEach((resume) => {
+          const link = document.querySelector('a[href*="' + resume.id + '"]');
+          if (!link) return;
+          const card = findCardForLink(link);
+          if (card) {
+            const result = detectVisibilityFromCard(card);
+            resume.visibility = result.visibility;
+            resume.hidden = result.hidden;
+            resumeLog5.info("  Walk: " + resume.id.substring(0, 8) + "=" + result.visibility + " (method=" + result.method + ")");
+          }
+        });
+      }
+      const finalUnknown = resumes.filter((r) => r.visibility === VISIBILITY_UNKNOWN);
+      if (finalUnknown.length > 0) {
+        resumeLog5.info("Strategy 3: proximity search for " + finalUnknown.length + " remaining unknowns");
+        const pageHtml = stripScripts(document.body.innerHTML || "");
+        const pageLower = pageHtml.toLowerCase();
+        finalUnknown.forEach((resume) => {
+          const hashPos = pageLower.indexOf(resume.id.toLowerCase());
+          if (hashPos === -1) return;
+          let searchEnd = hashPos + 5e3;
+          resumes.forEach((other) => {
+            if (other.id === resume.id) return;
+            const otherPos = pageLower.indexOf(other.id.toLowerCase());
+            if (otherPos > hashPos && otherPos < searchEnd) searchEnd = otherPos;
+          });
+          const zone = pageLower.substring(Math.max(0, hashPos - 500), searchEnd);
+          const isHidden = hasHiddenIndicator(zone);
+          resume.visibility = isHidden ? VISIBILITY_HIDDEN : VISIBILITY_VISIBLE;
+          resume.hidden = isHidden;
+          resumeLog5.info("  Proximity: " + resume.id.substring(0, 8) + "=" + resume.visibility);
+        });
+      }
+    }
+    const stillUnknown = resumes.filter((r) => r.visibility === VISIBILITY_UNKNOWN);
+    if (stillUnknown.length > 0) {
+      resumeLog5.info("List visibility: " + stillUnknown.length + " resumes still UNKNOWN \u2014 will be resolved by detail page detection");
+    }
+    const hiddenCount = resumes.filter((r) => r.visibility === VISIBILITY_HIDDEN).length;
+    const visibleCount = resumes.filter((r) => r.visibility === VISIBILITY_VISIBLE).length;
+    const unknownCount = resumes.filter((r) => r.visibility === VISIBILITY_UNKNOWN).length;
+    resumeLog5.info("Resume list: " + resumes.length + " total (" + hiddenCount + " hidden, " + visibleCount + " visible, " + unknownCount + " unknown)");
+    return resumes;
+  }
+  var resumeLog5;
+  var init_resume_detail_list_parser = __esm({
+    "src/parsers/resume-detail/resume-detail-list-parser.js"() {
+      init_anti_hallucination();
+      init_resume_constants();
+      resumeLog5 = createLogger("Resume");
+    }
+  });
+
+  // src/parsers/resume-detail/resume-detail-debug-vis.js
+  function debugVisibility() {
+    const result = {
+      url: window.location.href,
+      strategy1_cards: [],
+      strategy2_walks: [],
+      strategy3_proximity: null,
+      indicators: {},
+      rawHtmlSnippets: {}
+    };
+    const RESUME_CARD_SELECTORS2 = [
+      '[data-qa="resume-list-item"]',
+      '[data-qa="resume-list-item-wrap"]',
+      '[data-qa="resume-list-item-wrapper"]',
+      '[data-qa*="resume-list-item"]',
+      '[data-qa*="resume-card"]'
+    ];
+    RESUME_CARD_SELECTORS2.forEach((sel) => {
+      const cards = document.querySelectorAll(sel);
+      result.strategy1_cards.push({
+        selector: sel,
+        count: cards.length,
+        samples: Array.from(cards).slice(0, 3).map((card) => ({
+          tagName: card.tagName,
+          textLength: (card.textContent || "").length,
+          textPreview: (card.textContent || "").substring(0, 200).trim(),
+          hasHiddenDataQa: VISIBILITY_HIDDEN_DATA_QA.some((qa) => card.querySelector(qa) !== null),
+          linksInside: card.querySelectorAll('a[href*="resume"], a[href*="/resume/"]').length,
+          outerHTMLPreview: card.outerHTML.substring(0, 300)
+        }))
+      });
+    });
+    const links = document.querySelectorAll("a[href]");
+    links.forEach((link) => {
+      const href = link.getAttribute("href") || "";
+      let hashMatch = href.match(/\/resume\/([a-f0-9]+)/);
+      if (!hashMatch) hashMatch = href.match(/[?&]resume=([a-f0-9]+)/);
+      if (!hashMatch) return;
+      const id = hashMatch[1];
+      if (id.length < MIN_HASH_LEN) return;
+      let card = null;
+      let el = link;
+      for (let i = 0; i < 8; i++) {
+        if (!el || el === document.body) break;
+        for (const sel of RESUME_CARD_SELECTORS2) {
+          if (el.matches && el.matches(sel)) {
+            card = el;
+            break;
+          }
+        }
+        if (card) break;
+        el = el.parentElement;
+      }
+      if (!card) {
+        el = link;
+        for (let i = 0; i < 8; i++) {
+          if (!el || el === document.body) break;
+          const parent = el.parentElement;
+          if (parent && (parent.textContent || "").length > 200) {
+            card = parent;
+            break;
+          }
+          el = parent;
+        }
+      }
+      result.strategy2_walks.push({
+        id: id.substring(0, 12),
+        href: href.substring(0, 80),
+        linkText: (link.textContent || "").substring(0, 60).trim(),
+        cardFound: !!card,
+        cardTag: card ? card.tagName : null,
+        cardTextPreview: card ? (card.textContent || "").substring(0, 300).trim() : null,
+        cardVisibility: card ? detectVisibilityFromCard(card) : null,
+        cardOuterHTMLPreview: card ? card.outerHTML.substring(0, 500) : null
+      });
+    });
+    const pageHtml = document.body.innerHTML || "";
+    const pageLower = pageHtml.toLowerCase();
+    const normalizedPageText = normalizeWs(pageLower);
+    HIDDEN_INDICATORS.forEach((ind) => {
+      const positions = [];
+      let idx = 0;
+      while ((idx = normalizedPageText.indexOf(ind, idx)) !== -1) {
+        positions.push({ position: idx, context: normalizedPageText.substring(Math.max(0, idx - 50), Math.min(normalizedPageText.length, idx + ind.length + 50)) });
+        idx += ind.length;
+      }
+      result.indicators[ind] = { count: positions.length, occurrences: positions.slice(0, 5) };
+    });
+    const cleanHtml = stripScripts(pageHtml);
+    const cleanNorm = normalizeWs(cleanHtml.toLowerCase());
+    HIDDEN_INDICATORS.forEach((ind) => {
+      const pos = cleanNorm.indexOf(ind);
+      result.rawHtmlSnippets[ind] = {
+        foundInClean: pos !== -1,
+        positionInClean: pos,
+        contextInClean: pos !== -1 ? cleanNorm.substring(Math.max(0, pos - 80), Math.min(cleanNorm.length, pos + ind.length + 80)) : null
+      };
+    });
+    result.visibilityDataQa = VISIBILITY_HIDDEN_DATA_QA.map((sel) => ({
+      selector: sel,
+      count: document.querySelectorAll(sel).length,
+      samples: Array.from(document.querySelectorAll(sel)).slice(0, 2).map((el) => ({
+        tagName: el.tagName,
+        textContent: (el.textContent || "").substring(0, 100).trim(),
+        outerHTMLPreview: el.outerHTML.substring(0, 200)
+      }))
+    }));
+    console.log("[HH-Copilot] Visibility diagnostic:", result);
+    return result;
+  }
+  var init_resume_detail_debug_vis = __esm({
+    "src/parsers/resume-detail/resume-detail-debug-vis.js"() {
+      init_resume_constants();
+    }
+  });
+
   // src/parsers/resume-detail/index.js
   var resume_detail_exports = {};
   __export(resume_detail_exports, {
@@ -1763,203 +2002,17 @@
       }
     });
     if (clicked.length > 0) {
-      resumeLog4.info("Expanded hidden sections: " + clicked.join(", "));
+      const resumeLog6 = (await Promise.resolve().then(() => (init_anti_hallucination(), anti_hallucination_exports))).createLogger("Resume");
+      resumeLog6.info("Expanded hidden sections: " + clicked.join(", "));
       await new Promise((r) => setTimeout(r, 1500));
     }
   }
-  function parseResumeList() {
-    const resumes = [];
-    const links = document.querySelectorAll("a[href]");
-    const seen = /* @__PURE__ */ new Set();
-    links.forEach((link) => {
-      const href = link.getAttribute("href") || "";
-      let hashMatch = href.match(/\/resume\/([a-f0-9]+)/);
-      if (!hashMatch) hashMatch = href.match(/[?&]resume=([a-f0-9]+)/);
-      if (!hashMatch) return;
-      const id = hashMatch[1];
-      if (id.length < MIN_HASH_LEN) return;
-      if (seen.has(id)) return;
-      seen.add(id);
-      const rawLinkText = link.textContent || "";
-      const title = cleanResumeTitle(rawLinkText, "\u0411\u0435\u0437 \u043D\u0430\u0437\u0432\u0430\u043D\u0438\u044F");
-      const vis = detectVisibilityFromLinkText(rawLinkText);
-      resumes.push({
-        id,
-        title,
-        url: href.startsWith("http") ? href : "https://hh.ru" + href,
-        visibility: vis.visibility,
-        hidden: vis.hidden
-      });
-      resumeLog4.info("  Link: " + id.substring(0, 8) + '="' + title.substring(0, 30) + '"=' + vis.visibility + " (method=" + vis.method + ")");
-    });
-    const allDetected = resumes.every((r) => r.visibility === VISIBILITY_HIDDEN || r.visibility === VISIBILITY_VISIBLE);
-    if (allDetected && resumes.length > 0) {
-      resumeLog4.info("Strategy 0: all " + resumes.length + " resumes detected from link text");
-    } else {
-      const unknownResumes = resumes.filter((r) => r.visibility === VISIBILITY_UNKNOWN);
-      resumeLog4.info("Strategy 0: " + (resumes.length - unknownResumes.length) + " detected, " + unknownResumes.length + " unknown \u2014 trying data-qa cards");
-      let filled = 0;
-      for (const sel of RESUME_CARD_SELECTORS) {
-        const cards = document.querySelectorAll(sel);
-        if (cards.length === 0) continue;
-        resumeLog4.info("Strategy 1: Found " + cards.length + " cards with selector: " + sel);
-        cards.forEach((card) => {
-          const cardLink = card.querySelector('a[href*="/resume/"], a[href*="resume="]');
-          if (!cardLink) return;
-          const cardHref = cardLink.getAttribute("href") || "";
-          let cardHashMatch = cardHref.match(/\/resume\/([a-f0-9]+)/);
-          if (!cardHashMatch) cardHashMatch = cardHref.match(/[?&]resume=([a-f0-9]+)/);
-          if (!cardHashMatch) return;
-          const cardId = cardHashMatch[1];
-          const resume = resumes.find((r) => r.id === cardId);
-          if (!resume || resume.visibility !== VISIBILITY_UNKNOWN) return;
-          const result = detectVisibilityFromCard(card);
-          resume.visibility = result.visibility;
-          resume.hidden = result.hidden;
-          filled++;
-          resumeLog4.info("  Card: " + cardId.substring(0, 8) + "=" + result.visibility + " (method=" + result.method + ")");
-        });
-        if (filled > 0) break;
-      }
-      const stillUnknown2 = resumes.filter((r) => r.visibility === VISIBILITY_UNKNOWN);
-      if (stillUnknown2.length > 0) {
-        resumeLog4.info("Strategy 2: DOM walking for " + stillUnknown2.length + " unknown resumes");
-        stillUnknown2.forEach((resume) => {
-          const link = document.querySelector('a[href*="' + resume.id + '"]');
-          if (!link) return;
-          const card = findCardForLink(link);
-          if (card) {
-            const result = detectVisibilityFromCard(card);
-            resume.visibility = result.visibility;
-            resume.hidden = result.hidden;
-            resumeLog4.info("  Walk: " + resume.id.substring(0, 8) + "=" + result.visibility + " (method=" + result.method + ")");
-          }
-        });
-      }
-      const finalUnknown = resumes.filter((r) => r.visibility === VISIBILITY_UNKNOWN);
-      if (finalUnknown.length > 0) {
-        resumeLog4.info("Strategy 3: proximity search for " + finalUnknown.length + " remaining unknowns");
-        const pageHtml = stripScripts(document.body.innerHTML || "");
-        const pageLower = pageHtml.toLowerCase();
-        finalUnknown.forEach((resume) => {
-          const hashPos = pageLower.indexOf(resume.id.toLowerCase());
-          if (hashPos === -1) return;
-          let searchEnd = hashPos + 5e3;
-          resumes.forEach((other) => {
-            if (other.id === resume.id) return;
-            const otherPos = pageLower.indexOf(other.id.toLowerCase());
-            if (otherPos > hashPos && otherPos < searchEnd) searchEnd = otherPos;
-          });
-          const zone = pageLower.substring(Math.max(0, hashPos - 500), searchEnd);
-          const isHidden = hasHiddenIndicator(zone);
-          resume.visibility = isHidden ? VISIBILITY_HIDDEN : VISIBILITY_VISIBLE;
-          resume.hidden = isHidden;
-          resumeLog4.info("  Proximity: " + resume.id.substring(0, 8) + "=" + resume.visibility);
-        });
-      }
-    }
-    const stillUnknown = resumes.filter((r) => r.visibility === VISIBILITY_UNKNOWN);
-    if (stillUnknown.length > 0) {
-      resumeLog4.info("List visibility: " + stillUnknown.length + " resumes still UNKNOWN \u2014 will be resolved by detail page detection");
-    }
-    const hiddenCount = resumes.filter((r) => r.visibility === VISIBILITY_HIDDEN).length;
-    const visibleCount = resumes.filter((r) => r.visibility === VISIBILITY_VISIBLE).length;
-    const unknownCount = resumes.filter((r) => r.visibility === VISIBILITY_UNKNOWN).length;
-    resumeLog4.info("Resume list: " + resumes.length + " total (" + hiddenCount + " hidden, " + visibleCount + " visible, " + unknownCount + " unknown)");
-    return resumes;
-  }
-  function debugVisibility() {
-    const result = {
-      url: window.location.href,
-      strategy1_cards: [],
-      strategy2_walks: [],
-      strategy3_proximity: null,
-      indicators: {},
-      rawHtmlSnippets: {}
-    };
-    RESUME_CARD_SELECTORS.forEach((sel) => {
-      const cards = document.querySelectorAll(sel);
-      result.strategy1_cards.push({
-        selector: sel,
-        count: cards.length,
-        samples: Array.from(cards).slice(0, 3).map((card) => ({
-          tagName: card.tagName,
-          textLength: (card.textContent || "").length,
-          textPreview: (card.textContent || "").substring(0, 200).trim(),
-          hasHiddenDataQa: VISIBILITY_HIDDEN_DATA_QA.some((qa) => card.querySelector(qa) !== null),
-          linksInside: card.querySelectorAll('a[href*="resume"], a[href*="/resume/"]').length,
-          outerHTMLPreview: card.outerHTML.substring(0, 300)
-        }))
-      });
-    });
-    const links = document.querySelectorAll("a[href]");
-    links.forEach((link) => {
-      const href = link.getAttribute("href") || "";
-      let hashMatch = href.match(/\/resume\/([a-f0-9]+)/);
-      if (!hashMatch) hashMatch = href.match(/[?&]resume=([a-f0-9]+)/);
-      if (!hashMatch) return;
-      const id = hashMatch[1];
-      if (id.length < MIN_HASH_LEN) return;
-      const card = findCardForLink(link);
-      result.strategy2_walks.push({
-        id: id.substring(0, 12),
-        href: href.substring(0, 80),
-        linkText: (link.textContent || "").substring(0, 60).trim(),
-        cardFound: !!card,
-        cardTag: card ? card.tagName : null,
-        cardTextPreview: card ? (card.textContent || "").substring(0, 300).trim() : null,
-        cardVisibility: card ? detectVisibilityFromCard(card) : null,
-        cardOuterHTMLPreview: card ? card.outerHTML.substring(0, 500) : null
-      });
-    });
-    const pageHtml = document.body.innerHTML || "";
-    const pageLower = pageHtml.toLowerCase();
-    const normalizedPageText = normalizeWs(pageLower);
-    HIDDEN_INDICATORS.forEach((ind) => {
-      const positions = [];
-      let idx = 0;
-      while ((idx = normalizedPageText.indexOf(ind, idx)) !== -1) {
-        positions.push({
-          position: idx,
-          context: normalizedPageText.substring(Math.max(0, idx - 50), Math.min(normalizedPageText.length, idx + ind.length + 50))
-        });
-        idx += ind.length;
-      }
-      result.indicators[ind] = {
-        count: positions.length,
-        occurrences: positions.slice(0, 5)
-      };
-    });
-    const cleanHtml = stripScripts(pageHtml);
-    const cleanNorm = normalizeWs(cleanHtml.toLowerCase());
-    HIDDEN_INDICATORS.forEach((ind) => {
-      const pos = cleanNorm.indexOf(ind);
-      result.rawHtmlSnippets[ind] = {
-        foundInClean: pos !== -1,
-        positionInClean: pos,
-        contextInClean: pos !== -1 ? cleanNorm.substring(Math.max(0, pos - 80), Math.min(cleanNorm.length, pos + ind.length + 80)) : null
-      };
-    });
-    result.visibilityDataQa = VISIBILITY_HIDDEN_DATA_QA.map((sel) => ({
-      selector: sel,
-      count: document.querySelectorAll(sel).length,
-      samples: Array.from(document.querySelectorAll(sel)).slice(0, 2).map((el) => ({
-        tagName: el.tagName,
-        textContent: (el.textContent || "").substring(0, 100).trim(),
-        outerHTMLPreview: el.outerHTML.substring(0, 200)
-      }))
-    }));
-    console.log("[HH-Copilot] Visibility diagnostic:", result);
-    return result;
-  }
-  var resumeLog4;
   var init_resume_detail = __esm({
     "src/parsers/resume-detail/index.js"() {
-      init_anti_hallucination();
       init_parse_resume();
       init_diagnose();
-      init_resume_constants();
-      resumeLog4 = createLogger("Resume");
+      init_resume_detail_list_parser();
+      init_resume_detail_debug_vis();
     }
   });
 
@@ -4438,13 +4491,11 @@
       if (resumes.find((r) => r.id === id)) return;
       const rawLinkText = link.textContent || "";
       const vis = detectVisibilityFromLinkText(rawLinkText);
-      const visibility = vis.visibility;
-      const hidden = vis.hidden;
       const title = cleanResumeTitle(rawLinkText);
       const resumeUrl = "https://hh.ru/applicant/resumes/view?resume=" + id;
-      resumes.push({ id, title, url: resumeUrl, visibility, hidden });
-      if (visibility !== VISIBILITY_UNKNOWN) {
-        helperLog.info("LinkText visibility: " + id.substring(0, 8) + "=" + visibility + " (method=" + vis.method + ', title="' + title.substring(0, 30) + '")');
+      resumes.push({ id, title, url: resumeUrl, visibility: vis.visibility, hidden: vis.hidden });
+      if (vis.visibility !== VISIBILITY_UNKNOWN) {
+        helperLog.info("LinkText visibility: " + id.substring(0, 8) + "=" + vis.visibility + " (method=" + vis.method + ', title="' + title.substring(0, 30) + '")');
       }
     });
     return resumes;
@@ -4484,21 +4535,28 @@
     }
     return resumes;
   }
+  var helperLog;
+  var init_resume_fetch_helpers = __esm({
+    "src/lib/resume-fetch-helpers.js"() {
+      init_anti_hallucination();
+      init_resume_constants();
+      helperLog = createLogger("ResumeFetchH");
+    }
+  });
+
+  // src/lib/resume-fetch-list-vis.js
   function extractVisibilityStatus(doc, resumes, html) {
     if (resumes.length === 0) return;
     if (!html) {
-      helperLog.warn("extractVisibilityStatus: no raw HTML provided, skipping");
+      visLog.warn("extractVisibilityStatus: no raw HTML provided, skipping");
       return;
     }
     const htmlLower = html.toLowerCase();
     let alreadyDetected = 0;
     let needDetection = 0;
     resumes.forEach((r) => {
-      if (r.visibility === VISIBILITY_HIDDEN || r.visibility === VISIBILITY_VISIBLE) {
-        alreadyDetected++;
-      } else {
-        needDetection++;
-      }
+      if (r.visibility === VISIBILITY_HIDDEN || r.visibility === VISIBILITY_VISIBLE) alreadyDetected++;
+      else needDetection++;
     });
     resumes.forEach((r) => {
       const link = Array.from(doc.querySelectorAll("a[href]")).find((a) => {
@@ -4509,29 +4567,23 @@
         const raw = link.textContent || "";
         const norm = normalizeWs(raw);
         const hasInd = hasHiddenIndicator(raw);
-        helperLog.info("  DEBUG " + r.id.substring(0, 8) + ": rawLen=" + raw.length + " hasNbsp=" + (raw.indexOf("\xA0") !== -1) + ' normalized="' + norm.substring(0, 80) + '" hasHidden=' + hasInd + " vis=" + r.visibility);
+        visLog.info("  DEBUG " + r.id.substring(0, 8) + ": rawLen=" + raw.length + " hasNbsp=" + (raw.indexOf("\xA0") !== -1) + ' normalized="' + norm.substring(0, 80) + '" hasHidden=' + hasInd + " vis=" + r.visibility);
       }
     });
-    helperLog.info("Visibility scan: " + resumes.length + " resumes (" + alreadyDetected + " already from link text, " + needDetection + " need detection)");
+    visLog.info("Visibility scan: " + resumes.length + " resumes (" + alreadyDetected + " already from link text, " + needDetection + " need detection)");
     if (needDetection === 0) {
-      helperLog.info("All resumes already detected from link text \u2014 skipping other strategies");
-      const summary2 = resumes.map(
-        (r) => r.id.substring(0, 8) + "=" + r.visibility
-      ).join(", ");
-      helperLog.info("Visibility result: [" + summary2 + "]");
+      visLog.info("All resumes already detected from link text \u2014 skipping other strategies");
+      logVisibilitySummary(resumes);
       return;
     }
-    const globalIndicators = HIDDEN_INDICATORS.map((ind) => ({
-      text: ind,
-      pos: htmlLower.indexOf(ind)
-    }));
+    const globalIndicators = HIDDEN_INDICATORS.map((ind) => ({ text: ind, pos: htmlLower.indexOf(ind) }));
     const hasAnyIndicators = globalIndicators.some((i) => i.pos !== -1);
-    helperLog.info("Indicators in HTML: " + (hasAnyIndicators ? globalIndicators.filter((i) => i.pos !== -1).map((i) => '"' + i.text + '"@' + i.pos).join(", ") : "NONE FOUND"));
+    visLog.info("Indicators in HTML: " + (hasAnyIndicators ? globalIndicators.filter((i) => i.pos !== -1).map((i) => '"' + i.text + '"@' + i.pos).join(", ") : "NONE FOUND"));
     let strategyUsed = false;
     for (const sel of RESUME_CARD_SELECTORS) {
       const cards = doc.querySelectorAll(sel);
       if (cards.length === 0) continue;
-      helperLog.info("Strategy 1: Found " + cards.length + " cards with selector: " + sel);
+      visLog.info("Strategy 1: Found " + cards.length + " cards with selector: " + sel);
       let matched = 0;
       cards.forEach((card) => {
         const link = card.querySelector('a[href*="/resume/"], a[href*="resume="]');
@@ -4542,80 +4594,40 @@
         if (!hashMatch) return;
         const id = hashMatch[1];
         const resume = resumes.find((r) => r.id === id);
-        if (!resume) return;
-        if (resume.visibility !== VISIBILITY_UNKNOWN) return;
+        if (!resume || resume.visibility !== VISIBILITY_UNKNOWN) return;
         const result = detectVisibilityFromCard(card);
         resume.visibility = result.visibility;
         resume.hidden = result.hidden;
         matched++;
-        helperLog.info("  Card: " + id.substring(0, 8) + "=" + result.visibility + " (method=" + result.method + ", cardTextLen=" + (card.textContent || "").length + ")");
+        visLog.info("  Card: " + id.substring(0, 8) + "=" + result.visibility + " (method=" + result.method + ")");
       });
       if (matched > 0) {
-        helperLog.info("Strategy 1: matched " + matched + "/" + needDetection + " unknown resumes via data-qa cards");
+        visLog.info("Strategy 1: matched " + matched + "/" + needDetection + " unknown resumes via data-qa cards");
         break;
       }
     }
     const stillUnknown = resumes.filter((r) => r.visibility === VISIBILITY_UNKNOWN).length;
-    if (stillUnknown === 0) {
-      strategyUsed = true;
-    } else if (!strategyUsed) {
-      helperLog.info("Strategy 1: no data-qa cards matched, trying next strategy");
-    }
+    if (stillUnknown === 0) strategyUsed = true;
+    else if (!strategyUsed) visLog.info("Strategy 1: no data-qa cards matched, trying next strategy");
     if (!strategyUsed) {
       const scriptResult = extractVisibilityFromScripts(doc, resumes, html);
       if (scriptResult) {
-        helperLog.info("Strategy 2: found visibility in script/hydration state");
+        visLog.info("Strategy 2: found visibility in script/hydration state");
         strategyUsed = true;
       }
     }
     if (!strategyUsed) {
-      helperLog.info("Strategy 3: proximity search with <script> stripping");
-      const cleanHtml = stripScripts(html);
-      const cleanLower = cleanHtml.toLowerCase();
-      const cleanForSearch = cleanLower.replace(/&nbsp;/g, " ");
-      const cleanIndicators = HIDDEN_INDICATORS.map((ind) => ({
-        text: ind,
-        pos: cleanForSearch.indexOf(ind)
-      }));
-      const hasCleanIndicators = cleanIndicators.some((i) => i.pos !== -1);
-      helperLog.info("  Cleaned HTML: " + cleanHtml.length + " chars (was " + html.length + "), indicators: " + (hasCleanIndicators ? cleanIndicators.filter((i) => i.pos !== -1).map((i) => '"' + i.text + '"@' + i.pos).join(", ") : "NONE"));
-      const hashPositions = resumes.map((r) => {
-        const pos = cleanLower.indexOf(r.id.toLowerCase());
-        return { id: r.id, pos };
-      }).filter((h) => h.pos !== -1).sort((a, b) => a.pos - b.pos);
-      if (hashPositions.length > 0) {
-        helperLog.info("  Hash positions in cleaned HTML: " + hashPositions.map((h) => h.id.substring(0, 8) + "@" + h.pos).join(", "));
-      }
-      resumes.forEach((r) => {
-        if (r.visibility !== VISIBILITY_UNKNOWN) return;
-        const myPos = cleanForSearch.indexOf(r.id.toLowerCase());
-        if (myPos === -1) {
-          helperLog.info("  " + r.id.substring(0, 8) + ": hash not found in cleaned HTML");
-          return;
-        }
-        const nextResume = hashPositions.find((h) => h.pos > myPos && h.id !== r.id);
-        const boundary = nextResume ? nextResume.pos : cleanForSearch.length;
-        const searchStart = Math.max(0, myPos - 500);
-        const searchEnd = Math.min(myPos + SEARCH_RADIUS, boundary);
-        const zone = cleanForSearch.substring(searchStart, searchEnd);
-        const isHidden = hasHiddenIndicator(zone);
-        r.visibility = isHidden ? VISIBILITY_HIDDEN : VISIBILITY_UNKNOWN;
-        r.hidden = isHidden;
-        helperLog.info("  " + r.id.substring(0, 8) + "=" + r.visibility + " (zone " + searchStart + "-" + searchEnd + ", next=" + (nextResume ? nextResume.id.substring(0, 8) : "none") + ", indicators=" + (isHidden ? "FOUND" : "none") + ")");
-      });
+      runProximitySearch(resumes, html);
       strategyUsed = true;
     }
     const unknownAfterAll = resumes.filter((r) => r.visibility === VISIBILITY_UNKNOWN);
     if (unknownAfterAll.length > 0) {
-      helperLog.info("[VIS-DIAG] List: " + unknownAfterAll.length + " resumes still UNKNOWN \u2014 will be resolved by detail page detection");
+      visLog.info("[VIS-DIAG] List: " + unknownAfterAll.length + " resumes still UNKNOWN \u2014 will be resolved by detail page detection");
       unknownAfterAll.forEach((r) => {
-        helperLog.info("[VIS-DIAG]   List: " + r.id.substring(0, 8) + ' "' + (r.title || "").substring(0, 30) + '" \u2192 ' + r.visibility);
+        visLog.info("[VIS-DIAG]   List: " + r.id.substring(0, 8) + ' "' + (r.title || "").substring(0, 30) + '" \u2192 ' + r.visibility);
       });
     }
-    const summary = resumes.map(
-      (r) => r.id.substring(0, 8) + "=" + r.visibility
-    ).join(", ");
-    helperLog.info("Visibility result: [" + summary + "]");
+    logVisibilitySummary(resumes);
   }
   function extractVisibilityFromScripts(doc, resumes, html) {
     let found = false;
@@ -4627,15 +4639,12 @@
         if (r.visibility !== VISIBILITY_UNKNOWN) return;
         const hashIdx = text.indexOf(r.id);
         if (hashIdx === -1) return;
-        const nearby = text.substring(
-          Math.max(0, hashIdx - 200),
-          Math.min(text.length, hashIdx + 500)
-        );
+        const nearby = text.substring(Math.max(0, hashIdx - 200), Math.min(text.length, hashIdx + 500));
         if (/"hidden"\s*:\s*true/.test(nearby) || /"visibility"\s*:\s*"hidden"/.test(nearby) || /"status"\s*:\s*"hidden"/.test(nearby) || /"isHidden"\s*:\s*true/.test(nearby)) {
           r.visibility = VISIBILITY_HIDDEN;
           r.hidden = true;
           found = true;
-          helperLog.info("  Script visibility: " + r.id.substring(0, 8) + "=hidden (JSON pattern)");
+          visLog.info("  Script visibility: " + r.id.substring(0, 8) + "=hidden (JSON pattern)");
         }
       });
     });
@@ -4644,9 +4653,9 @@
       if (!qaMatch) continue;
       const qaValue = qaMatch[1];
       const qaPattern = 'data-qa="' + qaValue;
-      const qaIdx = htmlLower_all(html, qaPattern);
+      const qaIdx = findAllPositions(html, qaPattern);
       if (qaIdx.length > 0) {
-        helperLog.info('  Found data-qa="' + qaValue + '" at positions: ' + qaIdx.join(", "));
+        visLog.info('  Found data-qa="' + qaValue + '" at positions: ' + qaIdx.join(", "));
         qaIdx.forEach((pos) => {
           const before = html.substring(Math.max(0, pos - 3e3), pos).toLowerCase();
           let nearestId = null;
@@ -4662,14 +4671,47 @@
             nearestId.visibility = VISIBILITY_HIDDEN;
             nearestId.hidden = true;
             found = true;
-            helperLog.info("  data-qa visibility: " + nearestId.id.substring(0, 8) + "=hidden");
+            visLog.info("  data-qa visibility: " + nearestId.id.substring(0, 8) + "=hidden");
           }
         });
       }
     }
     return found;
   }
-  function htmlLower_all(html, pattern) {
+  function runProximitySearch(resumes, html) {
+    visLog.info("Strategy 3: proximity search with <script> stripping");
+    const cleanHtml = stripScripts(html);
+    const cleanLower = cleanHtml.toLowerCase();
+    const cleanForSearch = cleanLower.replace(/&nbsp;/g, " ");
+    const cleanIndicators = HIDDEN_INDICATORS.map((ind) => ({ text: ind, pos: cleanForSearch.indexOf(ind) }));
+    const hasCleanIndicators = cleanIndicators.some((i) => i.pos !== -1);
+    visLog.info("  Cleaned HTML: " + cleanHtml.length + " chars (was " + html.length + "), indicators: " + (hasCleanIndicators ? cleanIndicators.filter((i) => i.pos !== -1).map((i) => '"' + i.text + '"@' + i.pos).join(", ") : "NONE"));
+    const hashPositions = resumes.map((r) => {
+      const pos = cleanLower.indexOf(r.id.toLowerCase());
+      return { id: r.id, pos };
+    }).filter((h) => h.pos !== -1).sort((a, b) => a.pos - b.pos);
+    if (hashPositions.length > 0) {
+      visLog.info("  Hash positions in cleaned HTML: " + hashPositions.map((h) => h.id.substring(0, 8) + "@" + h.pos).join(", "));
+    }
+    resumes.forEach((r) => {
+      if (r.visibility !== VISIBILITY_UNKNOWN) return;
+      const myPos = cleanForSearch.indexOf(r.id.toLowerCase());
+      if (myPos === -1) {
+        visLog.info("  " + r.id.substring(0, 8) + ": hash not found in cleaned HTML");
+        return;
+      }
+      const nextResume = hashPositions.find((h) => h.pos > myPos && h.id !== r.id);
+      const boundary = nextResume ? nextResume.pos : cleanForSearch.length;
+      const searchStart = Math.max(0, myPos - 500);
+      const searchEnd = Math.min(myPos + SEARCH_RADIUS, boundary);
+      const zone = cleanForSearch.substring(searchStart, searchEnd);
+      const isHidden = hasHiddenIndicator(zone);
+      r.visibility = isHidden ? VISIBILITY_HIDDEN : VISIBILITY_UNKNOWN;
+      r.hidden = isHidden;
+      visLog.info("  " + r.id.substring(0, 8) + "=" + r.visibility + " (zone " + searchStart + "-" + searchEnd + ", next=" + (nextResume ? nextResume.id.substring(0, 8) : "none") + ", indicators=" + (isHidden ? "FOUND" : "none") + ")");
+    });
+  }
+  function findAllPositions(html, pattern) {
     const positions = [];
     const lower = html.toLowerCase();
     let idx = 0;
@@ -4679,12 +4721,16 @@
     }
     return positions;
   }
-  var helperLog, SEARCH_RADIUS;
-  var init_resume_fetch_helpers = __esm({
-    "src/lib/resume-fetch-helpers.js"() {
+  function logVisibilitySummary(resumes) {
+    const summary = resumes.map((r) => r.id.substring(0, 8) + "=" + r.visibility).join(", ");
+    visLog.info("Visibility result: [" + summary + "]");
+  }
+  var visLog, SEARCH_RADIUS;
+  var init_resume_fetch_list_vis = __esm({
+    "src/lib/resume-fetch-list-vis.js"() {
       init_anti_hallucination();
       init_resume_constants();
-      helperLog = createLogger("ResumeFetchH");
+      visLog = createLogger("ResumeFetchH");
       SEARCH_RADIUS = 5e3;
     }
   });
@@ -4730,6 +4776,7 @@
     "src/lib/resume-fetch-list.js"() {
       init_anti_hallucination();
       init_resume_fetch_helpers();
+      init_resume_fetch_list_vis();
       fetchLog = createLogger("ResumeFetch");
     }
   });
@@ -4908,6 +4955,143 @@
       GENDER_PATTERNS = [/\bмужчина\b/i, /\bженщина\b/i, /\bмужской\b/i, /\bженский\b/i, /\bmale\b/i, /\bfemale\b/i];
       AGE_PATTERN = /(?:полных\s*)?(\d{2})\s*(?:лет|год|года)/i;
       AGE_PATTERN2 = /(\d{2})\s*years?\s*old/i;
+    }
+  });
+
+  // src/lib/resume-fetch-resume-page-vis.js
+  function detectVisibilityFromResumePage(doc, html) {
+    const diag = [];
+    const visCard = doc.querySelector('[data-qa="resume-visibility-card"]');
+    if (visCard) {
+      const cardText = normalizeWs(visCard.textContent || "").toLowerCase();
+      if (cardText.includes("\u043D\u0435 \u0432\u0438\u0434\u043D\u043E \u043D\u0438\u043A\u043E\u043C\u0443") || cardText.includes("\u043D\u0435\xA0\u0432\u0438\u0434\u043D\u043E \u043D\u0438\u043A\u043E\u043C\u0443")) {
+        diag.push('S0:visibility-card="\u043D\u0435 \u0432\u0438\u0434\u043D\u043E \u043D\u0438\u043A\u043E\u043C\u0443" \u2192 HIDDEN');
+        visLog2.info("[VIS-DIAG] " + diag.join(" | "));
+        return { visibility: VISIBILITY_HIDDEN, trace: diag };
+      }
+      if (cardText.includes("\u0432\u0438\u0434\u043D\u043E \u0432\u0441\u0435\u043C") || cardText.includes("\u0432\u0438\u0434\u043D\u043E\xA0\u0432\u0441\u0435\u043C")) {
+        diag.push('S0:visibility-card="\u0432\u0438\u0434\u043D\u043E \u0432\u0441\u0435\u043C" \u2192 VISIBLE');
+        visLog2.info("[VIS-DIAG] " + diag.join(" | "));
+        return { visibility: VISIBILITY_VISIBLE, trace: diag };
+      }
+      diag.push('S0:visibility-card-unknown="' + cardText.substring(0, 40) + '"');
+    } else {
+      diag.push("S0:no-visibility-card");
+    }
+    for (const sel of VISIBILITY_HIDDEN_DATA_QA) {
+      const found = doc.querySelector(sel);
+      if (found) {
+        diag.push("S1:data-qa=" + sel + " \u2192 HIDDEN");
+        visLog2.info("[VIS-DIAG] " + diag.join(" | "));
+        return { visibility: VISIBILITY_HIDDEN, trace: diag };
+      }
+    }
+    diag.push("S1:no-data-qa-hidden");
+    const allButtons = doc.querySelectorAll("button, a");
+    let btnDetails = [];
+    for (const btn of allButtons) {
+      const text = normalizeWs(btn.textContent || "").toLowerCase();
+      const qa = (btn.getAttribute("data-qa") || "").toLowerCase();
+      if (text.includes("\u0441\u043A\u0440\u044B\u0442\u044C") || text.includes("\u0432\u0438\u0434\u0438\u043C")) {
+        btnDetails.push('"' + text.substring(0, 40) + '"' + (qa ? "[qa=" + qa + "]" : ""));
+      }
+      if (text.includes("\u0441\u0434\u0435\u043B\u0430\u0442\u044C \u0432\u0438\u0434\u0438\u043C\u044B\u043C")) {
+        diag.push('S2:btn="\u0441\u0434\u0435\u043B\u0430\u0442\u044C \u0432\u0438\u0434\u0438\u043C\u044B\u043C" \u2192 HIDDEN');
+        visLog2.info("[VIS-DIAG] " + diag.join(" | "));
+        visLog2.info("[VIS-DIAG] All vis-related buttons: " + JSON.stringify(btnDetails));
+        return { visibility: VISIBILITY_HIDDEN, trace: diag, btnDetails };
+      }
+      if (text.includes("\u0441\u043A\u0440\u044B\u0442\u044C \u0440\u0435\u0437\u044E\u043C\u0435")) {
+        diag.push('S2:btn="\u0441\u043A\u0440\u044B\u0442\u044C \u0440\u0435\u0437\u044E\u043C\u0435" \u2192 VISIBLE');
+        visLog2.info("[VIS-DIAG] " + diag.join(" | "));
+        visLog2.info("[VIS-DIAG] All vis-related buttons: " + JSON.stringify(btnDetails));
+        return { visibility: VISIBILITY_VISIBLE, trace: diag, btnDetails };
+      }
+    }
+    diag.push("S2:no-key-buttons" + (btnDetails.length ? "(saw:" + btnDetails.length + " partial)" : ""));
+    const bodyText = doc.body ? normalizeWs(doc.body.textContent || "") : "";
+    if (hasHiddenIndicator(bodyText)) {
+      const lower = bodyText.toLowerCase();
+      for (const ind of ["\u043C\u043D\u043E\u0433\u0438\u0435 \u043D\u0435 \u0432\u0438\u0434\u044F\u0442", "\u0441\u0434\u0435\u043B\u0430\u0442\u044C \u0432\u0438\u0434\u0438\u043C\u044B\u043C", "\u043D\u0435 \u0432\u0438\u0434\u043D\u043E"]) {
+        const pos = lower.indexOf(ind);
+        if (pos !== -1) {
+          diag.push('S3:body has "' + ind + '" @' + pos + " \u2192 HIDDEN");
+          break;
+        }
+      }
+      visLog2.info("[VIS-DIAG] " + diag.join(" | "));
+      return { visibility: VISIBILITY_HIDDEN, trace: diag };
+    }
+    if (hasVisibleIndicator(bodyText)) {
+      diag.push("S3:body has visible indicator \u2192 VISIBLE");
+      visLog2.info("[VIS-DIAG] " + diag.join(" | "));
+      return { visibility: VISIBILITY_VISIBLE, trace: diag };
+    }
+    diag.push("S3:body-no-indicators");
+    const htmlForSearch = html.replace(/&nbsp;/g, " ").toLowerCase();
+    const htmlNorm = normalizeWs(htmlForSearch);
+    if (hasHiddenIndicator(htmlNorm)) {
+      const lower = htmlNorm.toLowerCase();
+      for (const ind of ["\u043C\u043D\u043E\u0433\u0438\u0435 \u043D\u0435 \u0432\u0438\u0434\u044F\u0442", "\u0441\u0434\u0435\u043B\u0430\u0442\u044C \u0432\u0438\u0434\u0438\u043C\u044B\u043C", "\u043D\u0435 \u0432\u0438\u0434\u043D\u043E"]) {
+        const pos = lower.indexOf(ind);
+        if (pos !== -1) {
+          diag.push('S4:html has "' + ind + '" @' + pos + " \u2192 HIDDEN");
+          break;
+        }
+      }
+      visLog2.info("[VIS-DIAG] " + diag.join(" | "));
+      return { visibility: VISIBILITY_HIDDEN, trace: diag };
+    }
+    if (hasVisibleIndicator(htmlNorm)) {
+      diag.push("S4:html has visible indicator \u2192 VISIBLE");
+      visLog2.info("[VIS-DIAG] " + diag.join(" | "));
+      return { visibility: VISIBILITY_VISIBLE, trace: diag };
+    }
+    diag.push("S4:html-no-indicators");
+    const scriptEls = doc.querySelectorAll("script:not([src])");
+    let scriptPatterns = [];
+    for (const script of scriptEls) {
+      const t = script.textContent || "";
+      if (t.length < 50) continue;
+      const patterns = [
+        { re: /"hidden"\s*:\s*true/, name: '"hidden":true' },
+        { re: /"isHidden"\s*:\s*true/, name: '"isHidden":true' },
+        { re: /"visibility"\s*:\s*"hidden"/, name: '"visibility":"hidden"' },
+        { re: /"status"\s*:\s*"hidden"/, name: '"status":"hidden"' }
+      ];
+      for (const p of patterns) {
+        if (p.re.test(t)) scriptPatterns.push(p.name);
+      }
+    }
+    if (scriptPatterns.length > 0) {
+      diag.push("S5:script=" + scriptPatterns.join(",") + " \u2192 HIDDEN");
+      visLog2.info("[VIS-DIAG] " + diag.join(" | "));
+      return { visibility: VISIBILITY_HIDDEN, trace: diag, scriptPatterns };
+    }
+    diag.push("S5:no-script-patterns");
+    const hideLink = doc.querySelector('[data-qa="resume-action-hide"], [data-qa*="resume-hide"], a[data-qa*="hide-resume"]');
+    if (hideLink) {
+      const hideQa = hideLink.getAttribute("data-qa") || "";
+      diag.push("S6:hide-link qa=" + hideQa + " \u2192 VISIBLE");
+      visLog2.info("[VIS-DIAG] " + diag.join(" | "));
+      return { visibility: VISIBILITY_VISIBLE, trace: diag };
+    }
+    diag.push("S6:no-hide-link");
+    const allHideBtns = doc.querySelectorAll('[data-qa*="hide"], [data-qa*="hidden"]');
+    if (allHideBtns.length > 0) {
+      const hideQas = Array.from(allHideBtns).map((b) => b.getAttribute("data-qa")).filter(Boolean);
+      diag.push("EXTRA:hide-qa=" + hideQas.join(","));
+    }
+    diag.push("\u2192 UNKNOWN");
+    visLog2.info("[VIS-DIAG] " + diag.join(" | "));
+    return { visibility: VISIBILITY_UNKNOWN, trace: diag };
+  }
+  var visLog2;
+  var init_resume_fetch_resume_page_vis = __esm({
+    "src/lib/resume-fetch-resume-page-vis.js"() {
+      init_anti_hallucination();
+      init_resume_constants();
+      visLog2 = createLogger("ResumeFetch");
     }
   });
 
@@ -5381,99 +5565,14 @@
     }
   });
 
-  // src/lib/resume-fetch-strategy6-iframe.js
-  async function fetchExpandedExperienceViaIframe(resumeUrl, currentCount) {
-    fetchLog7.info("Strategy 6 iframe: loading " + resumeUrl);
-    const iframe = document.createElement("iframe");
-    iframe.style.cssText = "position:fixed;top:-9999px;left:-9999px;width:1280px;height:800px;opacity:0;pointer-events:none;border:none;";
-    iframe.setAttribute("aria-hidden", "true");
-    iframe.setAttribute("tabindex", "-1");
-    iframe.src = resumeUrl;
-    document.body.appendChild(iframe);
-    try {
-      await new Promise((resolve, reject) => {
-        const timeout = setTimeout(() => reject(new Error("iframe load timeout (15s)")), 15e3);
-        iframe.addEventListener("load", () => {
-          clearTimeout(timeout);
-          resolve();
-        });
-        iframe.addEventListener("error", () => {
-          clearTimeout(timeout);
-          reject(new Error("iframe load error"));
-        });
-      });
-      await new Promise((r) => setTimeout(r, 4e3));
-      const iframeDoc = iframe.contentDocument;
-      if (!iframeDoc) {
-        throw new Error("Cannot access iframe document (cross-origin or blocked)");
-      }
-      const iframeDiag = {};
-      try {
-        iframeDiag.finalUrl = iframe.contentWindow?.location?.href || "(no access)";
-      } catch (e) {
-        iframeDiag.finalUrl = "(cross-origin blocked: " + e.message + ")";
-      }
-      iframeDiag.title = iframeDoc.title || "(no title)";
-      iframeDiag.bodyTextLen = iframeDoc.body ? (iframeDoc.body.textContent || "").length : 0;
-      iframeDiag.bodyTextSnippet = iframeDoc.body ? normalizeWs(iframeDoc.body.textContent || "").substring(0, 1500) : "(no body)";
-      const allQa = iframeDoc.querySelectorAll("[data-qa]");
-      iframeDiag.dataQaList = Array.from(allQa).slice(0, 50).map((el) => {
-        const qa = el.getAttribute("data-qa") || "";
-        const text = normalizeWs(el.textContent || "").substring(0, 60);
-        return qa + (text ? '="' + text + '"' : "");
-      });
-      const allActions = iframeDoc.querySelectorAll('button, a, [role="button"]');
-      iframeDiag.actionTexts = Array.from(allActions).slice(0, 30).map((el) => {
-        return normalizeWs(el.textContent || "").substring(0, 50);
-      }).filter((t) => t.length > 2);
-      fetchLog7.info("[VIS-IFRAME-DIAG] url=" + iframeDiag.finalUrl);
-      fetchLog7.info('[VIS-IFRAME-DIAG] title="' + iframeDiag.title + '"');
-      fetchLog7.info("[VIS-IFRAME-DIAG] bodyLen=" + iframeDiag.bodyTextLen);
-      fetchLog7.info("[VIS-IFRAME-DIAG] bodySnippet=" + iframeDiag.bodyTextSnippet.substring(0, 500));
-      fetchLog7.info("[VIS-IFRAME-DIAG] dataQa count=" + allQa.length + ", sample: " + JSON.stringify(iframeDiag.dataQaList.slice(0, 20)));
-      fetchLog7.info("[VIS-IFRAME-DIAG] actions: " + JSON.stringify(iframeDiag.actionTexts));
-      const iframeVisResult = detectVisibilityFromIframeDoc(iframeDoc);
-      iframeVisResult.iframeDiag = iframeDiag;
-      fetchLog7.info("[VIS-DIAG] iframe visibility: " + iframeVisResult.visibility + " (trace: " + iframeVisResult.trace.join(" \u2192 ") + ")");
-      const preCards = iframeDoc.querySelectorAll('[data-qa="profile-experience-company-card"]');
-      const preSteppers = iframeDoc.querySelectorAll('[data-qa="magritte-stepper-step-content"]');
-      fetchLog7.info("Strategy 6 iframe: before expand \u2014 " + preCards.length + " company-cards, " + preSteppers.length + " stepper-items");
-      const expandButtons = iframeDoc.querySelectorAll('[data-qa="profile-experience-viewAll"], button');
-      let clicked = 0;
-      expandButtons.forEach((btn) => {
-        const text = (btn.textContent || "").trim().toLowerCase();
-        if (text.includes("\u0440\u0430\u0437\u0432\u0435\u0440\u043D\u0443\u0442\u044C") || text.includes("\u043F\u043E\u043A\u0430\u0437\u0430\u0442\u044C \u0432\u0441\u0435") || text.includes("\u043F\u043E\u043A\u0430\u0437\u0430\u0442\u044C \u0435\u0449\u0451") || text.includes("\u043F\u043E\u0441\u043C\u043E\u0442\u0440\u0435\u0442\u044C \u0432\u0441\u0451") || text.includes("\u043F\u043E\u0441\u043C\u043E\u0442\u0440\u0435\u0442\u044C \u0432\u0441\u0435") || text.includes("expand")) {
-          try {
-            btn.click();
-            clicked++;
-          } catch (e) {
-          }
-        }
-      });
-      fetchLog7.info("Strategy 6 iframe: clicked " + clicked + " expand buttons");
-      if (clicked > 0) {
-        await new Promise((r) => setTimeout(r, 2e3));
-      }
-      const postCards = iframeDoc.querySelectorAll('[data-qa="profile-experience-company-card"]');
-      const postSteppers = iframeDoc.querySelectorAll('[data-qa="magritte-stepper-step-content"]');
-      fetchLog7.info("Strategy 6 iframe: after expand \u2014 " + postCards.length + " company-cards, " + postSteppers.length + " stepper-items");
-      const entries = parseExperienceFromIframeDoc(iframeDoc);
-      fetchLog7.info("Strategy 6 iframe: parsed " + entries.length + " experience entries");
-      return { entries, iframeVis: iframeVisResult.visibility, iframeVisTrace: iframeVisResult.trace, iframeDiag: iframeVisResult.iframeDiag };
-    } finally {
-      try {
-        if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
-      } catch (e) {
-      }
-    }
-  }
+  // src/lib/resume-fetch-iframe-vis.js
   function detectVisibilityFromIframeDoc(iframeDoc) {
     const trace = [];
     const diagInfo = { buttons: [], visElements: [], hideElements: [] };
     const visCard = iframeDoc.querySelector('[data-qa="resume-visibility-card"]');
     if (visCard) {
       const cardText = normalizeWs(visCard.textContent || "").toLowerCase();
-      fetchLog7.info('[VIS-IFRAME] resume-visibility-card text="' + cardText.substring(0, 100) + '"');
+      visLog3.info('[VIS-IFRAME] resume-visibility-card text="' + cardText.substring(0, 100) + '"');
       if (cardText.includes("\u043D\u0435 \u0432\u0438\u0434\u043D\u043E \u043D\u0438\u043A\u043E\u043C\u0443") || cardText.includes("\u043D\u0435\xA0\u0432\u0438\u0434\u043D\u043E \u043D\u0438\u043A\u043E\u043C\u0443")) {
         trace.push('iframe-S0:visibility-card="\u043D\u0435 \u0432\u0438\u0434\u043D\u043E \u043D\u0438\u043A\u043E\u043C\u0443" \u2192 HIDDEN');
         return { visibility: VISIBILITY_HIDDEN, trace };
@@ -5495,7 +5594,7 @@
         diagInfo.buttons.push({ text: text.substring(0, 50), qa, href: href.substring(0, 60), tag: btn.tagName });
       }
     }
-    fetchLog7.info("[VIS-IFRAME] Diagnostic buttons: " + JSON.stringify(diagInfo.buttons));
+    visLog3.info("[VIS-IFRAME] Diagnostic buttons: " + JSON.stringify(diagInfo.buttons));
     for (const sel of VISIBILITY_HIDDEN_DATA_QA) {
       const found = iframeDoc.querySelector(sel);
       if (found) {
@@ -5598,11 +5697,114 @@
       }
     }
     if (diagInfo.visElements.length > 0) {
-      fetchLog7.info("[VIS-IFRAME] Related elements: " + JSON.stringify(diagInfo.visElements));
+      visLog3.info("[VIS-IFRAME] Related elements: " + JSON.stringify(diagInfo.visElements));
     }
     trace.push("\u2192 UNKNOWN");
-    fetchLog7.info("[VIS-IFRAME] All strategies exhausted. Buttons found: " + diagInfo.buttons.length + ", Related elements: " + diagInfo.visElements.length);
+    visLog3.info("[VIS-IFRAME] All strategies exhausted. Buttons found: " + diagInfo.buttons.length + ", Related elements: " + diagInfo.visElements.length);
     return { visibility: VISIBILITY_UNKNOWN, trace };
+  }
+  var visLog3;
+  var init_resume_fetch_iframe_vis = __esm({
+    "src/lib/resume-fetch-iframe-vis.js"() {
+      init_anti_hallucination();
+      init_resume_constants();
+      visLog3 = createLogger("ResumeFetch");
+    }
+  });
+
+  // src/lib/resume-fetch-strategy6-iframe.js
+  async function fetchExpandedExperienceViaIframe(resumeUrl, currentCount) {
+    fetchLog7.info("Strategy 6 iframe: loading " + resumeUrl);
+    const iframe = document.createElement("iframe");
+    iframe.style.cssText = "position:fixed;top:-9999px;left:-9999px;width:1280px;height:800px;opacity:0;pointer-events:none;border:none;";
+    iframe.setAttribute("aria-hidden", "true");
+    iframe.setAttribute("tabindex", "-1");
+    iframe.src = resumeUrl;
+    document.body.appendChild(iframe);
+    try {
+      await new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error("iframe load timeout (15s)")), 15e3);
+        iframe.addEventListener("load", () => {
+          clearTimeout(timeout);
+          resolve();
+        });
+        iframe.addEventListener("error", () => {
+          clearTimeout(timeout);
+          reject(new Error("iframe load error"));
+        });
+      });
+      await new Promise((r) => setTimeout(r, 4e3));
+      const iframeDoc = iframe.contentDocument;
+      if (!iframeDoc) {
+        throw new Error("Cannot access iframe document (cross-origin or blocked)");
+      }
+      const iframeDiag = buildIframeDiag(iframeDoc, iframe);
+      const iframeVisResult = detectVisibilityFromIframeDoc(iframeDoc);
+      iframeVisResult.iframeDiag = iframeDiag;
+      fetchLog7.info("[VIS-DIAG] iframe visibility: " + iframeVisResult.visibility + " (trace: " + iframeVisResult.trace.join(" \u2192 ") + ")");
+      const preCards = iframeDoc.querySelectorAll('[data-qa="profile-experience-company-card"]');
+      const preSteppers = iframeDoc.querySelectorAll('[data-qa="magritte-stepper-step-content"]');
+      fetchLog7.info("Strategy 6 iframe: before expand \u2014 " + preCards.length + " company-cards, " + preSteppers.length + " stepper-items");
+      const clicked = clickExpandButtons(iframeDoc);
+      fetchLog7.info("Strategy 6 iframe: clicked " + clicked + " expand buttons");
+      if (clicked > 0) {
+        await new Promise((r) => setTimeout(r, 2e3));
+      }
+      const postCards = iframeDoc.querySelectorAll('[data-qa="profile-experience-company-card"]');
+      const postSteppers = iframeDoc.querySelectorAll('[data-qa="magritte-stepper-step-content"]');
+      fetchLog7.info("Strategy 6 iframe: after expand \u2014 " + postCards.length + " company-cards, " + postSteppers.length + " stepper-items");
+      const entries = parseExperienceFromIframeDoc(iframeDoc);
+      fetchLog7.info("Strategy 6 iframe: parsed " + entries.length + " experience entries");
+      return { entries, iframeVis: iframeVisResult.visibility, iframeVisTrace: iframeVisResult.trace, iframeDiag: iframeVisResult.iframeDiag };
+    } finally {
+      try {
+        if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+      } catch (e) {
+      }
+    }
+  }
+  function buildIframeDiag(iframeDoc, iframe) {
+    const diag = {};
+    try {
+      diag.finalUrl = iframe.contentWindow?.location?.href || "(no access)";
+    } catch (e) {
+      diag.finalUrl = "(cross-origin blocked: " + e.message + ")";
+    }
+    diag.title = iframeDoc.title || "(no title)";
+    diag.bodyTextLen = iframeDoc.body ? (iframeDoc.body.textContent || "").length : 0;
+    diag.bodyTextSnippet = iframeDoc.body ? normalizeWs(iframeDoc.body.textContent || "").substring(0, 1500) : "(no body)";
+    const allQa = iframeDoc.querySelectorAll("[data-qa]");
+    diag.dataQaList = Array.from(allQa).slice(0, 50).map((el) => {
+      const qa = el.getAttribute("data-qa") || "";
+      const text = normalizeWs(el.textContent || "").substring(0, 60);
+      return qa + (text ? '="' + text + '"' : "");
+    });
+    const allActions = iframeDoc.querySelectorAll('button, a, [role="button"]');
+    diag.actionTexts = Array.from(allActions).slice(0, 30).map((el) => {
+      return normalizeWs(el.textContent || "").substring(0, 50);
+    }).filter((t) => t.length > 2);
+    fetchLog7.info("[VIS-IFRAME-DIAG] url=" + diag.finalUrl);
+    fetchLog7.info('[VIS-IFRAME-DIAG] title="' + diag.title + '"');
+    fetchLog7.info("[VIS-IFRAME-DIAG] bodyLen=" + diag.bodyTextLen);
+    fetchLog7.info("[VIS-IFRAME-DIAG] bodySnippet=" + diag.bodyTextSnippet.substring(0, 500));
+    fetchLog7.info("[VIS-IFRAME-DIAG] dataQa count=" + allQa.length + ", sample: " + JSON.stringify(diag.dataQaList.slice(0, 20)));
+    fetchLog7.info("[VIS-IFRAME-DIAG] actions: " + JSON.stringify(diag.actionTexts));
+    return diag;
+  }
+  function clickExpandButtons(iframeDoc) {
+    const expandButtons = iframeDoc.querySelectorAll('[data-qa="profile-experience-viewAll"], button');
+    let clicked = 0;
+    expandButtons.forEach((btn) => {
+      const text = (btn.textContent || "").trim().toLowerCase();
+      if (text.includes("\u0440\u0430\u0437\u0432\u0435\u0440\u043D\u0443\u0442\u044C") || text.includes("\u043F\u043E\u043A\u0430\u0437\u0430\u0442\u044C \u0432\u0441\u0435") || text.includes("\u043F\u043E\u043A\u0430\u0437\u0430\u0442\u044C \u0435\u0449\u0451") || text.includes("\u043F\u043E\u0441\u043C\u043E\u0442\u0440\u0435\u0442\u044C \u0432\u0441\u0451") || text.includes("\u043F\u043E\u0441\u043C\u043E\u0442\u0440\u0435\u0442\u044C \u0432\u0441\u0435") || text.includes("expand")) {
+        try {
+          btn.click();
+          clicked++;
+        } catch (e) {
+        }
+      }
+    });
+    return clicked;
   }
   function parseExperienceFromIframeDoc(iframeDoc) {
     const allCards = iframeDoc.querySelectorAll('[data-qa="profile-experience-company-card"]');
@@ -5658,6 +5860,7 @@
       init_anti_hallucination();
       init_resume_fetch_parse();
       init_resume_constants();
+      init_resume_fetch_iframe_vis();
       fetchLog7 = createLogger("ResumeFetch");
     }
   });
@@ -5992,6 +6195,102 @@
     }
   });
 
+  // src/lib/resume-fetch-resume-exp-orch.js
+  async function parseExperienceFromDoc(doc, dbg, resume, html, resumeUrl) {
+    const entries = parseExperienceFromDocStrategies1to3(doc, resume);
+    if (html && entries.length > 0) {
+      const textParsed = parseExperienceFromHtmlText(html, entries.length);
+      if (textParsed.length > entries.length) {
+        expLog.info("Strategy 4 (text patterns): found " + textParsed.length + " experiences (was " + entries.length + ")");
+        resume._debug.found.push("experience (text pattern supplement): " + textParsed.length);
+        entries.length = 0;
+        entries.push(...textParsed);
+      }
+    }
+    if (html) {
+      const scriptParsed = parseExperienceFromScripts(doc, html);
+      if (scriptParsed.length > entries.length) {
+        expLog.info("Strategy 5 (script JSON): found " + scriptParsed.length + " experiences (was " + entries.length + ")");
+        resume._debug.found.push("experience (script JSON): " + scriptParsed.length);
+        entries.length = 0;
+        entries.push(...scriptParsed);
+      } else if (scriptParsed.length > 0) {
+        expLog.info("Strategy 5 (script JSON): found " + scriptParsed.length + " experiences (not more than " + entries.length + ", skipping)");
+      }
+    }
+    let iframeVis = null;
+    let iframeVisTrace = null;
+    let iframeDiag = null;
+    if (html && entries.length > 0 && entries.length < 20) {
+      try {
+        const s6result = await fetchExpandedExperience(doc, html, resume.id, entries.length, resumeUrl);
+        if (s6result.iframeVis) {
+          iframeVis = s6result.iframeVis;
+          iframeVisTrace = s6result.iframeVisTrace;
+          iframeDiag = s6result.iframeDiag || null;
+        }
+        if (s6result.entries && s6result.entries.length > entries.length) {
+          expLog.info("Strategy 6 (expanded fetch): found " + s6result.entries.length + " experiences (was " + entries.length + ")");
+          resume._debug.found.push("experience (expanded fetch): " + s6result.entries.length);
+          entries.length = 0;
+          entries.push(...s6result.entries);
+        }
+      } catch (err) {
+        expLog.warn("Strategy 6 failed: " + err.message);
+      }
+    }
+    resume.experience = entries;
+    if (entries.length > 0) resume._debug.found.push("experience: " + entries.length);
+    else resume._debug.missing.push("experience (0 entries)");
+    applyIframeVisibilityOverride(resume, iframeVis, iframeVisTrace, iframeDiag);
+  }
+  function applyIframeVisibilityOverride(resume, iframeVis, iframeVisTrace, iframeDiag) {
+    if (!iframeVis) return;
+    const prevVis = resume.visibility;
+    const prevReason = resume._visDiag?.decisionReason || "";
+    if (iframeVis === VISIBILITY_HIDDEN && prevVis !== VISIBILITY_HIDDEN) {
+      expLog.info("[VIS-DIAG] iframe OVERRIDE: " + (resume.id ? resume.id.substring(0, 8) : "?") + " was " + prevVis + ", iframe says HIDDEN \u2192 overriding");
+      resume.visibility = VISIBILITY_HIDDEN;
+      resume.hidden = true;
+      if (resume._visDiag) {
+        resume._visDiag.decision = VISIBILITY_HIDDEN;
+        resume._visDiag.decisionReason = "iframe-detected-hidden (overrode " + prevVis + ", was: " + prevReason + ")";
+        resume._visDiag.pageTrace = (resume._visDiag.pageTrace || []).concat(iframeVisTrace || []);
+      }
+    } else if (iframeVis === VISIBILITY_VISIBLE && prevVis === VISIBILITY_UNKNOWN) {
+      expLog.info("[VIS-DIAG] iframe OVERRIDE: " + (resume.id ? resume.id.substring(0, 8) : "?") + " was UNKNOWN, iframe says VISIBLE \u2192 overriding");
+      resume.visibility = VISIBILITY_VISIBLE;
+      resume.hidden = false;
+      if (resume._visDiag) {
+        resume._visDiag.decision = VISIBILITY_VISIBLE;
+        resume._visDiag.decisionReason = "iframe-detected-visible (overrode UNKNOWN, was: " + prevReason + ")";
+        resume._visDiag.pageTrace = (resume._visDiag.pageTrace || []).concat(iframeVisTrace || []);
+      }
+    } else {
+      expLog.info("[VIS-DIAG] iframe CONFIRMED: " + (resume.id ? resume.id.substring(0, 8) : "?") + " is " + prevVis + ", iframe agrees (" + iframeVis + ")");
+      if (resume._visDiag && iframeVisTrace) {
+        resume._visDiag.pageTrace = (resume._visDiag.pageTrace || []).concat(iframeVisTrace);
+      }
+    }
+    if (resume._visDiag) {
+      resume._visDiag.iframeRan = true;
+      resume._visDiag.iframeVis = iframeVis;
+      if (iframeDiag) resume._visDiag.iframeDiag = iframeDiag;
+    }
+  }
+  var expLog;
+  var init_resume_fetch_resume_exp_orch = __esm({
+    "src/lib/resume-fetch-resume-exp-orch.js"() {
+      init_anti_hallucination();
+      init_resume_constants();
+      init_resume_fetch_experience();
+      init_resume_fetch_strategy4_text();
+      init_resume_fetch_strategy5_scripts();
+      init_resume_fetch_strategy6_expand();
+      expLog = createLogger("ResumeFetch");
+    }
+  });
+
   // src/lib/resume-fetch-education-languages.js
   function parseEducationFromDocSection(doc, dbg, resume) {
     const eduCard = doc.querySelector('[data-qa="resume-list-card-education"]');
@@ -6033,33 +6332,7 @@
     const html = await fetchHtml(resumeUrl);
     const doc = htmlToDoc(html);
     fetchLog11.info("Resume HTML: " + html.length + " chars");
-    const preDoc = htmlToDoc(html);
-    const preExpCards = preDoc.querySelectorAll('[data-qa="profile-experience-company-card"]');
-    const preStepperItems = preDoc.querySelectorAll('[data-qa="magritte-stepper-step-content"]');
-    const preShowAll = html.match(/Показать все|показать ещё|Посмотреть всё|Развернуть/gi);
-    fetchLog11.info("Pre-parse: " + preExpCards.length + " company-cards, " + preStepperItems.length + " stepper-items, " + (preShowAll ? preShowAll.length : 0) + ' "show all" buttons in HTML');
-    const expCardHtml = preDoc.querySelector('[data-qa="resume-list-card-experience"]');
-    if (expCardHtml) {
-      const snippet = expCardHtml.outerHTML.substring(0, 2e3);
-      fetchLog11.info("ExpCard HTML snippet (first 2000 chars): " + snippet);
-    }
-    const MONTHS_RE = /(?:январ[ьея]|феврал[ьья]|март[ае]?|апрел[ьья]|ма[йия]|июн[ьья]|июл[ьья]|август[ае]?|сентябр[ьья]|октябр[ьья]|ноябр[ьья]|декабр[ьья])\s*\d{4}\s*[—\-–]\s*(?:(?:январ[ьея]|феврал[ьья]|март[ае]?|апрел[ьья]|ма[йия]|июн[ьья]|июл[ьья]|август[ае]?|сентябр[ьья]|октябр[ьья]|ноябр[ьья]|декабр[ьья])\s*\d{4}|настоящее\s*время|по\s+настоящее\s+время|сейчас|по\s+сейчас)/gi;
-    const allDateRanges = html.match(MONTHS_RE) || [];
-    fetchLog11.info("Full HTML date ranges: " + allDateRanges.length + " found: " + JSON.stringify(allDateRanges));
-    const numDateRanges = html.match(/\d{2}\.\d{4}\s*[—\-–]\s*(?:\d{2}\.\d{4}|настоящее\s*время|по\s+настоящее\s*время|сейчас|по\s+сейчас)/gi) || [];
-    fetchLog11.info("Numeric date ranges: " + numDateRanges.length + " found: " + JSON.stringify(numDateRanges));
-    const scripts = preDoc.querySelectorAll("script:not([src])");
-    let expScriptCount = 0;
-    scripts.forEach((s) => {
-      const t = s.textContent || "";
-      if (/experience|работ[аеы]|компани|должност|career/i.test(t)) {
-        expScriptCount++;
-        if (expScriptCount <= 3) {
-          fetchLog11.info("Script with experience keywords (first 500 chars): " + t.substring(0, 500));
-        }
-      }
-    });
-    fetchLog11.info("Scripts with experience keywords: " + expScriptCount + " of " + scripts.length);
+    logPreParseDiagnostics(html, doc);
     window.__hhLastFetchHtml = html;
     window.__hhLastFetchDoc = doc;
     let hashMatch = resumeUrl.match(/\/resume\/([a-f0-9]+)/);
@@ -6088,52 +6361,18 @@
     const pageVisResult = detectVisibilityFromResumePage(doc, html);
     const pageVis = pageVisResult.visibility;
     const pageTrace = pageVisResult.trace || [];
-    const listVis = listMeta ? listMeta.visibility : "no-list-meta";
-    const listHidden = listMeta ? listMeta.hidden : void 0;
     const visDiagEntry = {
       id: id || "unknown",
       title: "(will be set after parse)",
       pageVis,
       pageTrace,
-      listVis,
-      listHidden,
+      listVis: listMeta ? listMeta.visibility : "no-list-meta",
+      listHidden: listMeta ? listMeta.hidden : void 0,
       decision: null,
       decisionReason: null,
       timestamp: (/* @__PURE__ */ new Date()).toISOString()
     };
-    fetchLog11.info("[VIS-DIAG] === Visibility decision for " + (id ? id.substring(0, 8) : "unknown") + " ===");
-    fetchLog11.info("[VIS-DIAG] Sources: page=" + pageVis + ", list=" + listVis + ", listHidden=" + listHidden);
-    if (pageVis === VISIBILITY_HIDDEN) {
-      resume.visibility = VISIBILITY_HIDDEN;
-      resume.hidden = true;
-      visDiagEntry.decision = VISIBILITY_HIDDEN;
-      visDiagEntry.decisionReason = "page-detected-hidden";
-      fetchLog11.info("[VIS-DIAG] Decision: HIDDEN (page detected)");
-    } else if (listMeta && listMeta.visibility === VISIBILITY_HIDDEN) {
-      resume.visibility = VISIBILITY_HIDDEN;
-      resume.hidden = true;
-      visDiagEntry.decision = VISIBILITY_HIDDEN;
-      visDiagEntry.decisionReason = "list-detected-hidden (page=" + pageVis + ")";
-      fetchLog11.info("[VIS-DIAG] Decision: HIDDEN (list detected, page=" + pageVis + ")");
-    } else if (pageVis === VISIBILITY_VISIBLE) {
-      resume.visibility = VISIBILITY_VISIBLE;
-      resume.hidden = false;
-      visDiagEntry.decision = VISIBILITY_VISIBLE;
-      visDiagEntry.decisionReason = "page-detected-visible";
-      fetchLog11.info("[VIS-DIAG] Decision: VISIBLE (page detected)");
-    } else if (listMeta && listMeta.visibility === VISIBILITY_VISIBLE) {
-      resume.visibility = VISIBILITY_VISIBLE;
-      resume.hidden = false;
-      visDiagEntry.decision = VISIBILITY_VISIBLE;
-      visDiagEntry.decisionReason = "list-detected-visible (page=UNKNOWN)";
-      fetchLog11.info("[VIS-DIAG] Decision: VISIBLE (list detected, page=UNKNOWN)");
-    } else {
-      resume.visibility = VISIBILITY_UNKNOWN;
-      resume.hidden = false;
-      visDiagEntry.decision = VISIBILITY_UNKNOWN;
-      visDiagEntry.decisionReason = "both-sources-unknown";
-      fetchLog11.info("[VIS-DIAG] Decision: UNKNOWN (both sources unknown)");
-    }
+    resolveVisibilityDecision(resume, pageVis, listMeta, visDiagEntry);
     resume._visDiag = visDiagEntry;
     if (listMeta && listMeta.title && listMeta.title !== "Untitled") {
       resume._listTitle = listMeta.title;
@@ -6144,17 +6383,13 @@
       return val;
     };
     parseHeader(doc, dbg, resume);
-    if (resume.title) {
-      resume.title = resume.title.replace(TITLE_SUFFIX_NOISE, "").trim();
-    }
+    if (resume.title) resume.title = resume.title.replace(TITLE_SUFFIX_NOISE, "").trim();
     parsePersonalDataFromDoc(doc, doc.querySelector('[data-qa="resume-block-title-position"]'), dbg, resume);
     parseSkillsFromDoc(doc, dbg, resume);
     await parseExperienceFromDoc(doc, dbg, resume, html, resumeUrl);
     parseEducationFromDocSection(doc, dbg, resume);
     parseLanguagesAndAbout2(doc, dbg, resume);
-    if (resume._visDiag) {
-      resume._visDiag.title = resume.title || "(no title)";
-    }
+    if (resume._visDiag) resume._visDiag.title = resume.title || "(no title)";
     fetchLog11.info("Parsed: " + resume.title + " | Skills: " + resume.skills.length + " | Exp: " + resume.experience.length + " | Edu: " + resume.education.length);
     return resume;
   }
@@ -6196,216 +6431,62 @@
       resume._debug.found.push("skills: " + resume.skills.length + " tags");
     }
   }
-  async function parseExperienceFromDoc(doc, dbg, resume, html, resumeUrl) {
-    const entries = parseExperienceFromDocStrategies1to3(doc, resume);
-    if (html && entries.length > 0) {
-      const textParsed = parseExperienceFromHtmlText(html, entries.length);
-      if (textParsed.length > entries.length) {
-        fetchLog11.info("Strategy 4 (text patterns): found " + textParsed.length + " experiences (was " + entries.length + ")");
-        resume._debug.found.push("experience (text pattern supplement): " + textParsed.length);
-        entries.length = 0;
-        entries.push(...textParsed);
-      }
+  function logPreParseDiagnostics(html, doc) {
+    const preExpCards = doc.querySelectorAll('[data-qa="profile-experience-company-card"]');
+    const preStepperItems = doc.querySelectorAll('[data-qa="magritte-stepper-step-content"]');
+    const preShowAll = html.match(/Показать все|показать ещё|Посмотреть всё|Развернуть/gi);
+    fetchLog11.info("Pre-parse: " + preExpCards.length + " company-cards, " + preStepperItems.length + " stepper-items, " + (preShowAll ? preShowAll.length : 0) + ' "show all" buttons in HTML');
+    const expCardHtml = doc.querySelector('[data-qa="resume-list-card-experience"]');
+    if (expCardHtml) {
+      fetchLog11.info("ExpCard HTML snippet (first 2000 chars): " + expCardHtml.outerHTML.substring(0, 2e3));
     }
-    if (html) {
-      const scriptParsed = parseExperienceFromScripts(doc, html);
-      if (scriptParsed.length > entries.length) {
-        fetchLog11.info("Strategy 5 (script JSON): found " + scriptParsed.length + " experiences (was " + entries.length + ")");
-        resume._debug.found.push("experience (script JSON): " + scriptParsed.length);
-        entries.length = 0;
-        entries.push(...scriptParsed);
-      } else if (scriptParsed.length > 0) {
-        fetchLog11.info("Strategy 5 (script JSON): found " + scriptParsed.length + " experiences (not more than " + entries.length + ", skipping)");
+    const MONTHS_RE = /(?:январ[ьея]|феврал[ьья]|март[ае]?|апрел[ьья]|ма[йия]|июн[ьья]|июл[ьья]|август[ае]?|сентябр[ьья]|октябр[ьья]|ноябр[ьья]|декабр[ьья])\s*\d{4}\s*[—\-–]\s*(?:(?:январ[ьея]|феврал[ьья]|март[ае]?|апрел[ьья]|ма[йия]|июн[ьья]|июл[ьья]|август[ае]?|сентябр[ьья]|октябр[ьья]|ноябр[ьья]|декабр[ьья])\s*\d{4}|настоящее\s*время|по\s+настоящее\s+время|сейчас|по\s+сейчас)/gi;
+    const allDateRanges = html.match(MONTHS_RE) || [];
+    fetchLog11.info("Full HTML date ranges: " + allDateRanges.length + " found: " + JSON.stringify(allDateRanges));
+    const numDateRanges = html.match(/\d{2}\.\d{4}\s*[—\-–]\s*(?:\d{2}\.\d{4}|настоящее\s*время|по\s+настоящее\s*время|сейчас|по\s+сейчас)/gi) || [];
+    fetchLog11.info("Numeric date ranges: " + numDateRanges.length + " found: " + JSON.stringify(numDateRanges));
+    const scripts = doc.querySelectorAll("script:not([src])");
+    let expScriptCount = 0;
+    scripts.forEach((s) => {
+      const t = s.textContent || "";
+      if (/experience|работ[аеы]|компани|должност|career/i.test(t)) {
+        expScriptCount++;
+        if (expScriptCount <= 3) fetchLog11.info("Script with experience keywords (first 500 chars): " + t.substring(0, 500));
       }
-    }
-    let iframeVis = null;
-    let iframeVisTrace = null;
-    let iframeDiag = null;
-    if (html && entries.length > 0 && entries.length < 20) {
-      try {
-        const s6result = await fetchExpandedExperience(doc, html, resume.id, entries.length, resumeUrl);
-        if (s6result.iframeVis) {
-          iframeVis = s6result.iframeVis;
-          iframeVisTrace = s6result.iframeVisTrace;
-          iframeDiag = s6result.iframeDiag || null;
-        }
-        if (s6result.entries && s6result.entries.length > entries.length) {
-          fetchLog11.info("Strategy 6 (expanded fetch): found " + s6result.entries.length + " experiences (was " + entries.length + ")");
-          resume._debug.found.push("experience (expanded fetch): " + s6result.entries.length);
-          entries.length = 0;
-          entries.push(...s6result.entries);
-        }
-      } catch (err) {
-        fetchLog11.warn("Strategy 6 failed: " + err.message);
-      }
-    }
-    resume.experience = entries;
-    if (entries.length > 0) resume._debug.found.push("experience: " + entries.length);
-    else resume._debug.missing.push("experience (0 entries)");
-    if (iframeVis) {
-      const prevVis = resume.visibility;
-      const prevReason = resume._visDiag?.decisionReason || "";
-      if (iframeVis === VISIBILITY_HIDDEN && prevVis !== VISIBILITY_HIDDEN) {
-        fetchLog11.info("[VIS-DIAG] iframe OVERRIDE: " + (resume.id ? resume.id.substring(0, 8) : "?") + " was " + prevVis + ", iframe says HIDDEN \u2192 overriding");
-        resume.visibility = VISIBILITY_HIDDEN;
-        resume.hidden = true;
-        if (resume._visDiag) {
-          resume._visDiag.decision = VISIBILITY_HIDDEN;
-          resume._visDiag.decisionReason = "iframe-detected-hidden (overrode " + prevVis + ", was: " + prevReason + ")";
-          resume._visDiag.pageTrace = (resume._visDiag.pageTrace || []).concat(iframeVisTrace || []);
-        }
-      } else if (iframeVis === VISIBILITY_VISIBLE && prevVis === VISIBILITY_UNKNOWN) {
-        fetchLog11.info("[VIS-DIAG] iframe OVERRIDE: " + (resume.id ? resume.id.substring(0, 8) : "?") + " was UNKNOWN, iframe says VISIBLE \u2192 overriding");
-        resume.visibility = VISIBILITY_VISIBLE;
-        resume.hidden = false;
-        if (resume._visDiag) {
-          resume._visDiag.decision = VISIBILITY_VISIBLE;
-          resume._visDiag.decisionReason = "iframe-detected-visible (overrode UNKNOWN, was: " + prevReason + ")";
-          resume._visDiag.pageTrace = (resume._visDiag.pageTrace || []).concat(iframeVisTrace || []);
-        }
-      } else {
-        fetchLog11.info("[VIS-DIAG] iframe CONFIRMED: " + (resume.id ? resume.id.substring(0, 8) : "?") + " is " + prevVis + ", iframe agrees (" + iframeVis + ")");
-        if (resume._visDiag && iframeVisTrace) {
-          resume._visDiag.pageTrace = (resume._visDiag.pageTrace || []).concat(iframeVisTrace);
-        }
-      }
-      if (resume._visDiag) {
-        resume._visDiag.iframeRan = true;
-        resume._visDiag.iframeVis = iframeVis;
-        if (iframeDiag) {
-          resume._visDiag.iframeDiag = iframeDiag;
-        }
-      }
-    }
+    });
+    fetchLog11.info("Scripts with experience keywords: " + expScriptCount + " of " + scripts.length);
   }
-  function detectVisibilityFromResumePage(doc, html) {
-    const diag = [];
-    const visCard = doc.querySelector('[data-qa="resume-visibility-card"]');
-    if (visCard) {
-      const cardText = normalizeWs(visCard.textContent || "").toLowerCase();
-      if (cardText.includes("\u043D\u0435 \u0432\u0438\u0434\u043D\u043E \u043D\u0438\u043A\u043E\u043C\u0443") || cardText.includes("\u043D\u0435\xA0\u0432\u0438\u0434\u043D\u043E \u043D\u0438\u043A\u043E\u043C\u0443")) {
-        diag.push('S0:visibility-card="\u043D\u0435 \u0432\u0438\u0434\u043D\u043E \u043D\u0438\u043A\u043E\u043C\u0443" \u2192 HIDDEN');
-        fetchLog11.info("[VIS-DIAG] " + diag.join(" | "));
-        return { visibility: VISIBILITY_HIDDEN, trace: diag };
-      }
-      if (cardText.includes("\u0432\u0438\u0434\u043D\u043E \u0432\u0441\u0435\u043C") || cardText.includes("\u0432\u0438\u0434\u043D\u043E\xA0\u0432\u0441\u0435\u043C")) {
-        diag.push('S0:visibility-card="\u0432\u0438\u0434\u043D\u043E \u0432\u0441\u0435\u043C" \u2192 VISIBLE');
-        fetchLog11.info("[VIS-DIAG] " + diag.join(" | "));
-        return { visibility: VISIBILITY_VISIBLE, trace: diag };
-      }
-      diag.push('S0:visibility-card-unknown="' + cardText.substring(0, 40) + '"');
+  function resolveVisibilityDecision(resume, pageVis, listMeta, visDiagEntry) {
+    const listVis = listMeta ? listMeta.visibility : "no-list-meta";
+    fetchLog11.info("[VIS-DIAG] === Visibility decision for " + (resume.id ? resume.id.substring(0, 8) : "unknown") + " ===");
+    fetchLog11.info("[VIS-DIAG] Sources: page=" + pageVis + ", list=" + listVis);
+    if (pageVis === VISIBILITY_HIDDEN) {
+      resume.visibility = VISIBILITY_HIDDEN;
+      resume.hidden = true;
+      visDiagEntry.decision = VISIBILITY_HIDDEN;
+      visDiagEntry.decisionReason = "page-detected-hidden";
+    } else if (listMeta && listMeta.visibility === VISIBILITY_HIDDEN) {
+      resume.visibility = VISIBILITY_HIDDEN;
+      resume.hidden = true;
+      visDiagEntry.decision = VISIBILITY_HIDDEN;
+      visDiagEntry.decisionReason = "list-detected-hidden (page=" + pageVis + ")";
+    } else if (pageVis === VISIBILITY_VISIBLE) {
+      resume.visibility = VISIBILITY_VISIBLE;
+      resume.hidden = false;
+      visDiagEntry.decision = VISIBILITY_VISIBLE;
+      visDiagEntry.decisionReason = "page-detected-visible";
+    } else if (listMeta && listMeta.visibility === VISIBILITY_VISIBLE) {
+      resume.visibility = VISIBILITY_VISIBLE;
+      resume.hidden = false;
+      visDiagEntry.decision = VISIBILITY_VISIBLE;
+      visDiagEntry.decisionReason = "list-detected-visible (page=UNKNOWN)";
     } else {
-      diag.push("S0:no-visibility-card");
+      resume.visibility = VISIBILITY_UNKNOWN;
+      resume.hidden = false;
+      visDiagEntry.decision = VISIBILITY_UNKNOWN;
+      visDiagEntry.decisionReason = "both-sources-unknown";
     }
-    for (const sel of VISIBILITY_HIDDEN_DATA_QA) {
-      const found = doc.querySelector(sel);
-      if (found) {
-        diag.push("S1:data-qa=" + sel + " \u2192 HIDDEN");
-        fetchLog11.info("[VIS-DIAG] " + diag.join(" | "));
-        return { visibility: VISIBILITY_HIDDEN, trace: diag };
-      }
-    }
-    diag.push("S1:no-data-qa-hidden");
-    const allButtons = doc.querySelectorAll("button, a");
-    let btnDetails = [];
-    for (const btn of allButtons) {
-      const text = normalizeWs(btn.textContent || "").toLowerCase();
-      const qa = (btn.getAttribute("data-qa") || "").toLowerCase();
-      if (text.includes("\u0441\u043A\u0440\u044B\u0442\u044C") || text.includes("\u0432\u0438\u0434\u0438\u043C")) {
-        btnDetails.push('"' + text.substring(0, 40) + '"' + (qa ? "[qa=" + qa + "]" : ""));
-      }
-      if (text.includes("\u0441\u0434\u0435\u043B\u0430\u0442\u044C \u0432\u0438\u0434\u0438\u043C\u044B\u043C")) {
-        diag.push('S2:btn="\u0441\u0434\u0435\u043B\u0430\u0442\u044C \u0432\u0438\u0434\u0438\u043C\u044B\u043C" \u2192 HIDDEN');
-        fetchLog11.info("[VIS-DIAG] " + diag.join(" | "));
-        fetchLog11.info("[VIS-DIAG] All vis-related buttons: " + JSON.stringify(btnDetails));
-        return { visibility: VISIBILITY_HIDDEN, trace: diag, btnDetails };
-      }
-      if (text.includes("\u0441\u043A\u0440\u044B\u0442\u044C \u0440\u0435\u0437\u044E\u043C\u0435")) {
-        diag.push('S2:btn="\u0441\u043A\u0440\u044B\u0442\u044C \u0440\u0435\u0437\u044E\u043C\u0435" \u2192 VISIBLE');
-        fetchLog11.info("[VIS-DIAG] " + diag.join(" | "));
-        fetchLog11.info("[VIS-DIAG] All vis-related buttons: " + JSON.stringify(btnDetails));
-        return { visibility: VISIBILITY_VISIBLE, trace: diag, btnDetails };
-      }
-    }
-    diag.push("S2:no-key-buttons" + (btnDetails.length ? "(saw:" + btnDetails.length + " partial)" : ""));
-    const bodyText = doc.body ? normalizeWs(doc.body.textContent || "") : "";
-    if (hasHiddenIndicator(bodyText)) {
-      const lower = bodyText.toLowerCase();
-      for (const ind of ["\u043C\u043D\u043E\u0433\u0438\u0435 \u043D\u0435 \u0432\u0438\u0434\u044F\u0442", "\u0441\u0434\u0435\u043B\u0430\u0442\u044C \u0432\u0438\u0434\u0438\u043C\u044B\u043C", "\u043D\u0435 \u0432\u0438\u0434\u043D\u043E"]) {
-        const pos = lower.indexOf(ind);
-        if (pos !== -1) {
-          diag.push('S3:body has "' + ind + '" @' + pos + " \u2192 HIDDEN");
-          break;
-        }
-      }
-      fetchLog11.info("[VIS-DIAG] " + diag.join(" | "));
-      return { visibility: VISIBILITY_HIDDEN, trace: diag };
-    }
-    if (hasVisibleIndicator(bodyText)) {
-      diag.push("S3:body has visible indicator \u2192 VISIBLE");
-      fetchLog11.info("[VIS-DIAG] " + diag.join(" | "));
-      return { visibility: VISIBILITY_VISIBLE, trace: diag };
-    }
-    diag.push("S3:body-no-indicators");
-    const htmlForSearch = html.replace(/&nbsp;/g, " ").toLowerCase();
-    const htmlNorm = normalizeWs(htmlForSearch);
-    if (hasHiddenIndicator(htmlNorm)) {
-      const lower = htmlNorm.toLowerCase();
-      for (const ind of ["\u043C\u043D\u043E\u0433\u0438\u0435 \u043D\u0435 \u0432\u0438\u0434\u044F\u0442", "\u0441\u0434\u0435\u043B\u0430\u0442\u044C \u0432\u0438\u0434\u0438\u043C\u044B\u043C", "\u043D\u0435 \u0432\u0438\u0434\u043D\u043E"]) {
-        const pos = lower.indexOf(ind);
-        if (pos !== -1) {
-          diag.push('S4:html has "' + ind + '" @' + pos + " \u2192 HIDDEN");
-          break;
-        }
-      }
-      fetchLog11.info("[VIS-DIAG] " + diag.join(" | "));
-      return { visibility: VISIBILITY_HIDDEN, trace: diag };
-    }
-    if (hasVisibleIndicator(htmlNorm)) {
-      diag.push("S4:html has visible indicator \u2192 VISIBLE");
-      fetchLog11.info("[VIS-DIAG] " + diag.join(" | "));
-      return { visibility: VISIBILITY_VISIBLE, trace: diag };
-    }
-    diag.push("S4:html-no-indicators");
-    const scriptEls = doc.querySelectorAll("script:not([src])");
-    let scriptPatterns = [];
-    for (const script of scriptEls) {
-      const t = script.textContent || "";
-      if (t.length < 50) continue;
-      const patterns = [
-        { re: /"hidden"\s*:\s*true/, name: '"hidden":true' },
-        { re: /"isHidden"\s*:\s*true/, name: '"isHidden":true' },
-        { re: /"visibility"\s*:\s*"hidden"/, name: '"visibility":"hidden"' },
-        { re: /"status"\s*:\s*"hidden"/, name: '"status":"hidden"' }
-      ];
-      for (const p of patterns) {
-        if (p.re.test(t)) {
-          scriptPatterns.push(p.name);
-        }
-      }
-    }
-    if (scriptPatterns.length > 0) {
-      diag.push("S5:script=" + scriptPatterns.join(",") + " \u2192 HIDDEN");
-      fetchLog11.info("[VIS-DIAG] " + diag.join(" | "));
-      return { visibility: VISIBILITY_HIDDEN, trace: diag, scriptPatterns };
-    }
-    diag.push("S5:no-script-patterns");
-    const hideLink = doc.querySelector('[data-qa="resume-action-hide"], [data-qa*="resume-hide"], a[data-qa*="hide-resume"]');
-    if (hideLink) {
-      const hideQa = hideLink.getAttribute("data-qa") || "";
-      diag.push("S6:hide-link qa=" + hideQa + " \u2192 VISIBLE");
-      fetchLog11.info("[VIS-DIAG] " + diag.join(" | "));
-      return { visibility: VISIBILITY_VISIBLE, trace: diag };
-    }
-    diag.push("S6:no-hide-link");
-    const allHideBtns = doc.querySelectorAll('[data-qa*="hide"], [data-qa*="hidden"]');
-    if (allHideBtns.length > 0) {
-      const hideQas = Array.from(allHideBtns).map((b) => b.getAttribute("data-qa")).filter(Boolean);
-      diag.push("EXTRA:hide-qa=" + hideQas.join(","));
-    }
-    diag.push("\u2192 UNKNOWN");
-    fetchLog11.info("[VIS-DIAG] " + diag.join(" | "));
-    return { visibility: VISIBILITY_UNKNOWN, trace: diag };
+    fetchLog11.info("[VIS-DIAG] Decision: " + visDiagEntry.decision + " (" + visDiagEntry.decisionReason + ")");
   }
   var fetchLog11;
   var init_resume_fetch_resume = __esm({
@@ -6414,10 +6495,8 @@
       init_resume_fetch_helpers();
       init_resume_fetch_parse();
       init_resume_constants();
-      init_resume_fetch_experience();
-      init_resume_fetch_strategy4_text();
-      init_resume_fetch_strategy5_scripts();
-      init_resume_fetch_strategy6_expand();
+      init_resume_fetch_resume_page_vis();
+      init_resume_fetch_resume_exp_orch();
       init_resume_fetch_education_languages();
       fetchLog11 = createLogger("ResumeFetch");
     }
@@ -7439,16 +7518,15 @@
   }
   async function loadSavedResumes() {
     try {
-      const d = await chrome.storage.local.get("myResume");
-      if (d.myResume && d.myResume.id) {
-        const savedResume = d.myResume;
+      const savedResume = await getActiveResume();
+      if (savedResume && savedResume.id) {
         if (savedResume.visibility === void 0) {
           savedResume.visibility = savedResume.hidden ? "hidden" : VISIBILITY_UNKNOWN;
-          await chrome.storage.local.set({ myResume: savedResume });
+          await setActiveResume(savedResume);
         }
         if (savedResume.title && TITLE_SUFFIX_NOISE.test(savedResume.title)) {
           savedResume.title = savedResume.title.replace(TITLE_SUFFIX_NOISE, "").trim();
-          await chrome.storage.local.set({ myResume: savedResume });
+          await setActiveResume(savedResume);
         }
         panelState.resume = savedResume;
         mainLog.info("Loaded saved resume: " + savedResume.title);
@@ -7471,7 +7549,7 @@
           }
         });
         if (needsSave) {
-          await chrome.storage.local.set({ myResumes: panelState.myResumes });
+          await saveMyResumes(panelState.myResumes);
           mainLog.info("Migrated resume data: added visibility, cleaned titles");
         }
         renderMyResumesPanel();

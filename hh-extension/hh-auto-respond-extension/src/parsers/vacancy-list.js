@@ -6,7 +6,7 @@
 
 import { findAllElements, findElement } from '../lib/selectors.js';
 import { safeGetText, safeGetAttr, extractVacancyId, validateVacancyData, createLogger } from '../lib/anti-hallucination.js';
-import { getBlacklistedCompanies } from '../lib/storage.js';
+import { getBlacklistedCompanies, getAppliedVacancies } from '../lib/storage.js';
 
 const parserLog = createLogger('Parser');
 
@@ -18,8 +18,7 @@ export async function parseVacanciesFromPage() {
   const vacancies = [];
   let appliedIds = [], blacklisted = [];
   try {
-    const d1 = await chrome.storage.local.get('appliedVacancies');
-    appliedIds = d1.appliedVacancies || [];
+    appliedIds = await getAppliedVacancies();
     blacklisted = await getBlacklistedCompanies();
   } catch (e) {}
 
