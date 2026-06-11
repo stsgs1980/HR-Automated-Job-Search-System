@@ -40,7 +40,8 @@ export async function fetchExpandedExperience(doc, html, resumeId, currentCount,
     const result = {
       entries: [],
       iframeVis: iframeResult.iframeVis,
-      iframeVisTrace: iframeResult.iframeVisTrace
+      iframeVisTrace: iframeResult.iframeVisTrace,
+      iframeDiag: iframeResult.iframeDiag
     };
     if (iframeResult.entries.length > currentCount) {
       fetchLog.info('Strategy 6: SUCCESS via iframe — got ' + iframeResult.entries.length + ' experiences');

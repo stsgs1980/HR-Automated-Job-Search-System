@@ -45,9 +45,22 @@ window.__hhVis = function() {
   (d.resumes || []).forEach(function(r) {
     var color = r.finalVisibility === 'visible' ? '#22c55e' : r.finalVisibility === 'hidden' ? '#ef4444' : '#f59e0b';
     console.log('%c  ' + (r.id ? r.id.substring(0, 8) : '?') + ' "' + (r.title || '').substring(0, 40) + '" → %c' + r.finalVisibility, 'font-weight:bold', 'color:' + color + ';font-weight:bold');
-    console.log('    list: ' + r.listVis + ' | page: ' + r.pageVis + ' | reason: ' + r.decisionReason);
+    console.log('    list: ' + r.listVis + ' | page: ' + r.pageVis + ' | iframe: ' + (r.iframeVis || '-') + ' | reason: ' + r.decisionReason);
     if (r.pageTrace && r.pageTrace.length > 0) {
       console.log('    trace:', r.pageTrace.join(' → '));
+    }
+    // Show iframe diagnostic data if available
+    if (r.iframeDiag) {
+      console.log('    iframe URL:', r.iframeDiag.finalUrl);
+      console.log('    iframe title:', r.iframeDiag.title);
+      console.log('    iframe bodyLen:', r.iframeDiag.bodyTextLen);
+      console.log('    iframe bodySnippet:', r.iframeDiag.bodyTextSnippet ? r.iframeDiag.bodyTextSnippet.substring(0, 300) : '(empty)');
+      if (r.iframeDiag.dataQaList && r.iframeDiag.dataQaList.length > 0) {
+        console.log('    iframe dataQa (' + r.iframeDiag.dataQaList.length + '):', r.iframeDiag.dataQaList.slice(0, 15));
+      }
+      if (r.iframeDiag.actionTexts && r.iframeDiag.actionTexts.length > 0) {
+        console.log('    iframe actions:', r.iframeDiag.actionTexts);
+      }
     }
   });
   console.groupEnd();

@@ -53,10 +53,43 @@ export async function fetchExpandedExperienceViaIframe(resumeUrl, currentCount) 
       throw new Error('Cannot access iframe document (cross-origin or blocked)');
     }
 
+    // ═══ DIAGNOSTIC: dump iframe state for debugging ═══
+    const iframeDiag = {};
+    try {
+      iframeDiag.finalUrl = iframe.contentWindow?.location?.href || '(no access)';
+    } catch (e) { iframeDiag.finalUrl = '(cross-origin blocked: ' + e.message + ')'; }
+    iframeDiag.title = iframeDoc.title || '(no title)';
+    iframeDiag.bodyTextLen = iframeDoc.body ? (iframeDoc.body.textContent || '').length : 0;
+    iframeDiag.bodyTextSnippet = iframeDoc.body
+      ? normalizeWs(iframeDoc.body.textContent || '').substring(0, 1500)
+      : '(no body)';
+
+    // Dump ALL data-qa attributes found in the iframe (helps find visibility indicators)
+    const allQa = iframeDoc.querySelectorAll('[data-qa]');
+    iframeDiag.dataQaList = Array.from(allQa).slice(0, 50).map(el => {
+      const qa = el.getAttribute('data-qa') || '';
+      const text = normalizeWs((el.textContent || '')).substring(0, 60);
+      return qa + (text ? '="' + text + '"' : '');
+    });
+
+    // Dump ALL buttons/links text (limited)
+    const allActions = iframeDoc.querySelectorAll('button, a, [role="button"]');
+    iframeDiag.actionTexts = Array.from(allActions).slice(0, 30).map(el => {
+      return normalizeWs((el.textContent || '')).substring(0, 50);
+    }).filter(t => t.length > 2);
+
+    fetchLog.info('[VIS-IFRAME-DIAG] url=' + iframeDiag.finalUrl);
+    fetchLog.info('[VIS-IFRAME-DIAG] title="' + iframeDiag.title + '"');
+    fetchLog.info('[VIS-IFRAME-DIAG] bodyLen=' + iframeDiag.bodyTextLen);
+    fetchLog.info('[VIS-IFRAME-DIAG] bodySnippet=' + iframeDiag.bodyTextSnippet.substring(0, 500));
+    fetchLog.info('[VIS-IFRAME-DIAG] dataQa count=' + allQa.length + ', sample: ' + JSON.stringify(iframeDiag.dataQaList.slice(0, 20)));
+    fetchLog.info('[VIS-IFRAME-DIAG] actions: ' + JSON.stringify(iframeDiag.actionTexts));
+
     // ═══ VISIBILITY DETECTION from fully-hydrated iframe DOM ═══
     // This is the MOST RELIABLE method: after React hydration, the DOM
     // contains "Многие не видят ваше резюме" / "Сделать видимым" etc.
     const iframeVisResult = detectVisibilityFromIframeDoc(iframeDoc);
+    iframeVisResult.iframeDiag = iframeDiag; // attach for visDiag
     fetchLog.info('[VIS-DIAG] iframe visibility: ' + iframeVisResult.visibility +
       ' (trace: ' + iframeVisResult.trace.join(' → ') + ')');
 
@@ -89,7 +122,7 @@ export async function fetchExpandedExperienceViaIframe(resumeUrl, currentCount) 
     const entries = parseExperienceFromIframeDoc(iframeDoc);
     fetchLog.info('Strategy 6 iframe: parsed ' + entries.length + ' experience entries');
 
-    return { entries, iframeVis: iframeVisResult.visibility, iframeVisTrace: iframeVisResult.trace };
+    return { entries, iframeVis: iframeVisResult.visibility, iframeVisTrace: iframeVisResult.trace, iframeDiag: iframeVisResult.iframeDiag };
   } finally {
     try {
       if (iframe.parentNode) iframe.parentNode.removeChild(iframe);

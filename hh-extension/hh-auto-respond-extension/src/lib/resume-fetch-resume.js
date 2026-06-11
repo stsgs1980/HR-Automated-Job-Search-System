@@ -302,6 +302,7 @@ async function parseExperienceFromDoc(doc, dbg, resume, html, resumeUrl) {
   // ALSO returns iframe-based visibility detection (most reliable — from hydrated DOM)
   let iframeVis = null;
   let iframeVisTrace = null;
+  let iframeDiag = null;
   if (html && entries.length > 0 && entries.length < 20) {
     try {
       const s6result = await fetchExpandedExperience(doc, html, resume.id, entries.length, resumeUrl);
@@ -309,6 +310,7 @@ async function parseExperienceFromDoc(doc, dbg, resume, html, resumeUrl) {
       if (s6result.iframeVis) {
         iframeVis = s6result.iframeVis;
         iframeVisTrace = s6result.iframeVisTrace;
+        iframeDiag = s6result.iframeDiag || null;
       }
       if (s6result.entries && s6result.entries.length > entries.length) {
         fetchLog.info('Strategy 6 (expanded fetch): found ' + s6result.entries.length + ' experiences (was ' + entries.length + ')');
@@ -364,6 +366,10 @@ async function parseExperienceFromDoc(doc, dbg, resume, html, resumeUrl) {
     if (resume._visDiag) {
       resume._visDiag.iframeRan = true;
       resume._visDiag.iframeVis = iframeVis;
+      // Store iframe diagnostic data (body text, data-qa list, actions)
+      if (iframeDiag) {
+        resume._visDiag.iframeDiag = iframeDiag;
+      }
     }
   }
 }

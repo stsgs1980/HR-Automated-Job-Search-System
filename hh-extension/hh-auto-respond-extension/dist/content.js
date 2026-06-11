@@ -2866,7 +2866,33 @@
       if (!iframeDoc) {
         throw new Error("Cannot access iframe document (cross-origin or blocked)");
       }
+      const iframeDiag = {};
+      try {
+        iframeDiag.finalUrl = iframe.contentWindow?.location?.href || "(no access)";
+      } catch (e) {
+        iframeDiag.finalUrl = "(cross-origin blocked: " + e.message + ")";
+      }
+      iframeDiag.title = iframeDoc.title || "(no title)";
+      iframeDiag.bodyTextLen = iframeDoc.body ? (iframeDoc.body.textContent || "").length : 0;
+      iframeDiag.bodyTextSnippet = iframeDoc.body ? normalizeWs(iframeDoc.body.textContent || "").substring(0, 1500) : "(no body)";
+      const allQa = iframeDoc.querySelectorAll("[data-qa]");
+      iframeDiag.dataQaList = Array.from(allQa).slice(0, 50).map((el) => {
+        const qa = el.getAttribute("data-qa") || "";
+        const text = normalizeWs(el.textContent || "").substring(0, 60);
+        return qa + (text ? '="' + text + '"' : "");
+      });
+      const allActions = iframeDoc.querySelectorAll('button, a, [role="button"]');
+      iframeDiag.actionTexts = Array.from(allActions).slice(0, 30).map((el) => {
+        return normalizeWs(el.textContent || "").substring(0, 50);
+      }).filter((t) => t.length > 2);
+      fetchLog7.info("[VIS-IFRAME-DIAG] url=" + iframeDiag.finalUrl);
+      fetchLog7.info('[VIS-IFRAME-DIAG] title="' + iframeDiag.title + '"');
+      fetchLog7.info("[VIS-IFRAME-DIAG] bodyLen=" + iframeDiag.bodyTextLen);
+      fetchLog7.info("[VIS-IFRAME-DIAG] bodySnippet=" + iframeDiag.bodyTextSnippet.substring(0, 500));
+      fetchLog7.info("[VIS-IFRAME-DIAG] dataQa count=" + allQa.length + ", sample: " + JSON.stringify(iframeDiag.dataQaList.slice(0, 20)));
+      fetchLog7.info("[VIS-IFRAME-DIAG] actions: " + JSON.stringify(iframeDiag.actionTexts));
       const iframeVisResult = detectVisibilityFromIframeDoc(iframeDoc);
+      iframeVisResult.iframeDiag = iframeDiag;
       fetchLog7.info("[VIS-DIAG] iframe visibility: " + iframeVisResult.visibility + " (trace: " + iframeVisResult.trace.join(" \u2192 ") + ")");
       const preCards = iframeDoc.querySelectorAll('[data-qa="profile-experience-company-card"]');
       const preSteppers = iframeDoc.querySelectorAll('[data-qa="magritte-stepper-step-content"]');
@@ -2892,7 +2918,7 @@
       fetchLog7.info("Strategy 6 iframe: after expand \u2014 " + postCards.length + " company-cards, " + postSteppers.length + " stepper-items");
       const entries = parseExperienceFromIframeDoc(iframeDoc);
       fetchLog7.info("Strategy 6 iframe: parsed " + entries.length + " experience entries");
-      return { entries, iframeVis: iframeVisResult.visibility, iframeVisTrace: iframeVisResult.trace };
+      return { entries, iframeVis: iframeVisResult.visibility, iframeVisTrace: iframeVisResult.trace, iframeDiag: iframeVisResult.iframeDiag };
     } finally {
       try {
         if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
@@ -3314,7 +3340,8 @@
       const result = {
         entries: [],
         iframeVis: iframeResult.iframeVis,
-        iframeVisTrace: iframeResult.iframeVisTrace
+        iframeVisTrace: iframeResult.iframeVisTrace,
+        iframeDiag: iframeResult.iframeDiag
       };
       if (iframeResult.entries.length > currentCount) {
         fetchLog10.info("Strategy 6: SUCCESS via iframe \u2014 got " + iframeResult.entries.length + " experiences");
@@ -3616,12 +3643,14 @@
     }
     let iframeVis = null;
     let iframeVisTrace = null;
+    let iframeDiag = null;
     if (html && entries.length > 0 && entries.length < 20) {
       try {
         const s6result = await fetchExpandedExperience(doc, html, resume.id, entries.length, resumeUrl);
         if (s6result.iframeVis) {
           iframeVis = s6result.iframeVis;
           iframeVisTrace = s6result.iframeVisTrace;
+          iframeDiag = s6result.iframeDiag || null;
         }
         if (s6result.entries && s6result.entries.length > entries.length) {
           fetchLog11.info("Strategy 6 (expanded fetch): found " + s6result.entries.length + " experiences (was " + entries.length + ")");
@@ -3666,6 +3695,9 @@
       if (resume._visDiag) {
         resume._visDiag.iframeRan = true;
         resume._visDiag.iframeVis = iframeVis;
+        if (iframeDiag) {
+          resume._visDiag.iframeDiag = iframeDiag;
+        }
       }
     }
   }
@@ -3865,6 +3897,9 @@
               diagEntry.decisionReason = resume._visDiag.decisionReason;
               if (resume._visDiag.iframeVis) {
                 diagEntry.iframeVis = resume._visDiag.iframeVis;
+              }
+              if (resume._visDiag.iframeDiag) {
+                diagEntry.iframeDiag = resume._visDiag.iframeDiag;
               }
             }
           }

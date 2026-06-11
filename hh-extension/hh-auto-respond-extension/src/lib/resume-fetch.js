@@ -120,6 +120,10 @@ export async function syncAllResumes({ onProgress, onComplete, onError } = {}) {
             if (resume._visDiag.iframeVis) {
               diagEntry.iframeVis = resume._visDiag.iframeVis;
             }
+            // Store iframe diagnostic data (body text, data-qa list, actions)
+            if (resume._visDiag.iframeDiag) {
+              diagEntry.iframeDiag = resume._visDiag.iframeDiag;
+            }
           }
         }
       } catch (err) {
