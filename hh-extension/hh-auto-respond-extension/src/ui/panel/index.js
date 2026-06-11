@@ -44,7 +44,13 @@ export function updateAuthState(forceUI = false) {
       }
       // Start page parsers when user logs in
       if (was !== true) {
-        import('../../content/main.js').then(m => m.initPageLogic()).catch(() => {});
+        import('../../content/main.js').then(m => {
+          if (m.initPageLogic) {
+            m.initPageLogic();
+          } else {
+            panelLog.error('initPageLogic not found in dynamic import');
+          }
+        }).catch(e => panelLog.error('Failed to import initPageLogic: ' + e.message));
       }
     }
     updateFabIcon();
@@ -67,7 +73,13 @@ export async function updateAuthStateAsync() {
         renderInitialData();
       }
       if (was !== true) {
-        import('../../content/main.js').then(m => m.initPageLogic()).catch(() => {});
+        import('../../content/main.js').then(m => {
+          if (m.initPageLogic) {
+            m.initPageLogic();
+          } else {
+            panelLog.error('initPageLogic not found in dynamic import (async)');
+          }
+        }).catch(e => panelLog.error('Failed to import initPageLogic (async): ' + e.message));
       }
     }
     updateFabIcon();

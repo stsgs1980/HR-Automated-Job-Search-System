@@ -28,6 +28,9 @@ import { initPageLogic } from './main-page-handlers.js';
 import { handleLoadResume, handleReparseResume } from './main-resume-loader.js';
 import { handleSyncResumes } from './main-sync.js';
 
+// Re-export for dynamic import from panel (ui/panel/index.js)
+export { initPageLogic };
+
 const mainLog = createLogger('Main');
 
 // Expose diagnostic functions globally for console access

@@ -9283,8 +9283,13 @@
           renderInitialData();
         }
         if (was !== true) {
-          Promise.resolve().then(() => (init_main(), main_exports)).then((m) => m.initPageLogic()).catch(() => {
-          });
+          Promise.resolve().then(() => (init_main(), main_exports)).then((m) => {
+            if (m.initPageLogic) {
+              m.initPageLogic();
+            } else {
+              panelLog.error("initPageLogic not found in dynamic import");
+            }
+          }).catch((e) => panelLog.error("Failed to import initPageLogic: " + e.message));
         }
       }
       updateFabIcon();
@@ -9305,8 +9310,13 @@
           renderInitialData();
         }
         if (was !== true) {
-          Promise.resolve().then(() => (init_main(), main_exports)).then((m) => m.initPageLogic()).catch(() => {
-          });
+          Promise.resolve().then(() => (init_main(), main_exports)).then((m) => {
+            if (m.initPageLogic) {
+              m.initPageLogic();
+            } else {
+              panelLog.error("initPageLogic not found in dynamic import (async)");
+            }
+          }).catch((e) => panelLog.error("Failed to import initPageLogic (async): " + e.message));
         }
       }
       updateFabIcon();
@@ -10034,6 +10044,9 @@
 
   // src/content/main.js
   var main_exports = {};
+  __export(main_exports, {
+    initPageLogic: () => initPageLogic
+  });
   async function init() {
     mainLog.info("Loaded: " + window.location.href);
     await checkDailyReset();
