@@ -2541,6 +2541,49 @@
 .score-ring.high span { color: #059669; }
 .score-ring.medium span { color: #D97706; }
 .score-ring.low span { color: #DC2626; }
+
+/* \u2550\u2550\u2550 Guided Tour \u2550\u2550\u2550 */
+.hh-tour-overlay { cursor: pointer; }
+.hh-tour-spotlight { pointer-events: none; }
+.hh-tour-tooltip {
+  width: 320px; max-width: calc(100vw - 32px);
+  background: #ffffff; border-radius: 12px;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.18), 0 2px 8px rgba(0,0,0,0.08);
+  border: 1px solid rgba(0,0,0,0.06);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  overflow: hidden; animation: tourFadeIn 0.25s ease;
+}
+@keyframes tourFadeIn { from { opacity:0; transform:scale(0.96); } to { opacity:1; transform:scale(1); } }
+.hh-tour-header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 10px 14px 0; }
+.hh-tour-counter {
+  font-size: 11px; font-weight: 600; color: #3b82f6;
+  background: #eff6ff; padding: 2px 8px; border-radius: 99px; }
+.hh-tour-skip {
+  background: none; border: none; font-size: 12px; color: #a1a1aa;
+  cursor: pointer; padding: 2px 6px; border-radius: 4px; transition: color 0.15s; }
+.hh-tour-skip:hover { color: #71717a; }
+.hh-tour-title {
+  padding: 8px 14px 0; font-size: 14px; font-weight: 700; color: #18181b; }
+.hh-tour-text {
+  padding: 6px 14px 10px; font-size: 13px; line-height: 1.5; color: #52525b; }
+.hh-tour-footer {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 8px 14px; border-top: 1px solid #f4f4f5; background: #fafafa; }
+.hh-tour-prev, .hh-tour-next {
+  border: none; border-radius: 8px; padding: 6px 14px; font-size: 12px;
+  font-weight: 600; cursor: pointer; transition: all 0.15s; }
+.hh-tour-next { background: #059669; color: #fff; }
+.hh-tour-next:hover { background: #047857; }
+.hh-tour-prev { background: #f4f4f5; color: #52525b; }
+.hh-tour-prev:hover { background: #e4e4e7; }
+.hh-tour-help {
+  background: none; border: 1px solid #d4d4d8; border-radius: 50%;
+  width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;
+  cursor: pointer; font-size: 13px; font-weight: 700; color: #71717a;
+  transition: all 0.15s; line-height: 1; }
+.hh-tour-help:hover { background: #f4f4f5; color: #059669; border-color: #059669; }
 `;
     }
   });
@@ -3307,7 +3350,7 @@
       </div>
     </div>
     <div class="har-footer">
-      <span style="font-size:11px;color:#71717a;">HH Copilot v${"1.9.14"}</span>
+      <span style="font-size:11px;color:#71717a;">HH Copilot v${"1.9.15"}</span>
       <div style="display:flex;align-items:center;gap:4px;">
         <span style="width:6px;height:6px;background:#10B981;border-radius:50%;"></span>
         <span style="font-size:11px;color:#71717a;">chrome.storage</span>
@@ -3326,7 +3369,7 @@
     ${getSettingsSection()}
     ${getStatsSection()}
     <div class="har-footer">
-      <span style="font-size:11px;color:#71717a;">HH Copilot v${"1.9.14"}</span>
+      <span style="font-size:11px;color:#71717a;">HH Copilot v${"1.9.15"}</span>
       <div style="display:flex;align-items:center;gap:4px;">
         <span style="width:6px;height:6px;background:#10B981;border-radius:50%;"></span>
         <span style="font-size:11px;color:#71717a;">chrome.storage</span>
@@ -3354,6 +3397,7 @@
         <span style="width:5px;height:5px;background:#059669;border-radius:50%;display:inline-block;margin-right:4px;"></span>
         ${badgeLabel}
       </div>
+      <button class="hh-tour-help" data-action="start-tour" title="\u0413\u0438\u0434 \u043F\u043E \u0440\u0430\u0441\u0448\u0438\u0440\u0435\u043D\u0438\u044E">?</button>
       <button class="har-close-btn" data-action="close-panel" aria-label="\u0417\u0430\u043A\u0440\u044B\u0442\u044C \u043F\u0430\u043D\u0435\u043B\u044C"
         style="width:28px;height:28px;border-radius:8px;border:none;background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#71717a;">
         ${ICONS.close}
@@ -4290,6 +4334,340 @@
     }
   });
 
+  // src/lib/tour-tooltip.js
+  function getTooltip() {
+    return tooltip;
+  }
+  function removeTooltip() {
+    const root = refs.shadowRoot;
+    if (tooltip && root?.contains(tooltip)) root.removeChild(tooltip);
+    tooltip = null;
+  }
+  function renderTooltip(targetEl, step, idx, stepsLen) {
+    removeTooltip();
+    const root = refs.shadowRoot;
+    if (!root) return;
+    tooltip = document.createElement("div");
+    tooltip.className = "hh-tour-tooltip";
+    const rect = targetEl.getBoundingClientRect();
+    const pos = step.position || autoPosition(rect);
+    tooltip.innerHTML = buildTooltipHTML(step, idx, stepsLen);
+    root.appendChild(tooltip);
+    positionTooltip(tooltip, rect, pos);
+  }
+  function renderCenteredTooltip(step, idx, stepsLen) {
+    removeTooltip();
+    const root = refs.shadowRoot;
+    if (!root) return;
+    tooltip = document.createElement("div");
+    tooltip.className = "hh-tour-tooltip";
+    tooltip.innerHTML = buildTooltipHTML(step, idx, stepsLen);
+    root.appendChild(tooltip);
+    tooltip.style.cssText += "position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:" + (TOUR_Z + 1) + ";";
+  }
+  function buildTooltipHTML(step, idx, stepsLen) {
+    const isLast = idx === stepsLen - 1;
+    const isFirst = idx === 0;
+    const counter = idx + 1 + "/" + stepsLen;
+    return '<div class="hh-tour-header"><span class="hh-tour-counter">' + counter + '</span><button class="hh-tour-skip" data-tour="skip">\u041F\u0440\u043E\u043F\u0443\u0441\u0442\u0438\u0442\u044C</button></div>' + (step.title ? '<div class="hh-tour-title">' + step.title + "</div>" : "") + '<div class="hh-tour-text">' + step.text + '</div><div class="hh-tour-footer">' + (isFirst ? "" : '<button class="hh-tour-prev" data-tour="prev">\u2190 \u041D\u0430\u0437\u0430\u0434</button>') + '<button class="hh-tour-next" data-tour="next">' + (isLast ? "\u0413\u043E\u0442\u043E\u0432\u043E \u2713" : "\u0414\u0430\u043B\u0435\u0435 \u2192") + "</button></div>";
+  }
+  function positionTooltip(tipEl, targetRect, pos) {
+    tipEl.style.position = "fixed";
+    tipEl.style.zIndex = TOUR_Z + 1;
+    const gap = 12;
+    tipEl.style.visibility = "hidden";
+    tipEl.style.top = "0";
+    tipEl.style.left = "0";
+    requestAnimationFrame(() => {
+      const tipRect = tipEl.getBoundingClientRect();
+      let top, left;
+      if (pos === "bottom") {
+        top = targetRect.bottom + gap;
+        left = targetRect.left + targetRect.width / 2 - tipRect.width / 2;
+      } else if (pos === "top") {
+        top = targetRect.top - tipRect.height - gap;
+        left = targetRect.left + targetRect.width / 2 - tipRect.width / 2;
+      } else if (pos === "left") {
+        top = targetRect.top + targetRect.height / 2 - tipRect.height / 2;
+        left = targetRect.left - tipRect.width - gap;
+      } else if (pos === "right") {
+        top = targetRect.top + targetRect.height / 2 - tipRect.height / 2;
+        left = targetRect.right + gap;
+      } else {
+        top = window.innerHeight / 2 - tipRect.height / 2;
+        left = window.innerWidth / 2 - tipRect.width / 2;
+      }
+      left = Math.max(8, Math.min(left, window.innerWidth - tipRect.width - 8));
+      top = Math.max(8, Math.min(top, window.innerHeight - tipRect.height - 8));
+      tipEl.style.top = top + "px";
+      tipEl.style.left = left + "px";
+      tipEl.style.visibility = "";
+    });
+  }
+  function autoPosition(rect) {
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const spaceAbove = rect.top;
+    return spaceBelow > 200 ? "bottom" : spaceAbove > 200 ? "top" : "right";
+  }
+  var TOUR_Z, tooltip;
+  var init_tour_tooltip = __esm({
+    "src/lib/tour-tooltip.js"() {
+      init_state();
+      TOUR_Z = 9999999;
+      tooltip = null;
+    }
+  });
+
+  // src/lib/tour-engine.js
+  function startTour(tourSteps, onFinish) {
+    if (overlay) endTour(false);
+    steps = tourSteps;
+    currentStep = 0;
+    onDone = onFinish || null;
+    createOverlay();
+    showStep(0);
+  }
+  function isTourDone() {
+    try {
+      return localStorage.getItem(STORAGE_KEY) === "v1";
+    } catch {
+      return false;
+    }
+  }
+  function markTourDone() {
+    try {
+      localStorage.setItem(STORAGE_KEY, "v1");
+    } catch {
+    }
+  }
+  function restartTour(tourSteps, onFinish) {
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch {
+    }
+    startTour(tourSteps, onFinish);
+  }
+  function endTour(save = true) {
+    if (save) markTourDone();
+    removeOverlay();
+    steps = [];
+    currentStep = 0;
+    if (onDone) {
+      onDone();
+      onDone = null;
+    }
+  }
+  function createOverlay() {
+    const root = refs.shadowRoot;
+    if (!root) return;
+    overlay = document.createElement("div");
+    overlay.className = "hh-tour-overlay";
+    overlay.style.cssText = "position:fixed;inset:0;z-index:" + (TOUR_Z2 - 1) + ";background:rgba(0,0,0,0.45);transition:opacity 0.2s;";
+    spotlight = document.createElement("div");
+    spotlight.className = "hh-tour-spotlight";
+    spotlight.style.cssText = "position:fixed;z-index:" + TOUR_Z2 + ";border-radius:6px;box-shadow:0 0 0 4px rgba(59,130,246,0.5),0 0 20px rgba(59,130,246,0.2);transition:all 0.3s ease;pointer-events:none;";
+    root.appendChild(overlay);
+    root.appendChild(spotlight);
+    overlay.addEventListener("click", () => endTour(true));
+  }
+  function removeOverlay() {
+    const root = refs.shadowRoot;
+    if (overlay && root?.contains(overlay)) root.removeChild(overlay);
+    if (spotlight && root?.contains(spotlight)) root.removeChild(spotlight);
+    removeTooltip();
+    overlay = spotlight = null;
+  }
+  function showStep(idx) {
+    if (idx < 0 || idx >= steps.length) {
+      endTour(true);
+      return;
+    }
+    currentStep = idx;
+    const step = steps[idx];
+    if (step.tab) switchToTab(step.tab);
+    setTimeout(() => {
+      const el = findTarget(step.target);
+      if (el) {
+        positionSpotlight(el);
+        renderTooltip(el, step, idx, steps.length);
+      } else {
+        renderCenteredTooltip(step, idx, steps.length);
+      }
+    }, step.tab ? 150 : 30);
+  }
+  function findTarget(selector) {
+    const root = refs.shadowRoot;
+    if (!root) return null;
+    return root.querySelector(selector) || document.querySelector(selector);
+  }
+  function positionSpotlight(el) {
+    const rect = el.getBoundingClientRect();
+    const pad = 4;
+    spotlight.style.top = rect.top - pad + "px";
+    spotlight.style.left = rect.left - pad + "px";
+    spotlight.style.width = rect.width + pad * 2 + "px";
+    spotlight.style.height = rect.height + pad * 2 + "px";
+  }
+  function switchToTab(tabId) {
+    const root = refs.shadowRoot;
+    if (!root) return;
+    root.querySelectorAll(".tab-btn").forEach((b) => b.classList.remove("active"));
+    root.querySelectorAll(".tab-section").forEach((s) => s.classList.remove("active"));
+    const btn = root.querySelector('.tab-btn[data-tab="' + tabId + '"]');
+    const section = root.querySelector("#tab-" + tabId);
+    if (btn) btn.classList.add("active");
+    if (section) section.classList.add("active");
+  }
+  var STORAGE_KEY, TOUR_Z2, currentStep, steps, overlay, spotlight, onDone;
+  var init_tour_engine = __esm({
+    "src/lib/tour-engine.js"() {
+      init_state();
+      init_tour_tooltip();
+      STORAGE_KEY = "hh-copilot-tour-done";
+      TOUR_Z2 = 9999999;
+      currentStep = 0;
+      steps = [];
+      overlay = null;
+      spotlight = null;
+      onDone = null;
+      document.addEventListener("click", (e) => {
+        const btn = e.target.closest("[data-tour]");
+        if (!btn) return;
+        const action = btn.getAttribute("data-tour");
+        if (action === "next") showStep(currentStep + 1);
+        else if (action === "prev") showStep(currentStep - 1);
+        else if (action === "skip") endTour(true);
+      });
+    }
+  });
+
+  // src/lib/tour-steps.js
+  function getWelcomeTourSteps() {
+    return [
+      // ── Welcome ──
+      {
+        target: ".har-tabbar",
+        tab: "overview",
+        title: "\u0414\u043E\u0431\u0440\u043E \u043F\u043E\u0436\u0430\u043B\u043E\u0432\u0430\u0442\u044C \u0432 HH Copilot!",
+        text: "6 \u0432\u043A\u043B\u0430\u0434\u043E\u043A \u043F\u043E\u043C\u043E\u0433\u0430\u044E\u0442 \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0437\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u043F\u043E\u0438\u0441\u043A \u0440\u0430\u0431\u043E\u0442\u044B \u043D\u0430 hh.ru. \u041F\u0440\u043E\u0439\u0434\u0451\u043C\u0441\u044F \u043F\u043E \u043A\u0430\u0436\u0434\u043E\u0439 \u2014 \u044D\u0442\u043E \u0437\u0430\u0439\u043C\u0451\u0442 \u043C\u0438\u043D\u0443\u0442\u0443.",
+        position: "bottom"
+      },
+      // ── Overview ──
+      {
+        target: "#kpi-daily-count",
+        tab: "overview",
+        title: "\u041E\u0431\u0437\u043E\u0440: \u043B\u0438\u043C\u0438\u0442\u044B",
+        text: "\u041A\u043E\u043B\u044C\u0446\u0435\u0432\u0430\u044F \u0434\u0438\u0430\u0433\u0440\u0430\u043C\u043C\u0430 \u043F\u043E\u043A\u0430\u0437\u044B\u0432\u0430\u0435\u0442, \u0441\u043A\u043E\u043B\u044C\u043A\u043E \u043E\u0442\u043A\u043B\u0438\u043A\u043E\u0432 \u043E\u0441\u0442\u0430\u043B\u043E\u0441\u044C \u0441\u0435\u0433\u043E\u0434\u043D\u044F. hh.ru \u043E\u0433\u0440\u0430\u043D\u0438\u0447\u0438\u0432\u0430\u0435\u0442 \u0447\u0438\u0441\u043B\u043E \u043E\u0442\u043A\u043B\u0438\u043A\u043E\u0432 \u2014 Copilot \u0441\u043B\u0435\u0434\u0438\u0442 \u0437\u0430 \u043B\u0438\u043C\u0438\u0442\u0430\u043C\u0438.",
+        position: "bottom"
+      },
+      {
+        target: '[data-action="apply-all"]',
+        tab: "overview",
+        title: "\u041E\u0431\u0437\u043E\u0440: \u043C\u0430\u0441\u0441\u043E\u0432\u044B\u0439 \u043E\u0442\u043A\u043B\u0438\u043A",
+        text: "\u041E\u0434\u043D\u0430 \u043A\u043D\u043E\u043F\u043A\u0430 \u2014 \u0438 Copilot \u043E\u0442\u043A\u043B\u0438\u043A\u0430\u0435\u0442\u0441\u044F \u043D\u0430 \u0432\u0441\u0435 \u043F\u043E\u0434\u0445\u043E\u0434\u044F\u0449\u0438\u0435 \u0432\u0430\u043A\u0430\u043D\u0441\u0438\u0438 \u0441 \u0432\u0430\u0448\u0438\u043C \u0441\u043E\u043F\u0440\u043E\u0432\u043E\u0434\u0438\u0442\u0435\u043B\u044C\u043D\u044B\u043C \u043F\u0438\u0441\u044C\u043C\u043E\u043C.",
+        position: "bottom"
+      },
+      // ── Resume ──
+      {
+        target: '[data-action="sync-resumes"]',
+        tab: "resume",
+        title: "\u0420\u0435\u0437\u044E\u043C\u0435: \u0441\u0438\u043D\u0445\u0440\u043E\u043D\u0438\u0437\u0430\u0446\u0438\u044F",
+        text: "\u0417\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u0435 \u0432\u0441\u0435 \u0432\u0430\u0448\u0438 \u0440\u0435\u0437\u044E\u043C\u0435 \u0441 hh.ru. Copilot \u0441\u043E\u0445\u0440\u0430\u043D\u0438\u0442 \u0438\u0445 \u0434\u043B\u044F \u0430\u043D\u0430\u043B\u0438\u0437\u0430 \u0438 \u043C\u044D\u0442\u0447\u0438\u043D\u0433\u0430 \u0441 \u0432\u0430\u043A\u0430\u043D\u0441\u0438\u044F\u043C\u0438.",
+        position: "bottom"
+      },
+      {
+        target: "#res-score-ring",
+        tab: "resume",
+        title: "\u0420\u0435\u0437\u044E\u043C\u0435: \u043A\u0430\u0447\u0435\u0441\u0442\u0432\u043E",
+        text: "\u041E\u0446\u0435\u043D\u043A\u0430 \u0442\u043E\u0433\u043E, \u043A\u0430\u043A \u0432\u0430\u0448\u0435 \u0440\u0435\u0437\u044E\u043C\u0435 \u0432\u044B\u0433\u043B\u044F\u0434\u0438\u0442 \u0434\u043B\u044F ATS \u0438 HR: ATS-\u0441\u043E\u0432\u043C\u0435\u0441\u0442\u0438\u043C\u043E\u0441\u0442\u044C, \u043A\u0430\u0447\u0435\u0441\u0442\u0432\u043E \u043E\u043F\u044B\u0442\u0430, \u043A\u0440\u0430\u0441\u043D\u044B\u0435 \u0444\u043B\u0430\u0433\u0438 \u0438 \u0440\u0435\u043A\u043E\u043C\u0435\u043D\u0434\u0430\u0446\u0438\u0438.",
+        position: "left"
+      },
+      // ── Vacancies ──
+      {
+        target: '[data-action="refresh"]',
+        tab: "vacancies",
+        title: "\u0412\u0430\u043A\u0430\u043D\u0441\u0438\u0438: \u043F\u0430\u0440\u0441\u0438\u043D\u0433",
+        text: "\u041D\u0430\u0445\u043E\u0434\u044F\u0441\u044C \u043D\u0430 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0435 \u043F\u043E\u0438\u0441\u043A\u0430 \u0432\u0430\u043A\u0430\u043D\u0441\u0438\u0439, \u043D\u0430\u0436\u043C\u0438\u0442\u0435 \u044D\u0442\u0443 \u043A\u043D\u043E\u043F\u043A\u0443 \u2014 Copilot \u0441\u043E\u0431\u0435\u0440\u0451\u0442 \u0432\u0441\u0435 \u0432\u0430\u043A\u0430\u043D\u0441\u0438\u0438 \u0438 \u043E\u0446\u0435\u043D\u0438\u0442 \u0441\u043E\u0432\u043F\u0430\u0434\u0435\u043D\u0438\u0435 \u0441 \u0432\u0430\u0448\u0438\u043C \u0440\u0435\u0437\u044E\u043C\u0435.",
+        position: "bottom"
+      },
+      {
+        target: "#vac-status-filter",
+        tab: "vacancies",
+        title: "\u0412\u0430\u043A\u0430\u043D\u0441\u0438\u0438: \u0444\u0438\u043B\u044C\u0442\u0440\u044B",
+        text: "\u0424\u0438\u043B\u044C\u0442\u0440\u0443\u0439\u0442\u0435 \u0432\u0430\u043A\u0430\u043D\u0441\u0438\u0438 \u043F\u043E \u0441\u0442\u0430\u0442\u0443\u0441\u0443, \u043F\u043E\u0438\u0441\u043A\u0443 \u0438 \u043E\u0446\u0435\u043D\u043A\u0435 \u0441\u043E\u0432\u043F\u0430\u0434\u0435\u043D\u0438\u044F. \u0412\u044B\u0441\u043E\u043A\u043E\u0435 \u0441\u043E\u0432\u043F\u0430\u0434\u0435\u043D\u0438\u0435 = \u0441\u0442\u043E\u0438\u0442 \u043E\u0442\u043A\u043B\u0438\u043A\u043D\u0443\u0442\u044C\u0441\u044F.",
+        position: "bottom"
+      },
+      {
+        target: "#mass-start-btn",
+        tab: "vacancies",
+        title: "\u0412\u0430\u043A\u0430\u043D\u0441\u0438\u0438: \u043C\u0430\u0441\u0441\u043E\u0432\u044B\u0439 \u043E\u0442\u043A\u043B\u0438\u043A",
+        text: "\u041F\u043E\u0441\u043B\u0435 \u043F\u0430\u0440\u0441\u0438\u043D\u0433\u0430 \u2014 \u0432\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0432\u0430\u043A\u0430\u043D\u0441\u0438\u0438 \u0438 \u0437\u0430\u043F\u0443\u0441\u0442\u0438\u0442\u0435 \u043C\u0430\u0441\u0441\u043E\u0432\u044B\u0439 \u043E\u0442\u043A\u043B\u0438\u043A. Copilot \u0441\u0430\u043C \u0437\u0430\u043F\u043E\u043B\u043D\u0438\u0442 \u0444\u043E\u0440\u043C\u044B \u0438 \u043E\u0442\u043F\u0440\u0430\u0432\u0438\u0442.",
+        position: "top"
+      },
+      // ── Negotiations ──
+      {
+        target: "#neg-list",
+        tab: "negotiations",
+        title: "\u041F\u0435\u0440\u0435\u0433\u043E\u0432\u043E\u0440\u044B: \u0447\u0430\u0442",
+        text: "\u0412\u0441\u0435 \u043F\u0435\u0440\u0435\u043F\u0438\u0441\u043A\u0438 \u0441 \u0440\u0430\u0431\u043E\u0442\u043E\u0434\u0430\u0442\u0435\u043B\u044F\u043C\u0438 \u0432 \u043E\u0434\u043D\u043E\u043C \u043C\u0435\u0441\u0442\u0435. \u041E\u0442\u0432\u0435\u0447\u0430\u0439\u0442\u0435 \u043F\u0440\u044F\u043C\u043E \u0438\u0437 \u0441\u0430\u0439\u0434\u0431\u0430\u0440\u0430 \u2014 \u043D\u0435 \u043D\u0443\u0436\u043D\u043E \u043F\u0435\u0440\u0435\u043A\u043B\u044E\u0447\u0430\u0442\u044C\u0441\u044F \u043C\u0435\u0436\u0434\u0443 \u0432\u043A\u043B\u0430\u0434\u043A\u0430\u043C\u0438 hh.ru.",
+        position: "left"
+      },
+      {
+        target: "#cover-letter-text",
+        tab: "negotiations",
+        title: "\u041F\u0435\u0440\u0435\u0433\u043E\u0432\u043E\u0440\u044B: \u0441\u043E\u043F\u0440\u043E\u0432\u043E\u0434\u0438\u0442\u0435\u043B\u044C\u043D\u043E\u0435",
+        text: "\u0428\u0430\u0431\u043B\u043E\u043D \u0441\u043E\u043F\u0440\u043E\u0432\u043E\u0434\u0438\u0442\u0435\u043B\u044C\u043D\u043E\u0433\u043E \u043F\u0438\u0441\u044C\u043C\u0430 \u043F\u043E\u0434\u0441\u0442\u0430\u0432\u043B\u044F\u0435\u0442\u0441\u044F \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438 \u043F\u0440\u0438 \u043A\u0430\u0436\u0434\u043E\u043C \u043E\u0442\u043A\u043B\u0438\u043A\u0435. \u041D\u0430\u0441\u0442\u0440\u043E\u0439\u0442\u0435 \u0442\u0435\u043A\u0441\u0442 \u043F\u043E\u0434 \u0441\u0435\u0431\u044F.",
+        position: "top"
+      },
+      // ── Settings ──
+      {
+        target: "#s-daily-limit",
+        tab: "settings",
+        title: "\u041D\u0430\u0441\u0442\u0440\u043E\u0439\u043A\u0438: \u043B\u0438\u043C\u0438\u0442\u044B",
+        text: "\u0423\u043F\u0440\u0430\u0432\u043B\u044F\u0439\u0442\u0435 \u0441\u043A\u043E\u0440\u043E\u0441\u0442\u044C\u044E \u043E\u0442\u043A\u043B\u0438\u043A\u043E\u0432: \u0434\u043D\u0435\u0432\u043D\u043E\u0439 \u0438 \u0447\u0430\u0441\u043E\u0432\u043E\u0439 \u043B\u0438\u043C\u0438\u0442\u044B, \u0438\u043D\u0442\u0435\u0440\u0432\u0430\u043B \u043C\u0435\u0436\u0434\u0443 \u043E\u0442\u043A\u043B\u0438\u043A\u0430\u043C\u0438. \u0417\u0430\u0449\u0438\u0442\u0430 \u043E\u0442 \u0431\u043B\u043E\u043A\u0438\u0440\u043E\u0432\u043A\u0438 hh.ru.",
+        position: "bottom"
+      },
+      {
+        target: "#bl-input",
+        tab: "settings",
+        title: "\u041D\u0430\u0441\u0442\u0440\u043E\u0439\u043A\u0438: \u0447\u0451\u0440\u043D\u044B\u0439 \u0441\u043F\u0438\u0441\u043E\u043A",
+        text: "\u0414\u043E\u0431\u0430\u0432\u043B\u044F\u0439\u0442\u0435 \u043A\u043E\u043C\u043F\u0430\u043D\u0438\u0438, \u0432 \u043A\u043E\u0442\u043E\u0440\u044B\u0435 \u043D\u0435 \u0445\u043E\u0442\u0438\u0442\u0435 \u043E\u0442\u043A\u043B\u0438\u043A\u0430\u0442\u044C\u0441\u044F. Copilot \u043F\u0440\u043E\u043F\u0443\u0441\u0442\u0438\u0442 \u0438\u0445 \u043F\u0440\u0438 \u043C\u0430\u0441\u0441\u043E\u0432\u043E\u043C \u043E\u0442\u043A\u043B\u0438\u043A\u0435.",
+        position: "bottom"
+      },
+      // ── Stats ──
+      {
+        target: "#stat-chart",
+        tab: "stats",
+        title: "\u0421\u0442\u0430\u0442\u0438\u0441\u0442\u0438\u043A\u0430: \u0430\u043D\u0430\u043B\u0438\u0442\u0438\u043A\u0430",
+        text: "\u0413\u0440\u0430\u0444\u0438\u043A\u0438 \u043E\u0442\u043A\u043B\u0438\u043A\u043E\u0432, \u043F\u0440\u0438\u0433\u043B\u0430\u0448\u0435\u043D\u0438\u0439 \u0438 \u043A\u043E\u043D\u0432\u0435\u0440\u0441\u0438\u0438 \u043F\u043E \u0434\u043D\u044F\u043C \u0438 \u043D\u0435\u0434\u0435\u043B\u044F\u043C. \u041F\u043E\u043D\u0438\u043C\u0430\u0439\u0442\u0435, \u0447\u0442\u043E \u0440\u0430\u0431\u043E\u0442\u0430\u0435\u0442, \u0430 \u0447\u0442\u043E \u043D\u0435\u0442.",
+        position: "top"
+      },
+      {
+        target: "#activity-log",
+        tab: "stats",
+        title: "\u0421\u0442\u0430\u0442\u0438\u0441\u0442\u0438\u043A\u0430: \u043B\u043E\u0433 \u0434\u0435\u0439\u0441\u0442\u0432\u0438\u0439",
+        text: "\u041F\u043E\u0434\u0440\u043E\u0431\u043D\u044B\u0439 \u043B\u043E\u0433 \u0432\u0441\u0435\u0445 \u0434\u0435\u0439\u0441\u0442\u0432\u0438\u0439: \u043E\u0442\u043A\u043B\u0438\u043A\u0438, \u043E\u0448\u0438\u0431\u043A\u0438, \u043A\u0430\u043F\u0447\u0438, \u0437\u0430\u043C\u0435\u0434\u043B\u0435\u043D\u0438\u044F. \u041F\u043E\u043B\u043D\u044B\u0439 \u043A\u043E\u043D\u0442\u0440\u043E\u043B\u044C \u043D\u0430\u0434 \u043F\u0440\u043E\u0446\u0435\u0441\u0441\u043E\u043C.",
+        position: "top"
+      },
+      // ── Final ──
+      {
+        target: ".har-tabbar",
+        tab: "overview",
+        title: "\u0412\u0441\u0451!",
+        text: "\u0422\u0435\u043F\u0435\u0440\u044C \u0432\u044B \u0437\u043D\u0430\u0435\u0442\u0435 \u043E\u0441\u043D\u043E\u0432\u043D\u044B\u0435 \u0432\u043E\u0437\u043C\u043E\u0436\u043D\u043E\u0441\u0442\u0438. \u041A\u043D\u043E\u043F\u043A\u0430 \xAB?\xBB \u0432 \u0448\u0430\u043F\u043A\u0435 \u2014 \u0437\u0430\u043F\u0443\u0441\u0442\u0438\u0442 \u0442\u0443\u0440 \u0437\u0430\u043D\u043E\u0432\u043E. \u0423\u0434\u0430\u0447\u0438 \u0432 \u043F\u043E\u0438\u0441\u043A\u0435! \u{1F680}",
+        position: "bottom"
+      }
+    ];
+  }
+  function getTabTourSteps(tabId) {
+    const allSteps = getWelcomeTourSteps();
+    return allSteps.filter((s) => s.tab === tabId);
+  }
+  var init_tour_steps = __esm({
+    "src/lib/tour-steps.js"() {
+    }
+  });
+
   // src/ui/panel/render.js
   function renderSidebarContent() {
     const content = refs.shadowRoot?.querySelector(".har-content");
@@ -4345,6 +4723,9 @@
     renderBlacklist();
     renderSettingsValues();
     renderNegotiationList();
+    if (!isTourDone()) {
+      setTimeout(() => startTour(getWelcomeTourSteps()), 800);
+    }
   }
   var init_render = __esm({
     "src/ui/panel/render.js"() {
@@ -4356,6 +4737,8 @@
       init_stats2();
       init_negotiations2();
       init_settings2();
+      init_tour_engine();
+      init_tour_steps();
     }
   });
 
@@ -7982,6 +8365,10 @@
         toggleSidebar();
         return;
       }
+      if (t.closest('[data-action="start-tour"]')) {
+        restartTour(getWelcomeTourSteps());
+        return;
+      }
       const applyBtn = t.closest('[data-action="apply"]');
       if (applyBtn) {
         e.preventDefault();
@@ -8029,14 +8416,14 @@
             btn.disabled = false;
             btn.innerHTML = origHTML;
           }, 3e4);
-          const onDone = () => {
+          const onDone2 = () => {
             setTimeout(() => {
               btn.disabled = false;
               btn.innerHTML = origHTML;
             }, 300);
-            window.removeEventListener("hh-ar-load-resume-done", onDone);
+            window.removeEventListener("hh-ar-load-resume-done", onDone2);
           };
-          window.addEventListener("hh-ar-load-resume-done", onDone);
+          window.addEventListener("hh-ar-load-resume-done", onDone2);
         }
         window.dispatchEvent(new CustomEvent("hh-ar-load-resume"));
         return;
@@ -8050,18 +8437,18 @@
           const origHTML = btn.innerHTML;
           btn.disabled = true;
           btn.innerHTML = '<span class="btn-spinner"></span>';
-          const onDone = () => {
+          const onDone2 = () => {
             setTimeout(() => {
               btn.disabled = false;
               btn.innerHTML = origHTML;
             }, 300);
-            window.removeEventListener("hh-ar-load-resume-done", onDone);
+            window.removeEventListener("hh-ar-load-resume-done", onDone2);
           };
-          window.addEventListener("hh-ar-load-resume-done", onDone);
+          window.addEventListener("hh-ar-load-resume-done", onDone2);
           setTimeout(() => {
             btn.disabled = false;
             btn.innerHTML = origHTML;
-            window.removeEventListener("hh-ar-load-resume-done", onDone);
+            window.removeEventListener("hh-ar-load-resume-done", onDone2);
           }, 3e4);
         }
         window.dispatchEvent(new CustomEvent("hh-ar-reparse-resume", { detail: { resumeUrl } }));
@@ -8073,18 +8460,18 @@
           const origHTML = btn.innerHTML;
           btn.disabled = true;
           btn.innerHTML = '<span class="btn-spinner"></span> \u0421\u0438\u043D\u0445\u0440\u043E\u043D\u0438\u0437\u0430\u0446\u0438\u044F...';
-          const onDone = () => {
+          const onDone2 = () => {
             setTimeout(() => {
               btn.disabled = false;
               btn.innerHTML = origHTML;
             }, 300);
-            window.removeEventListener("hh-ar-sync-done", onDone);
+            window.removeEventListener("hh-ar-sync-done", onDone2);
           };
-          window.addEventListener("hh-ar-sync-done", onDone);
+          window.addEventListener("hh-ar-sync-done", onDone2);
           setTimeout(() => {
             btn.disabled = false;
             btn.innerHTML = origHTML;
-            window.removeEventListener("hh-ar-sync-done", onDone);
+            window.removeEventListener("hh-ar-sync-done", onDone2);
           }, 6e4);
         }
         window.dispatchEvent(new CustomEvent("hh-ar-sync-resumes"));
@@ -8150,6 +8537,8 @@
       init_stats2();
       init_negotiations2();
       init_resumes2();
+      init_tour_engine();
+      init_tour_steps();
     }
   });
 

@@ -13,6 +13,8 @@ import { renderOverviewKPI } from '../tabs/overview.js';
 import { renderStats } from '../tabs/stats.js';
 import { renderNegotiationList } from '../tabs/negotiations.js';
 import { renderBlacklist, renderSettingsValues } from '../tabs/settings.js';
+import { startTour, isTourDone } from '../../lib/tour-engine.js';
+import { getWelcomeTourSteps } from '../../lib/tour-steps.js';
 
 // ═══════════════════════════════════════════════
 // RENDER STATES
@@ -93,4 +95,9 @@ export function renderInitialData() {
   renderBlacklist();
   renderSettingsValues();
   renderNegotiationList();
+
+  // Auto-start tour for first-time users
+  if (!isTourDone()) {
+    setTimeout(() => startTour(getWelcomeTourSteps()), 800);
+  }
 }

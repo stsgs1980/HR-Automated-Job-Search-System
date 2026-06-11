@@ -90,6 +90,7 @@ function getHeaderHTML(userName) {
         <span style="width:5px;height:5px;background:#059669;border-radius:50%;display:inline-block;margin-right:4px;"></span>
         ${badgeLabel}
       </div>
+      <button class="hh-tour-help" data-action="start-tour" title="Гид по расширению">?</button>
       <button class="har-close-btn" data-action="close-panel" aria-label="Закрыть панель"
         style="width:28px;height:28px;border-radius:8px;border:none;background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#71717a;">
         ${ICONS.close}

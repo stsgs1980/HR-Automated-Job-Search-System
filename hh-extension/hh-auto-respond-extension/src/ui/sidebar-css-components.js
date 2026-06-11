@@ -153,4 +153,47 @@ export const SIDEBAR_CSS_COMPONENTS = `
 .score-ring.high span { color: #059669; }
 .score-ring.medium span { color: #D97706; }
 .score-ring.low span { color: #DC2626; }
+
+/* ═══ Guided Tour ═══ */
+.hh-tour-overlay { cursor: pointer; }
+.hh-tour-spotlight { pointer-events: none; }
+.hh-tour-tooltip {
+  width: 320px; max-width: calc(100vw - 32px);
+  background: #ffffff; border-radius: 12px;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.18), 0 2px 8px rgba(0,0,0,0.08);
+  border: 1px solid rgba(0,0,0,0.06);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  overflow: hidden; animation: tourFadeIn 0.25s ease;
+}
+@keyframes tourFadeIn { from { opacity:0; transform:scale(0.96); } to { opacity:1; transform:scale(1); } }
+.hh-tour-header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 10px 14px 0; }
+.hh-tour-counter {
+  font-size: 11px; font-weight: 600; color: #3b82f6;
+  background: #eff6ff; padding: 2px 8px; border-radius: 99px; }
+.hh-tour-skip {
+  background: none; border: none; font-size: 12px; color: #a1a1aa;
+  cursor: pointer; padding: 2px 6px; border-radius: 4px; transition: color 0.15s; }
+.hh-tour-skip:hover { color: #71717a; }
+.hh-tour-title {
+  padding: 8px 14px 0; font-size: 14px; font-weight: 700; color: #18181b; }
+.hh-tour-text {
+  padding: 6px 14px 10px; font-size: 13px; line-height: 1.5; color: #52525b; }
+.hh-tour-footer {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 8px 14px; border-top: 1px solid #f4f4f5; background: #fafafa; }
+.hh-tour-prev, .hh-tour-next {
+  border: none; border-radius: 8px; padding: 6px 14px; font-size: 12px;
+  font-weight: 600; cursor: pointer; transition: all 0.15s; }
+.hh-tour-next { background: #059669; color: #fff; }
+.hh-tour-next:hover { background: #047857; }
+.hh-tour-prev { background: #f4f4f5; color: #52525b; }
+.hh-tour-prev:hover { background: #e4e4e7; }
+.hh-tour-help {
+  background: none; border: 1px solid #d4d4d8; border-radius: 50%;
+  width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;
+  cursor: pointer; font-size: 13px; font-weight: 700; color: #71717a;
+  transition: all 0.15s; line-height: 1; }
+.hh-tour-help:hover { background: #f4f4f5; color: #059669; border-color: #059669; }
 `;
