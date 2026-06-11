@@ -339,3 +339,34 @@ Stage Summary:
 - ALL panelState mutations centralised through accessor functions (0 external direct mutations)
 - 14 new files created, 21 files modified
 - Build passes: dist/content.js 364.4kb
+
+---
+Task ID: anti-monolith-final-batch2
+Agent: main
+Task: Final anti-monolith batch — iframe-vis function split + panelState accessor migration
+
+Work Log:
+- Full compliance scan: 0 files over 200 lines, but 1 function over 150 lines
+- detectVisibilityFromIframeDoc() in resume-fetch-iframe-vis.js was 161 lines (limit: 150)
+- Split into 2 strategy modules + orchestrator:
+  - resume-fetch-iframe-vis-dom.js (94 lines) — DOM strategies S0,S1,S2,S4 + diag buttons
+  - resume-fetch-iframe-vis-adv.js (121 lines) — text/script strategies S3,S5,S6,S7,S8 + vis elements
+  - resume-fetch-iframe-vis.js (95 lines) — thin orchestrator with tryStrategy() helper
+- Added updateStats() and updateSettings() accessor functions to state.js
+- Migrated 3 Object.assign(panelState, ...) calls:
+  - content/main.js: Object.assign(panelState.stats, stats) → updateStats(stats)
+  - content/main.js: Object.assign(panelState.settings, settings) → updateSettings(settings)
+  - ui/panel/index.js: Object.assign(panelState.stats, stats) → mergeStatsState(stats)
+- Final compliance scan: 0 violations remaining
+  - 0 files over 200 lines
+  - 0 functions over 150 lines
+  - 0 direct panelState mutations outside state.js
+  - 0 direct chrome.storage calls outside lib/storage*.js
+  - 0 direct fetch() calls outside lib/
+- Build verified: esbuild compiles cleanly, dist/content.js 366.7kb
+- Committed and pushed to origin/main
+
+Stage Summary:
+- detectVisibilityFromIframeDoc() split: 161 → 95 lines (orchestrator) + 94 + 121 (strategies)
+- panelState fully centralised: updateStats/updateSettings accessors added, 3 callers migrated
+- Anti-monolith compliance: 100% — zero violations across all checks
