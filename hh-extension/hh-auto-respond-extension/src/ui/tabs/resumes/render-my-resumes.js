@@ -82,9 +82,9 @@ export function renderMyResumesPanel() {
     const radio = isActive
       ? '<span style="width:16px;height:16px;border-radius:50%;border:2px solid #059669;display:flex;align-items:center;justify-content:center;flex-shrink:0;"><span style="width:8px;height:8px;border-radius:50%;background:#059669;"></span></span>'
       : '<span style="width:16px;height:16px;border-radius:50%;border:2px solid #d4d4d8;display:flex;align-items:center;justify-content:center;flex-shrink:0;"></span>';
-    // Reparse icon (↻) only on active resume card — replaces standalone reparse button
+    // Reparse icon (↻) only on active resume card — fetches fresh data from server
     const reparseIcon = isActive
-      ? '<button class="btn btn-outline btn-sm" data-action="load-resume" title="' + (vis === 'hidden' ? 'Перепарсить скрытое' : 'Перепарсить') + '" ' +
+      ? '<button class="btn btn-outline btn-sm" data-action="reparse-resume" title="' + (vis === 'hidden' ? 'Перепарсить скрытое' : 'Перепарсить') + '" ' +
         'style="padding:2px 6px;font-size:13px;line-height:1;' + (vis === 'hidden' ? 'color:#b45309;border-color:#fbbf24;' : '') + '">' +
         '↻</button>'
       : '';
@@ -108,8 +108,8 @@ export function renderMyResumesPanel() {
 
   listEl.querySelectorAll('.har-my-resume-item').forEach(item => {
     item.addEventListener('click', (e) => {
-      // If ↻ reparse button was clicked, don't switch active resume — let event delegation handle load-resume
-      if (e.target.closest('[data-action="load-resume"]')) return;
+      // If ↻ reparse button was clicked, don't switch active resume — let event delegation handle reparse-resume
+      if (e.target.closest('[data-action="reparse-resume"]')) return;
       const idx = parseInt(item.getAttribute('data-resume-idx'), 10);
       const resume = resumes[idx];
       if (!resume) return;

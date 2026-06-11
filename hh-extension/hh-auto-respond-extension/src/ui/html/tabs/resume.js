@@ -5,28 +5,6 @@ import { ICONS } from '../icons.js';
 
 export function getResumeSection() {
   return `<div class="tab-section" id="tab-resume">
-    <div class="card fade-in" style="margin-bottom:12px;">
-      <div class="timeline-toggle" style="display:flex;align-items:center;justify-content:space-between;" data-timeline="resume-parsing">
-        <div style="display:flex;align-items:center;gap:10px;">
-          <div id="res-avatar" style="width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,#059669,#10B981);display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px;font-weight:700;flex-shrink:0;">?</div>
-          <div>
-            <div style="display:flex;align-items:center;gap:6px;">
-              <div id="res-title" style="font-size:13px;font-weight:600;">Действующее резюме</div>
-            </div>
-            <div id="res-subtitle" style="font-size:11px;color:#71717a;margin-top:1px;">Выберите резюме из списка ниже</div>
-          </div>
-        </div>
-        <div style="display:flex;align-items:center;gap:6px;">
-          <span id="res-parsed-badge" class="badge badge-zinc" style="font-size:11px;">не выбрано</span>
-          ${ICONS.chevronDown}
-        </div>
-      </div>
-      <div class="timeline-body" id="res-parsing-body" style="margin-top:12px;padding-top:4px;">
-        <div id="res-parsed-data">
-          <div style="padding:12px;text-align:center;font-size:11px;color:#71717a;">Выберите или загрузите резюме</div>
-        </div>
-      </div>
-    </div>
     <div id="res-sync-section" class="card fade-in" style="margin-bottom:12px;">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
         <span style="font-size:12px;font-weight:600;">Все резюме</span>
@@ -48,6 +26,28 @@ export function getResumeSection() {
         <button class="btn btn-outline btn-sm" data-action="sync-resumes" style="width:100%;">
           ${ICONS.refresh} Синхронизировать все
         </button>
+      </div>
+    </div>
+    <div class="card fade-in" style="margin-bottom:12px;">
+      <div class="timeline-toggle" style="display:flex;align-items:center;justify-content:space-between;" data-timeline="resume-parsing">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div id="res-avatar" style="width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,#059669,#10B981);display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px;font-weight:700;flex-shrink:0;">?</div>
+          <div>
+            <div style="display:flex;align-items:center;gap:6px;">
+              <div id="res-title" style="font-size:13px;font-weight:600;">Действующее резюме</div>
+            </div>
+            <div id="res-subtitle" style="font-size:11px;color:#71717a;margin-top:1px;">Выберите резюме из списка выше</div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span id="res-parsed-badge" class="badge badge-zinc" style="font-size:11px;">не выбрано</span>
+          ${ICONS.chevronDown}
+        </div>
+      </div>
+      <div class="timeline-body" id="res-parsing-body" style="margin-top:12px;padding-top:4px;">
+        <div id="res-parsed-data">
+          <div style="padding:12px;text-align:center;font-size:11px;color:#71717a;">Выберите или загрузите резюме</div>
+        </div>
       </div>
     </div>
     <div id="res-skills-section" class="card fade-in" style="margin-bottom:12px;display:none;">

@@ -5,7 +5,7 @@
  * Extracted from events.js for anti-monolith compliance.
  */
 
-import { panelState } from '../state.js';
+import { panelState, refs } from '../state.js';
 import { toggleSidebar, updateAuthStateAsync } from './index.js';
 import { resetAuthCache } from '../auth.js';
 import { clearResumeData, dumpResumeToConsole, testParseResume } from './panel-diagnostics.js';
@@ -55,6 +55,25 @@ export function bindSidebarClicks(container) {
         window.addEventListener('hh-ar-load-resume-done', onDone);
       }
       window.dispatchEvent(new CustomEvent('hh-ar-load-resume'));
+      return;
+    }
+    if (t.closest('[data-action="reparse-resume"]')) {
+      const btn = t.closest('[data-action="reparse-resume"]');
+      const resume = panelState.resume;
+      if (!resume || !resume.id) return;
+      const resumeUrl = resume.url || ('https://hh.ru/applicant/resumes/view?resume=' + resume.id);
+      if (btn) {
+        const origHTML = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="btn-spinner"></span>';
+        const onDone = () => {
+          setTimeout(() => { btn.disabled = false; btn.innerHTML = origHTML; }, 300);
+          window.removeEventListener('hh-ar-load-resume-done', onDone);
+        };
+        window.addEventListener('hh-ar-load-resume-done', onDone);
+        setTimeout(() => { btn.disabled = false; btn.innerHTML = origHTML; window.removeEventListener('hh-ar-load-resume-done', onDone); }, 30000);
+      }
+      window.dispatchEvent(new CustomEvent('hh-ar-reparse-resume', { detail: { resumeUrl } }));
       return;
     }
     if (t.closest('[data-action="sync-resumes"]')) {

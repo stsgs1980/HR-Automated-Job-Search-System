@@ -1,8 +1,6 @@
 /**
  * CONTENT: RESUME LOADER
- * ========================
- * Handles the hh-ar-load-resume event — loads/resumes from
- * the current page or from synced storage data.
+ * Handles hh-ar-load-resume and hh-ar-reparse-resume events.
  */
 
 import { createLogger } from '../lib/anti-hallucination.js';
@@ -24,7 +22,6 @@ export async function handleLoadResume() {
   const path = window.location.pathname;
   setStatus('Загрузка действующего резюме...');
 
-  // Show loading spinner in the panel content area
   showResumeLoading('Загрузка действующего резюме...');
 
   try {
@@ -40,6 +37,44 @@ export async function handleLoadResume() {
     setStatus('Ошибка: ' + err.message);
   } finally {
     // Signal completion for button loading state — ALWAYS dispatch
+    window.dispatchEvent(new CustomEvent('hh-ar-load-resume-done'));
+  }
+}
+
+// ── Reparse: fetch active resume fresh from server ──
+
+/** Handle hh-ar-reparse-resume: ALWAYS fetches from server by URL. */
+export async function handleReparseResume(e) {
+  if (!panelState.isLoggedIn) return;
+  const resumeUrl = e.detail?.resumeUrl;
+  if (!resumeUrl) {
+    loadLog.warn('Reparse: no resumeUrl provided');
+    return;
+  }
+
+  setStatus('Перепарсивание резюме...');
+  showResumeLoading('Перепарсивание резюме...');
+
+  try {
+    const resume = await fetchAndParseResume(resumeUrl);
+    const hasUsefulData = resume.id && (resume.title || resume.skills.length > 0 || resume.experience.length > 0);
+    if (hasUsefulData) {
+      setActiveResumeState(resume);
+      await setActiveResume(resume);
+      await saveMyResume(resume);
+      setMyResumes(await getMyResumes());
+      renderResumePanel();
+      renderMyResumesPanel();
+      setStatus('Перепарсено: ' + (resume.title || 'Без названия'));
+      loadLog.info('Reparse: fetched and saved: ' + resume.title);
+    } else {
+      setStatus('Перепарсивание не дало данных');
+      loadLog.warn('Reparse: parse result has no useful data');
+    }
+  } catch (err) {
+    loadLog.error('Reparse error: ' + err.message);
+    setStatus('Ошибка перепарсивания: ' + err.message);
+  } finally {
     window.dispatchEvent(new CustomEvent('hh-ar-load-resume-done'));
   }
 }

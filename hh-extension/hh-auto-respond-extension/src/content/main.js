@@ -24,7 +24,7 @@ import { setActiveResumeState, setMyResumes, updateStats, updateSettings } from 
 
 // Split modules
 import { initPageLogic } from './main-page-handlers.js';
-import { handleLoadResume } from './main-resume-loader.js';
+import { handleLoadResume, handleReparseResume } from './main-resume-loader.js';
 import { handleSyncResumes } from './main-sync.js';
 
 const mainLog = createLogger('Main');
@@ -85,6 +85,7 @@ async function init() {
   });
 
   window.addEventListener('hh-ar-load-resume', handleLoadResume);
+  window.addEventListener('hh-ar-reparse-resume', handleReparseResume);
   window.addEventListener('hh-ar-sync-resumes', handleSyncResumes);
 }
 

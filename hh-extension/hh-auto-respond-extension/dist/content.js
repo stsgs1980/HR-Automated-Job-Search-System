@@ -2689,28 +2689,6 @@
   // src/ui/html/tabs/resume.js
   function getResumeSection() {
     return `<div class="tab-section" id="tab-resume">
-    <div class="card fade-in" style="margin-bottom:12px;">
-      <div class="timeline-toggle" style="display:flex;align-items:center;justify-content:space-between;" data-timeline="resume-parsing">
-        <div style="display:flex;align-items:center;gap:10px;">
-          <div id="res-avatar" style="width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,#059669,#10B981);display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px;font-weight:700;flex-shrink:0;">?</div>
-          <div>
-            <div style="display:flex;align-items:center;gap:6px;">
-              <div id="res-title" style="font-size:13px;font-weight:600;">\u0414\u0435\u0439\u0441\u0442\u0432\u0443\u044E\u0449\u0435\u0435 \u0440\u0435\u0437\u044E\u043C\u0435</div>
-            </div>
-            <div id="res-subtitle" style="font-size:11px;color:#71717a;margin-top:1px;">\u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0440\u0435\u0437\u044E\u043C\u0435 \u0438\u0437 \u0441\u043F\u0438\u0441\u043A\u0430 \u043D\u0438\u0436\u0435</div>
-          </div>
-        </div>
-        <div style="display:flex;align-items:center;gap:6px;">
-          <span id="res-parsed-badge" class="badge badge-zinc" style="font-size:11px;">\u043D\u0435 \u0432\u044B\u0431\u0440\u0430\u043D\u043E</span>
-          ${ICONS.chevronDown}
-        </div>
-      </div>
-      <div class="timeline-body" id="res-parsing-body" style="margin-top:12px;padding-top:4px;">
-        <div id="res-parsed-data">
-          <div style="padding:12px;text-align:center;font-size:11px;color:#71717a;">\u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0438\u043B\u0438 \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u0435 \u0440\u0435\u0437\u044E\u043C\u0435</div>
-        </div>
-      </div>
-    </div>
     <div id="res-sync-section" class="card fade-in" style="margin-bottom:12px;">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
         <span style="font-size:12px;font-weight:600;">\u0412\u0441\u0435 \u0440\u0435\u0437\u044E\u043C\u0435</span>
@@ -2732,6 +2710,28 @@
         <button class="btn btn-outline btn-sm" data-action="sync-resumes" style="width:100%;">
           ${ICONS.refresh} \u0421\u0438\u043D\u0445\u0440\u043E\u043D\u0438\u0437\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u0432\u0441\u0435
         </button>
+      </div>
+    </div>
+    <div class="card fade-in" style="margin-bottom:12px;">
+      <div class="timeline-toggle" style="display:flex;align-items:center;justify-content:space-between;" data-timeline="resume-parsing">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div id="res-avatar" style="width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,#059669,#10B981);display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px;font-weight:700;flex-shrink:0;">?</div>
+          <div>
+            <div style="display:flex;align-items:center;gap:6px;">
+              <div id="res-title" style="font-size:13px;font-weight:600;">\u0414\u0435\u0439\u0441\u0442\u0432\u0443\u044E\u0449\u0435\u0435 \u0440\u0435\u0437\u044E\u043C\u0435</div>
+            </div>
+            <div id="res-subtitle" style="font-size:11px;color:#71717a;margin-top:1px;">\u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0440\u0435\u0437\u044E\u043C\u0435 \u0438\u0437 \u0441\u043F\u0438\u0441\u043A\u0430 \u0432\u044B\u0448\u0435</div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span id="res-parsed-badge" class="badge badge-zinc" style="font-size:11px;">\u043D\u0435 \u0432\u044B\u0431\u0440\u0430\u043D\u043E</span>
+          ${ICONS.chevronDown}
+        </div>
+      </div>
+      <div class="timeline-body" id="res-parsing-body" style="margin-top:12px;padding-top:4px;">
+        <div id="res-parsed-data">
+          <div style="padding:12px;text-align:center;font-size:11px;color:#71717a;">\u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0438\u043B\u0438 \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u0435 \u0440\u0435\u0437\u044E\u043C\u0435</div>
+        </div>
       </div>
     </div>
     <div id="res-skills-section" class="card fade-in" style="margin-bottom:12px;display:none;">
@@ -4236,12 +4236,12 @@
         visBadge = '<span class="badge" style="font-size:9px;margin-left:4px;background:#e4e4e7;color:#71717a;">?</span>';
       }
       const radio = isActive ? '<span style="width:16px;height:16px;border-radius:50%;border:2px solid #059669;display:flex;align-items:center;justify-content:center;flex-shrink:0;"><span style="width:8px;height:8px;border-radius:50%;background:#059669;"></span></span>' : '<span style="width:16px;height:16px;border-radius:50%;border:2px solid #d4d4d8;display:flex;align-items:center;justify-content:center;flex-shrink:0;"></span>';
-      const reparseIcon = isActive ? '<button class="btn btn-outline btn-sm" data-action="load-resume" title="' + (vis === "hidden" ? "\u041F\u0435\u0440\u0435\u043F\u0430\u0440\u0441\u0438\u0442\u044C \u0441\u043A\u0440\u044B\u0442\u043E\u0435" : "\u041F\u0435\u0440\u0435\u043F\u0430\u0440\u0441\u0438\u0442\u044C") + '" style="padding:2px 6px;font-size:13px;line-height:1;' + (vis === "hidden" ? "color:#b45309;border-color:#fbbf24;" : "") + '">\u21BB</button>' : "";
+      const reparseIcon = isActive ? '<button class="btn btn-outline btn-sm" data-action="reparse-resume" title="' + (vis === "hidden" ? "\u041F\u0435\u0440\u0435\u043F\u0430\u0440\u0441\u0438\u0442\u044C \u0441\u043A\u0440\u044B\u0442\u043E\u0435" : "\u041F\u0435\u0440\u0435\u043F\u0430\u0440\u0441\u0438\u0442\u044C") + '" style="padding:2px 6px;font-size:13px;line-height:1;' + (vis === "hidden" ? "color:#b45309;border-color:#fbbf24;" : "") + '">\u21BB</button>' : "";
       return '<div class="har-my-resume-item" data-resume-idx="' + idx + '" style="padding:8px;border-bottom:1px solid #e4e4e7;cursor:pointer;display:flex;align-items:flex-start;gap:8px;' + (isActive ? "background:#f0fdf4;border-radius:6px;" : "") + (vis === "hidden" && !isActive ? "opacity:0.6;" : "") + '">' + radio + '<div style="flex:1;min-width:0;"><div style="font-weight:600;font-size:12px;display:flex;align-items:center;flex-wrap:wrap;gap:2px;"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(r.title || "\u0411\u0435\u0437 \u043D\u0430\u0437\u0432\u0430\u043D\u0438\u044F") + "</span>" + visBadge + "</div>" + (r.salary ? '<div style="font-size:11px;color:#059669;">' + esc(r.salary) + "</div>" : "") + '<div style="font-size:10px;color:#71717a;">' + skillCount + " \u043D\u0430\u0432., " + expCount + " \u0437\u0430\u043F. \u043E\u043F\u044B\u0442\u0430</div></div>" + reparseIcon + "</div>";
     }).join("");
     listEl.querySelectorAll(".har-my-resume-item").forEach((item) => {
       item.addEventListener("click", (e) => {
-        if (e.target.closest('[data-action="load-resume"]')) return;
+        if (e.target.closest('[data-action="reparse-resume"]')) return;
         const idx = parseInt(item.getAttribute("data-resume-idx"), 10);
         const resume = resumes[idx];
         if (!resume) return;
@@ -7048,6 +7048,32 @@
         window.dispatchEvent(new CustomEvent("hh-ar-load-resume"));
         return;
       }
+      if (t.closest('[data-action="reparse-resume"]')) {
+        const btn = t.closest('[data-action="reparse-resume"]');
+        const resume = panelState.resume;
+        if (!resume || !resume.id) return;
+        const resumeUrl = resume.url || "https://hh.ru/applicant/resumes/view?resume=" + resume.id;
+        if (btn) {
+          const origHTML = btn.innerHTML;
+          btn.disabled = true;
+          btn.innerHTML = '<span class="btn-spinner"></span>';
+          const onDone = () => {
+            setTimeout(() => {
+              btn.disabled = false;
+              btn.innerHTML = origHTML;
+            }, 300);
+            window.removeEventListener("hh-ar-load-resume-done", onDone);
+          };
+          window.addEventListener("hh-ar-load-resume-done", onDone);
+          setTimeout(() => {
+            btn.disabled = false;
+            btn.innerHTML = origHTML;
+            window.removeEventListener("hh-ar-load-resume-done", onDone);
+          }, 3e4);
+        }
+        window.dispatchEvent(new CustomEvent("hh-ar-reparse-resume", { detail: { resumeUrl } }));
+        return;
+      }
       if (t.closest('[data-action="sync-resumes"]')) {
         const btn = t.closest('[data-action="sync-resumes"]');
         if (btn) {
@@ -7552,6 +7578,38 @@
       window.dispatchEvent(new CustomEvent("hh-ar-load-resume-done"));
     }
   }
+  async function handleReparseResume(e) {
+    if (!panelState.isLoggedIn) return;
+    const resumeUrl = e.detail?.resumeUrl;
+    if (!resumeUrl) {
+      loadLog.warn("Reparse: no resumeUrl provided");
+      return;
+    }
+    setStatus2("\u041F\u0435\u0440\u0435\u043F\u0430\u0440\u0441\u0438\u0432\u0430\u043D\u0438\u0435 \u0440\u0435\u0437\u044E\u043C\u0435...");
+    showResumeLoading("\u041F\u0435\u0440\u0435\u043F\u0430\u0440\u0441\u0438\u0432\u0430\u043D\u0438\u0435 \u0440\u0435\u0437\u044E\u043C\u0435...");
+    try {
+      const resume = await fetchAndParseResume(resumeUrl);
+      const hasUsefulData = resume.id && (resume.title || resume.skills.length > 0 || resume.experience.length > 0);
+      if (hasUsefulData) {
+        setActiveResumeState(resume);
+        await setActiveResume(resume);
+        await saveMyResume(resume);
+        setMyResumes(await getMyResumes());
+        renderResumePanel();
+        renderMyResumesPanel();
+        setStatus2("\u041F\u0435\u0440\u0435\u043F\u0430\u0440\u0441\u0435\u043D\u043E: " + (resume.title || "\u0411\u0435\u0437 \u043D\u0430\u0437\u0432\u0430\u043D\u0438\u044F"));
+        loadLog.info("Reparse: fetched and saved: " + resume.title);
+      } else {
+        setStatus2("\u041F\u0435\u0440\u0435\u043F\u0430\u0440\u0441\u0438\u0432\u0430\u043D\u0438\u0435 \u043D\u0435 \u0434\u0430\u043B\u043E \u0434\u0430\u043D\u043D\u044B\u0445");
+        loadLog.warn("Reparse: parse result has no useful data");
+      }
+    } catch (err) {
+      loadLog.error("Reparse error: " + err.message);
+      setStatus2("\u041E\u0448\u0438\u0431\u043A\u0430 \u043F\u0435\u0440\u0435\u043F\u0430\u0440\u0441\u0438\u0432\u0430\u043D\u0438\u044F: " + err.message);
+    } finally {
+      window.dispatchEvent(new CustomEvent("hh-ar-load-resume-done"));
+    }
+  }
   async function loadFromResumePage(path) {
     let resume;
     if (/\/resume\/edit\//.test(path)) {
@@ -7754,6 +7812,7 @@
       updateVacancies(v);
     });
     window.addEventListener("hh-ar-load-resume", handleLoadResume);
+    window.addEventListener("hh-ar-reparse-resume", handleReparseResume);
     window.addEventListener("hh-ar-sync-resumes", handleSyncResumes);
   }
   async function loadSavedResumes() {
