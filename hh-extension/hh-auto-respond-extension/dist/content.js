@@ -381,28 +381,23 @@
 
   // src/engine/apply-queue.js
   async function getQueue() {
-    try {
-      const d = await chrome.storage.local.get("applyQueue");
-      return d.applyQueue || [];
-    } catch (e) {
-      return [];
-    }
+    return getApplyQueue();
   }
   async function setQueue(queue) {
-    await chrome.storage.local.set({ applyQueue: queue });
+    await setApplyQueue(queue);
   }
   async function dequeueNext() {
-    const queue = await getQueue();
+    const queue = await getApplyQueue();
     if (queue.length === 0) return null;
     const next = queue[0];
-    await setQueue(queue.slice(1));
+    await setApplyQueue(queue.slice(1));
     return next;
   }
   async function clearQueue() {
-    await chrome.storage.local.remove("applyQueue");
+    await setApplyQueue([]);
   }
   async function processNextInQueue() {
-    const queue = await getQueue();
+    const queue = await getApplyQueue();
     if (queue.length === 0) {
       autoLog.info("Queue empty \u2014 mass apply complete");
       return;
@@ -432,6 +427,7 @@
       init_anti_hallucination();
       init_rate_limiter();
       init_timing();
+      init_storage();
       autoLog = createLogger("AutoRespond");
       QUEUE_ITEM_MAX_AGE = 6e5;
     }
@@ -1971,2201 +1967,6 @@
   var init_resume_detail2 = __esm({
     "src/parsers/resume-detail.js"() {
       init_resume_detail();
-    }
-  });
-
-  // src/lib/resume-fetch-helpers.js
-  async function fetchHtml(url) {
-    const resp = await fetch(url, {
-      credentials: "include",
-      headers: { "Accept": "text/html" }
-    });
-    if (!resp.ok) throw new Error("fetch " + url + " -> " + resp.status);
-    return resp.text();
-  }
-  function htmlToDoc(html) {
-    const parser = new DOMParser();
-    return parser.parseFromString(html, "text/html");
-  }
-  function safeGetText2(el, fallback) {
-    fallback = fallback || "";
-    if (!el || !(el instanceof Element)) return fallback;
-    const text = (el.textContent || "").trim();
-    return text.length > 0 ? text : fallback;
-  }
-  function extractResumeLinks(anchorList) {
-    const resumes = [];
-    anchorList.forEach((link) => {
-      const href = link.getAttribute("href") || "";
-      let hashMatch = href.match(/\/resume\/([a-f0-9]+)/);
-      if (!hashMatch) hashMatch = href.match(/[?&]resume=([a-f0-9]+)/);
-      if (!hashMatch) return;
-      const id = hashMatch[1];
-      if (id.length < MIN_HASH_LEN) return;
-      if (resumes.find((r) => r.id === id)) return;
-      const rawLinkText = link.textContent || "";
-      const vis = detectVisibilityFromLinkText(rawLinkText);
-      const visibility = vis.visibility;
-      const hidden = vis.hidden;
-      const title = cleanResumeTitle(rawLinkText);
-      const resumeUrl = "https://hh.ru/applicant/resumes/view?resume=" + id;
-      resumes.push({ id, title, url: resumeUrl, visibility, hidden });
-      if (visibility !== VISIBILITY_UNKNOWN) {
-        helperLog.info("LinkText visibility: " + id.substring(0, 8) + "=" + visibility + " (method=" + vis.method + ', title="' + title.substring(0, 30) + '")');
-      }
-    });
-    return resumes;
-  }
-  function extractFromScripts(doc, html) {
-    const resumes = [];
-    const scripts = doc.querySelectorAll("script");
-    scripts.forEach((script) => {
-      const text = script.textContent || "";
-      const matches = text.matchAll(/resume[=/]\\?"?([a-f0-9]{32,})/g);
-      for (const m of matches) {
-        const id = m[1];
-        if (!resumes.find((r) => r.id === id)) {
-          resumes.push({
-            id,
-            title: "Resume " + id.substring(0, 8),
-            url: "https://hh.ru/applicant/resumes/view?resume=" + id
-          });
-        }
-      }
-    });
-    if (resumes.length === 0) {
-      const jsonMatches = html.matchAll(/"resumeId"\s*:\s*"([a-f0-9]+)"/g);
-      for (const m of jsonMatches) {
-        const id = m[1];
-        if (!resumes.find((r) => r.id === id)) {
-          resumes.push({
-            id,
-            title: "Resume " + id.substring(0, 8),
-            url: "https://hh.ru/applicant/resumes/view?resume=" + id
-          });
-        }
-      }
-    }
-    if (resumes.length > 0) {
-      helperLog.info("Found " + resumes.length + " resumes from script/JSON data");
-    }
-    return resumes;
-  }
-  function extractVisibilityStatus(doc, resumes, html) {
-    if (resumes.length === 0) return;
-    if (!html) {
-      helperLog.warn("extractVisibilityStatus: no raw HTML provided, skipping");
-      return;
-    }
-    const htmlLower = html.toLowerCase();
-    let alreadyDetected = 0;
-    let needDetection = 0;
-    resumes.forEach((r) => {
-      if (r.visibility === VISIBILITY_HIDDEN || r.visibility === VISIBILITY_VISIBLE) {
-        alreadyDetected++;
-      } else {
-        needDetection++;
-      }
-    });
-    resumes.forEach((r) => {
-      const link = Array.from(doc.querySelectorAll("a[href]")).find((a) => {
-        const h = a.getAttribute("href") || "";
-        return h.includes(r.id);
-      });
-      if (link) {
-        const raw = link.textContent || "";
-        const norm = normalizeWs(raw);
-        const hasInd = hasHiddenIndicator(raw);
-        helperLog.info("  DEBUG " + r.id.substring(0, 8) + ": rawLen=" + raw.length + " hasNbsp=" + (raw.indexOf("\xA0") !== -1) + ' normalized="' + norm.substring(0, 80) + '" hasHidden=' + hasInd + " vis=" + r.visibility);
-      }
-    });
-    helperLog.info("Visibility scan: " + resumes.length + " resumes (" + alreadyDetected + " already from link text, " + needDetection + " need detection)");
-    if (needDetection === 0) {
-      helperLog.info("All resumes already detected from link text \u2014 skipping other strategies");
-      const summary2 = resumes.map(
-        (r) => r.id.substring(0, 8) + "=" + r.visibility
-      ).join(", ");
-      helperLog.info("Visibility result: [" + summary2 + "]");
-      return;
-    }
-    const globalIndicators = HIDDEN_INDICATORS.map((ind) => ({
-      text: ind,
-      pos: htmlLower.indexOf(ind)
-    }));
-    const hasAnyIndicators = globalIndicators.some((i) => i.pos !== -1);
-    helperLog.info("Indicators in HTML: " + (hasAnyIndicators ? globalIndicators.filter((i) => i.pos !== -1).map((i) => '"' + i.text + '"@' + i.pos).join(", ") : "NONE FOUND"));
-    let strategyUsed = false;
-    for (const sel of RESUME_CARD_SELECTORS) {
-      const cards = doc.querySelectorAll(sel);
-      if (cards.length === 0) continue;
-      helperLog.info("Strategy 1: Found " + cards.length + " cards with selector: " + sel);
-      let matched = 0;
-      cards.forEach((card) => {
-        const link = card.querySelector('a[href*="/resume/"], a[href*="resume="]');
-        if (!link) return;
-        const href = link.getAttribute("href") || "";
-        let hashMatch = href.match(/\/resume\/([a-f0-9]+)/);
-        if (!hashMatch) hashMatch = href.match(/[?&]resume=([a-f0-9]+)/);
-        if (!hashMatch) return;
-        const id = hashMatch[1];
-        const resume = resumes.find((r) => r.id === id);
-        if (!resume) return;
-        if (resume.visibility !== VISIBILITY_UNKNOWN) return;
-        const result = detectVisibilityFromCard(card);
-        resume.visibility = result.visibility;
-        resume.hidden = result.hidden;
-        matched++;
-        helperLog.info("  Card: " + id.substring(0, 8) + "=" + result.visibility + " (method=" + result.method + ", cardTextLen=" + (card.textContent || "").length + ")");
-      });
-      if (matched > 0) {
-        helperLog.info("Strategy 1: matched " + matched + "/" + needDetection + " unknown resumes via data-qa cards");
-        break;
-      }
-    }
-    const stillUnknown = resumes.filter((r) => r.visibility === VISIBILITY_UNKNOWN).length;
-    if (stillUnknown === 0) {
-      strategyUsed = true;
-    } else if (!strategyUsed) {
-      helperLog.info("Strategy 1: no data-qa cards matched, trying next strategy");
-    }
-    if (!strategyUsed) {
-      const scriptResult = extractVisibilityFromScripts(doc, resumes, html);
-      if (scriptResult) {
-        helperLog.info("Strategy 2: found visibility in script/hydration state");
-        strategyUsed = true;
-      }
-    }
-    if (!strategyUsed) {
-      helperLog.info("Strategy 3: proximity search with <script> stripping");
-      const cleanHtml = stripScripts(html);
-      const cleanLower = cleanHtml.toLowerCase();
-      const cleanForSearch = cleanLower.replace(/&nbsp;/g, " ");
-      const cleanIndicators = HIDDEN_INDICATORS.map((ind) => ({
-        text: ind,
-        pos: cleanForSearch.indexOf(ind)
-      }));
-      const hasCleanIndicators = cleanIndicators.some((i) => i.pos !== -1);
-      helperLog.info("  Cleaned HTML: " + cleanHtml.length + " chars (was " + html.length + "), indicators: " + (hasCleanIndicators ? cleanIndicators.filter((i) => i.pos !== -1).map((i) => '"' + i.text + '"@' + i.pos).join(", ") : "NONE"));
-      const hashPositions = resumes.map((r) => {
-        const pos = cleanLower.indexOf(r.id.toLowerCase());
-        return { id: r.id, pos };
-      }).filter((h) => h.pos !== -1).sort((a, b) => a.pos - b.pos);
-      if (hashPositions.length > 0) {
-        helperLog.info("  Hash positions in cleaned HTML: " + hashPositions.map((h) => h.id.substring(0, 8) + "@" + h.pos).join(", "));
-      }
-      resumes.forEach((r) => {
-        if (r.visibility !== VISIBILITY_UNKNOWN) return;
-        const myPos = cleanForSearch.indexOf(r.id.toLowerCase());
-        if (myPos === -1) {
-          helperLog.info("  " + r.id.substring(0, 8) + ": hash not found in cleaned HTML");
-          return;
-        }
-        const nextResume = hashPositions.find((h) => h.pos > myPos && h.id !== r.id);
-        const boundary = nextResume ? nextResume.pos : cleanForSearch.length;
-        const searchStart = Math.max(0, myPos - 500);
-        const searchEnd = Math.min(myPos + SEARCH_RADIUS, boundary);
-        const zone = cleanForSearch.substring(searchStart, searchEnd);
-        const isHidden = hasHiddenIndicator(zone);
-        r.visibility = isHidden ? VISIBILITY_HIDDEN : VISIBILITY_UNKNOWN;
-        r.hidden = isHidden;
-        helperLog.info("  " + r.id.substring(0, 8) + "=" + r.visibility + " (zone " + searchStart + "-" + searchEnd + ", next=" + (nextResume ? nextResume.id.substring(0, 8) : "none") + ", indicators=" + (isHidden ? "FOUND" : "none") + ")");
-      });
-      strategyUsed = true;
-    }
-    const unknownAfterAll = resumes.filter((r) => r.visibility === VISIBILITY_UNKNOWN);
-    if (unknownAfterAll.length > 0) {
-      helperLog.info("[VIS-DIAG] List: " + unknownAfterAll.length + " resumes still UNKNOWN \u2014 will be resolved by detail page detection");
-      unknownAfterAll.forEach((r) => {
-        helperLog.info("[VIS-DIAG]   List: " + r.id.substring(0, 8) + ' "' + (r.title || "").substring(0, 30) + '" \u2192 ' + r.visibility);
-      });
-    }
-    const summary = resumes.map(
-      (r) => r.id.substring(0, 8) + "=" + r.visibility
-    ).join(", ");
-    helperLog.info("Visibility result: [" + summary + "]");
-  }
-  function extractVisibilityFromScripts(doc, resumes, html) {
-    let found = false;
-    const scripts = doc.querySelectorAll("script");
-    scripts.forEach((script) => {
-      const text = script.textContent || "";
-      if (!text || text.length < 100) return;
-      resumes.forEach((r) => {
-        if (r.visibility !== VISIBILITY_UNKNOWN) return;
-        const hashIdx = text.indexOf(r.id);
-        if (hashIdx === -1) return;
-        const nearby = text.substring(
-          Math.max(0, hashIdx - 200),
-          Math.min(text.length, hashIdx + 500)
-        );
-        if (/"hidden"\s*:\s*true/.test(nearby) || /"visibility"\s*:\s*"hidden"/.test(nearby) || /"status"\s*:\s*"hidden"/.test(nearby) || /"isHidden"\s*:\s*true/.test(nearby)) {
-          r.visibility = VISIBILITY_HIDDEN;
-          r.hidden = true;
-          found = true;
-          helperLog.info("  Script visibility: " + r.id.substring(0, 8) + "=hidden (JSON pattern)");
-        }
-      });
-    });
-    for (const sel of VISIBILITY_HIDDEN_DATA_QA) {
-      const qaMatch = sel.match(/data-qa="([^"]+)"/) || sel.match(/data-qa\*="([^"]+)"/);
-      if (!qaMatch) continue;
-      const qaValue = qaMatch[1];
-      const qaPattern = 'data-qa="' + qaValue;
-      const qaIdx = htmlLower_all(html, qaPattern);
-      if (qaIdx.length > 0) {
-        helperLog.info('  Found data-qa="' + qaValue + '" at positions: ' + qaIdx.join(", "));
-        qaIdx.forEach((pos) => {
-          const before = html.substring(Math.max(0, pos - 3e3), pos).toLowerCase();
-          let nearestId = null;
-          let nearestDist = Infinity;
-          resumes.forEach((r) => {
-            const idx = before.lastIndexOf(r.id.toLowerCase());
-            if (idx !== -1 && before.length - idx < nearestDist) {
-              nearestDist = before.length - idx;
-              nearestId = r;
-            }
-          });
-          if (nearestId && nearestId.visibility === VISIBILITY_UNKNOWN) {
-            nearestId.visibility = VISIBILITY_HIDDEN;
-            nearestId.hidden = true;
-            found = true;
-            helperLog.info("  data-qa visibility: " + nearestId.id.substring(0, 8) + "=hidden");
-          }
-        });
-      }
-    }
-    return found;
-  }
-  function htmlLower_all(html, pattern) {
-    const positions = [];
-    const lower = html.toLowerCase();
-    let idx = 0;
-    while ((idx = lower.indexOf(pattern, idx)) !== -1) {
-      positions.push(idx);
-      idx += pattern.length;
-    }
-    return positions;
-  }
-  var helperLog, SEARCH_RADIUS;
-  var init_resume_fetch_helpers = __esm({
-    "src/lib/resume-fetch-helpers.js"() {
-      init_anti_hallucination();
-      init_resume_constants();
-      helperLog = createLogger("ResumeFetchH");
-      SEARCH_RADIUS = 5e3;
-    }
-  });
-
-  // src/lib/resume-fetch-list.js
-  async function fetchResumeList() {
-    fetchLog.info("Fetching /applicant/resumes ...");
-    let html;
-    try {
-      html = await fetchHtml("https://hh.ru/applicant/resumes");
-    } catch (err) {
-      fetchLog.error("Failed to fetch /applicant/resumes: " + err.message);
-      return [];
-    }
-    if (!html || html.length < 500) {
-      fetchLog.warn("Got very short response (" + (html ? html.length : 0) + " chars), likely redirect");
-      return [];
-    }
-    const doc = htmlToDoc(html);
-    const allAnchors = doc.querySelectorAll("a[href]");
-    fetchLog.info("Fetched HTML: " + html.length + " chars, " + allAnchors.length + " links");
-    const resumes = extractResumeLinks(allAnchors);
-    extractVisibilityStatus(doc, resumes, html);
-    if (resumes.length === 0) {
-      fetchLog.info("No links found, trying embedded script data...");
-      const scriptResumes = extractFromScripts(doc, html);
-      if (scriptResumes.length > 0) return scriptResumes;
-    }
-    if (resumes.length === 0 && window.location.pathname.includes("/applicant/resumes")) {
-      fetchLog.info("No links from fetch, trying current page DOM...");
-      const domLinks = document.querySelectorAll("a[href]");
-      const domResumes = extractResumeLinks(domLinks);
-      if (domResumes.length > 0) {
-        fetchLog.info("Found " + domResumes.length + " resumes from current page DOM");
-        return domResumes;
-      }
-    }
-    fetchLog.info("Resume list: " + resumes.length + " resumes found");
-    return resumes;
-  }
-  var fetchLog;
-  var init_resume_fetch_list = __esm({
-    "src/lib/resume-fetch-list.js"() {
-      init_anti_hallucination();
-      init_resume_fetch_helpers();
-      fetchLog = createLogger("ResumeFetch");
-    }
-  });
-
-  // src/lib/resume-fetch-parse.js
-  function parseCompanyCardFromDoc(card) {
-    const job = {};
-    const cellLeft = card.querySelector('[data-qa="cell-left-side"]');
-    if (cellLeft) {
-      const cellTexts = cellLeft.querySelectorAll('[data-qa="cell-text-content"]');
-      if (cellTexts.length >= 1) {
-        job.company = (cellTexts[0].textContent || "").trim();
-      }
-      if (cellTexts.length >= 2) {
-        job.duration = (cellTexts[1].textContent || "").trim();
-      }
-    }
-    const stepContent = card.querySelector('[data-qa="magritte-stepper-step-content"]');
-    if (stepContent) {
-      const stepCellLeft = stepContent.querySelector('[data-qa="cell-left-side"]');
-      if (stepCellLeft) {
-        const stepTexts = stepCellLeft.querySelectorAll('[data-qa="cell-text-content"]');
-        if (stepTexts.length >= 1) {
-          job.position = (stepTexts[0].textContent || "").trim();
-        }
-        if (stepTexts.length >= 2) {
-          let rawPeriod = (stepTexts[1].textContent || "").trim();
-          rawPeriod = rawPeriod.replace(/\s*\(\d[^)]+\)$/, "").trim();
-          job.period = rawPeriod;
-        }
-      }
-      const fullStepText = (stepContent.textContent || "").trim();
-      let desc = fullStepText;
-      const posText = job.position || "";
-      const periodText = job.period || "";
-      if (posText && desc.startsWith(posText)) {
-        desc = desc.substring(posText.length);
-      }
-      if (periodText && desc.startsWith(periodText)) {
-        desc = desc.substring(periodText.length);
-      }
-      desc = desc.trim();
-      if (desc.length > 20) {
-        job.description = desc;
-      }
-    }
-    return job.company || job.position ? job : null;
-  }
-  function parseEducationFromDoc(eduCard) {
-    const eduEntries = [];
-    const eduCells = eduCard.querySelectorAll('[data-qa="cell-left-side"]');
-    eduCells.forEach((cell) => {
-      const edu = parseEduCell(cell);
-      if (edu) eduEntries.push(edu);
-    });
-    if (eduEntries.length === 0) {
-      Array.from(eduCard.children).forEach((child) => {
-        const edu = parseEduChild(child);
-        if (edu) eduEntries.push(edu);
-      });
-    }
-    if (eduEntries.length === 0) {
-      const fullText = (eduCard.textContent || "").trim();
-      const lines = fullText.split(/[\n\r]+/).map((l) => l.trim()).filter((l) => l.length > 3);
-      for (const line of lines) {
-        if (/[А-Яа-яЁё]{3,}/.test(line) && line.length < 200) {
-          const yearMatch = line.match(/(\d{4})/);
-          eduEntries.push({
-            name: line.replace(/\d{4}/g, "").trim().substring(0, 100),
-            year: yearMatch ? yearMatch[1] : ""
-          });
-        }
-      }
-    }
-    return eduEntries;
-  }
-  function parseEduCell(cell) {
-    const edu = {};
-    const cellTexts = cell.querySelectorAll('[data-qa="cell-text-content"]');
-    cellTexts.forEach((ct) => {
-      const t = (ct.textContent || "").trim();
-      if (!t || t.length < 2) return;
-      if (EDU_UI_TEXTS.test(t)) return;
-      if (!edu.name) {
-        edu.name = t;
-      } else if (!edu.description) {
-        edu.description = t;
-      } else if (!edu.year && /\d{4}/.test(t)) {
-        edu.year = t.match(/\d{4}/)?.[0] || t;
-      }
-    });
-    if (edu.name && !EDU_UI_TEXTS.test(edu.name) && edu.name.length > 3) {
-      return edu;
-    }
-    return null;
-  }
-  function parseEduChild(child) {
-    const edu = {};
-    const linkEl = child.querySelector("a");
-    if (linkEl) {
-      const t = (linkEl.textContent || "").trim();
-      if (!EDU_UI_TEXTS.test(t)) edu.name = t;
-    }
-    if (!edu.name) {
-      const textEls = child.querySelectorAll("span, div, p");
-      for (const el of textEls) {
-        const t = (el.textContent || "").trim();
-        if (t.length > 3 && /[А-Яа-яЁё]/.test(t) && !/^\d/.test(t) && !/\d{4}/.test(t) && !EDU_UI_TEXTS.test(t)) {
-          edu.name = t;
-          break;
-        }
-      }
-    }
-    const spans = child.querySelectorAll("span, div");
-    for (const sp of spans) {
-      const t = (sp.textContent || "").trim();
-      if (/^\d{4}$/.test(t) || /\d{4}/.test(t) && t.length < 15) {
-        edu.year = t;
-        break;
-      }
-    }
-    if (edu.name && !EDU_UI_TEXTS.test(edu.name) && edu.name.length > 2) {
-      return edu;
-    }
-    return null;
-  }
-  function parsePersonalDataFromDoc(doc, titleEl, dbg, resume) {
-    const personalText = [];
-    const posCard = doc.querySelector('[data-qa="resume-position-card"]');
-    if (posCard) {
-      posCard.querySelectorAll("span, div, p, a").forEach((el) => {
-        const t = (el.textContent || "").trim();
-        if (t && t.length > 0 && t.length < 200) personalText.push(t);
-      });
-    }
-    const titleContainer = titleEl ? titleEl.closest("div[data-qa], section") || titleEl.parentElement : null;
-    if (titleContainer) {
-      titleContainer.querySelectorAll("span, div, p, a").forEach((el) => {
-        if (el === titleEl || titleEl.contains(el)) return;
-        const t = (el.textContent || "").trim();
-        if (t && t.length > 0 && t.length < 200 && !personalText.includes(t)) personalText.push(t);
-      });
-    }
-    for (const t of personalText) {
-      if (!resume.gender) {
-        for (const gp of GENDER_PATTERNS) {
-          const m = t.match(gp);
-          if (m) {
-            resume.gender = dbg("resumeGender", m[0]);
-            break;
-          }
-        }
-      }
-      if (!resume.age) {
-        const m = t.match(AGE_PATTERN) || t.match(AGE_PATTERN2);
-        if (m) {
-          resume.age = dbg("resumeAge", m[1] + " \u043B\u0435\u0442");
-        }
-      }
-      if (!resume.address && t.length > 3) {
-        const isGender = GENDER_PATTERNS.some((p) => p.test(t));
-        const isAge = AGE_PATTERN.test(t) || AGE_PATTERN2.test(t);
-        if (!isGender && !isAge && !t.includes("\u0440\u0443\u0431") && !t.includes("USD") && !t.includes("\u0437/\u043F") && !t.includes("\u0443\u0440\u043E\u0432\u0435\u043D\u044C") && !t.includes("\u0434\u043E\u0445\u043E\u0434") && t !== resume.salary && t !== resume.title) {
-          if (/[А-Яа-яЁё]{2,}/.test(t) && t.length < 80) {
-            resume.address = dbg("resumeAddress", t);
-          }
-        }
-      }
-    }
-  }
-  var EDU_UI_TEXTS, GENDER_PATTERNS, AGE_PATTERN, AGE_PATTERN2;
-  var init_resume_fetch_parse = __esm({
-    "src/lib/resume-fetch-parse.js"() {
-      init_resume_fetch_helpers();
-      EDU_UI_TEXTS = /^(посмотреть всё|редактировать|образование|доп\.? образование|высшее|среднее|среднее специальное|добавить|добавить образование|среднее профессиональное)$/i;
-      GENDER_PATTERNS = [/\bмужчина\b/i, /\bженщина\b/i, /\bмужской\b/i, /\bженский\b/i, /\bmale\b/i, /\bfemale\b/i];
-      AGE_PATTERN = /(?:полных\s*)?(\d{2})\s*(?:лет|год|года)/i;
-      AGE_PATTERN2 = /(\d{2})\s*years?\s*old/i;
-    }
-  });
-
-  // src/lib/resume-fetch-experience.js
-  function parseExperienceFromDocStrategies1to3(doc, resume) {
-    const allCards = doc.querySelectorAll('[data-qa="profile-experience-company-card"]');
-    const seen = /* @__PURE__ */ new Set();
-    const uniqueCards = [];
-    allCards.forEach((c) => {
-      if (!seen.has(c)) {
-        seen.add(c);
-        uniqueCards.push(c);
-      }
-    });
-    const entries = [];
-    const usedStepperElements = /* @__PURE__ */ new Set();
-    uniqueCards.forEach((card) => {
-      const job = parseCompanyCardFromDoc(card);
-      if (job) entries.push(job);
-      const stepEl = card.querySelector('[data-qa="magritte-stepper-step-content"]');
-      if (stepEl) usedStepperElements.add(stepEl);
-    });
-    const expCard = doc.querySelector('[data-qa="resume-list-card-experience"]');
-    if (expCard) {
-      resume._debug.found.push("experienceBlock");
-      const stepperItems = expCard.querySelectorAll('[data-qa="magritte-stepper-step-content"]');
-      const alreadyParsed = entries.length;
-      stepperItems.forEach((step) => {
-        if (usedStepperElements.has(step)) return;
-        let parentCard = step.closest('[data-qa="profile-experience-company-card"]');
-        if (parentCard && uniqueCards.includes(parentCard)) return;
-        const cellLeft = step.querySelector('[data-qa="cell-left-side"]');
-        if (!cellLeft) return;
-        const texts = cellLeft.querySelectorAll('[data-qa="cell-text-content"]');
-        const job = {};
-        if (texts.length >= 1) job.position = (texts[0].textContent || "").trim();
-        if (texts.length >= 2) job.period = (texts[1].textContent || "").trim().replace(/\s*\(\d[^)]+\)$/, "").trim();
-        if (job.position || job.period) entries.push(job);
-      });
-      const stepperAdded = entries.length - alreadyParsed;
-      if (stepperAdded > 0) {
-        resume._debug.found.push("experience (stepper supplement): +" + stepperAdded);
-      }
-      if (entries.length === 0) {
-        const allStepperItems = expCard.querySelectorAll('[data-qa="magritte-stepper-step-content"]');
-        allStepperItems.forEach((step) => {
-          const cellLeft = step.querySelector('[data-qa="cell-left-side"]');
-          if (!cellLeft) return;
-          const texts = cellLeft.querySelectorAll('[data-qa="cell-text-content"]');
-          const job = {};
-          if (texts.length >= 1) job.position = (texts[0].textContent || "").trim();
-          if (texts.length >= 2) job.period = (texts[1].textContent || "").trim().replace(/\s*\(\d[^)]+\)$/, "").trim();
-          if (job.position) entries.push(job);
-        });
-        if (entries.length > 0) {
-          resume._debug.found.push("experience (stepper full fallback): " + entries.length);
-        }
-      }
-    } else {
-      resume._debug.missing.push("experienceBlock (no container, " + uniqueCards.length + " cards)");
-    }
-    return entries;
-  }
-  var fetchLog2;
-  var init_resume_fetch_experience = __esm({
-    "src/lib/resume-fetch-experience.js"() {
-      init_anti_hallucination();
-      init_resume_fetch_parse();
-      fetchLog2 = createLogger("ResumeFetch");
-    }
-  });
-
-  // src/lib/resume-fetch-strategy4-text.js
-  function parseExperienceFromHtmlText(html, alreadyFound) {
-    const MONTHS = "\u044F\u043D\u0432\u0430\u0440[\u044C\u0435\u044F]|\u0444\u0435\u0432\u0440\u0430\u043B[\u044C\u044C\u044F]|\u043C\u0430\u0440\u0442[\u0430\u0435]?|\u0430\u043F\u0440\u0435\u043B[\u044C\u044C\u044F]|\u043C\u0430[\u0439\u0438\u044F]|\u0438\u044E\u043D[\u044C\u044C\u044F]|\u0438\u044E\u043B[\u044C\u044C\u044F]|\u0430\u0432\u0433\u0443\u0441\u0442[\u0430\u0435]?|\u0441\u0435\u043D\u0442\u044F\u0431\u0440[\u044C\u044C\u044F]|\u043E\u043A\u0442\u044F\u0431\u0440[\u044C\u044C\u044F]|\u043D\u043E\u044F\u0431\u0440[\u044C\u044C\u044F]|\u0434\u0435\u043A\u0430\u0431\u0440[\u044C\u044C\u044F]";
-    const DATE_RANGE_RE = new RegExp(
-      "(" + MONTHS + ")\\s*\\d{4}\\s*[\u2014\\-\u2013]\\s*(?:(" + MONTHS + ")\\s*\\d{4}|\u043D\u0430\u0441\u0442\u043E\u044F\u0449\u0435\u0435\\s*\u0432\u0440\u0435\u043C\u044F|\u043F\u043E\\s+\u043D\u0430\u0441\u0442\u043E\u044F\u0449\u0435\u0435\\s+\u0432\u0440\u0435\u043C\u044F)",
-      "gi"
-    );
-    const NUM_DATE_RE = /\d{2}\.\d{4}\s*[—\-–]\s*(?:\d{2}\.\d{4}|настоящее\s*время|по\s+настоящее\s+время)/gi;
-    const allDateRanges = [];
-    let match;
-    while ((match = DATE_RANGE_RE.exec(html)) !== null) {
-      allDateRanges.push({ index: match.index, text: match[0] });
-    }
-    while ((match = NUM_DATE_RE.exec(html)) !== null) {
-      allDateRanges.push({ index: match.index, text: match[0] });
-    }
-    fetchLog3.info("Text pattern: found " + allDateRanges.length + " date ranges in FULL HTML");
-    if (allDateRanges.length <= alreadyFound) {
-      fetchLog3.info("Text pattern: no more date ranges than already found (" + alreadyFound + ")");
-      return [];
-    }
-    const expStartPatterns = [
-      /data-qa="resume-list-card-experience"/i,
-      /<h[23][^>]*>.*?опыт\s+работы.*?<\/h[23]>/i,
-      /data-qa="resume-block-experience"/i,
-      /Опыт\s+работы/i
-    ];
-    const expEndPatterns = [
-      /data-qa="resume-list-card-education"/i,
-      /data-qa="resume-block-education"/i,
-      /<h[23][^>]*>.*?образование.*?<\/h[23]>/i,
-      /Образование/i
-    ];
-    let expStart = -1;
-    for (const pat of expStartPatterns) {
-      const m = html.match(pat);
-      if (m) {
-        expStart = m.index;
-        break;
-      }
-    }
-    let expEnd = html.length;
-    if (expStart !== -1) {
-      for (const pat of expEndPatterns) {
-        const m = html.match(pat);
-        if (m && m.index > expStart && m.index < expEnd) {
-          expEnd = m.index;
-        }
-      }
-    }
-    fetchLog3.info("Text pattern: experience section " + expStart + "-" + expEnd);
-    const expDateRanges = allDateRanges.filter((dr) => {
-      if (expStart === -1) return true;
-      return dr.index >= expStart - 200 && dr.index <= expEnd + 200;
-    });
-    fetchLog3.info("Text pattern: " + expDateRanges.length + " date ranges in experience section");
-    if (expDateRanges.length <= alreadyFound) {
-      return [];
-    }
-    const entries = [];
-    for (let i = 0; i < expDateRanges.length; i++) {
-      const dr = expDateRanges[i];
-      const searchBase = expStart !== -1 ? html.substring(expStart, expEnd) : html;
-      const searchOffset = expStart !== -1 ? expStart : 0;
-      const relIndex = dr.index - searchOffset;
-      const lookBack = searchBase.substring(Math.max(0, relIndex - 800), relIndex);
-      const nextIdx = i + 1 < expDateRanges.length ? expDateRanges[i + 1].index - searchOffset : searchBase.length;
-      const lookForward = searchBase.substring(relIndex + dr.text.length, Math.min(nextIdx, relIndex + dr.text.length + 800));
-      const textBefore = stripHtmlTags(lookBack);
-      const textAfter = stripHtmlTags(lookForward);
-      const job = {};
-      job.period = dr.text;
-      const linesBefore = textBefore.split(/\n/).map((l) => l.trim()).filter((l) => l.length > 3);
-      for (let j = linesBefore.length - 1; j >= 0; j--) {
-        const line = linesBefore[j];
-        if (/^\d{4}/.test(line) || /\d+\s*(год|лет|мес)/.test(line)) continue;
-        if (/^(Показать|Смотреть|Развернуть|Ещё|Все)/i.test(line)) continue;
-        if (line.length < 3 || line.length > 200) continue;
-        job.position = line;
-        break;
-      }
-      if (job.position) {
-        const posIdx = linesBefore.lastIndexOf(job.position);
-        for (let j = posIdx - 1; j >= Math.max(0, posIdx - 4); j--) {
-          const line = linesBefore[j];
-          if (/^\d{4}/.test(line) || /\d+\s*(год|лет|мес)/.test(line)) continue;
-          if (/^(Показать|Смотреть|Развернуть|Ещё|Все)/i.test(line)) continue;
-          if (line.length < 3 || line.length > 200) continue;
-          if (line === job.position) continue;
-          job.company = line;
-          break;
-        }
-      }
-      const linesAfter = textAfter.split(/\n/).map((l) => l.trim()).filter((l) => l.length > 10);
-      if (linesAfter.length > 0 && linesAfter[0].length > 20) {
-        job.description = linesAfter[0].substring(0, 300);
-      }
-      if (job.position || job.company || job.period) {
-        entries.push(job);
-      }
-    }
-    return entries;
-  }
-  function stripHtmlTags(html) {
-    return html.replace(/<br\s*\/?>/gi, "\n").replace(/<\/p>/gi, "\n").replace(/<\/div>/gi, "\n").replace(/<\/li>/gi, "\n").replace(/<[^>]+>/g, "").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/\s+/g, " ").trim();
-  }
-  var fetchLog3;
-  var init_resume_fetch_strategy4_text = __esm({
-    "src/lib/resume-fetch-strategy4-text.js"() {
-      init_anti_hallucination();
-      fetchLog3 = createLogger("ResumeFetch");
-    }
-  });
-
-  // src/lib/resume-fetch-json-utils.js
-  function extractJsonArray(text, startIdx) {
-    if (text[startIdx] !== "[") return null;
-    let depth = 0;
-    let inString = false;
-    let escapeNext = false;
-    for (let i = startIdx; i < text.length; i++) {
-      const ch = text[i];
-      if (escapeNext) {
-        escapeNext = false;
-        continue;
-      }
-      if (ch === "\\") {
-        escapeNext = true;
-        continue;
-      }
-      if (ch === '"' && !escapeNext) {
-        inString = !inString;
-        continue;
-      }
-      if (inString) continue;
-      if (ch === "[") depth++;
-      if (ch === "]") depth--;
-      if (depth === 0) return text.substring(startIdx, i + 1);
-    }
-    return null;
-  }
-  function extractJsonArrayFromHtml(html, startIdx) {
-    if (startIdx >= html.length || html[startIdx] !== "[") return null;
-    let depth = 0;
-    let inString = false;
-    for (let i = startIdx; i < html.length && i < startIdx + 5e5; i++) {
-      const ch = html[i];
-      if (ch === '"' && (i === 0 || html[i - 1] !== "\\")) {
-        inString = !inString;
-        continue;
-      }
-      if (inString) continue;
-      if (ch === "[") depth++;
-      if (ch === "]") depth--;
-      if (depth === 0) return html.substring(startIdx, i + 1);
-    }
-    return null;
-  }
-  function buildEntryFromApiItem(item) {
-    const job = {};
-    if (item.position) job.position = item.position;
-    if (item.name && !job.position) job.position = item.name;
-    if (item.company) job.company = typeof item.company === "string" ? item.company : item.company?.name || "";
-    if (item.organization && !job.company) job.company = item.organization;
-    if (item.start || item.startDate) {
-      const start = item.start || item.startDate;
-      const isCurrent = !!(item.current || item.untilNow);
-      const rawEnd = item.end || item.endDate;
-      const end = rawEnd || (isCurrent ? "\u043D\u0430\u0441\u0442\u043E\u044F\u0449\u0435\u0435 \u0432\u0440\u0435\u043C\u044F" : "");
-      if (typeof start === "string") {
-        job.period = start + " \u2014 " + end;
-      } else if (start && start.year) {
-        const months = ["\u044F\u043D\u0432\u0430\u0440\u044C", "\u0444\u0435\u0432\u0440\u0430\u043B\u044C", "\u043C\u0430\u0440\u0442", "\u0430\u043F\u0440\u0435\u043B\u044C", "\u043C\u0430\u0439", "\u0438\u044E\u043D\u044C", "\u0438\u044E\u043B\u044C", "\u0430\u0432\u0433\u0443\u0441\u0442", "\u0441\u0435\u043D\u0442\u044F\u0431\u0440\u044C", "\u043E\u043A\u0442\u044F\u0431\u0440\u044C", "\u043D\u043E\u044F\u0431\u0440\u044C", "\u0434\u0435\u043A\u0430\u0431\u0440\u044C"];
-        const startStr = (start.month ? months[start.month - 1] + " " : "") + start.year;
-        let endStr = "\u043D\u0430\u0441\u0442\u043E\u044F\u0449\u0435\u0435 \u0432\u0440\u0435\u043C\u044F";
-        if (end && typeof end === "object" && end.year) {
-          endStr = (end.month ? months[end.month - 1] + " " : "") + end.year;
-        } else if (end && typeof end === "string" && end.length > 0) {
-          endStr = end;
-        }
-        job.period = startStr + " \u2014 " + endStr;
-      }
-    }
-    if (item.description) job.description = item.description;
-    return job;
-  }
-  function findExperienceInObject(obj, depth) {
-    if (depth > 6 || !obj || typeof obj !== "object") return null;
-    if (Array.isArray(obj)) {
-      if (obj.length > 0 && obj[0] && typeof obj[0] === "object") {
-        const first = obj[0];
-        if (first.position || first.company || first.startDate || first.start || first.organization) {
-          const entries = [];
-          obj.forEach((item) => {
-            const job = buildEntryFromApiItem(item);
-            if (job.position || job.company) entries.push(job);
-          });
-          return entries.length > 0 ? entries : null;
-        }
-      }
-      return null;
-    }
-    const priorityKeys = ["experience", "jobs", "positions", "career", "workHistory"];
-    for (const key of priorityKeys) {
-      if (obj[key]) {
-        const result = findExperienceInObject(obj[key], depth + 1);
-        if (result) return result;
-      }
-    }
-    for (const key of Object.keys(obj)) {
-      if (priorityKeys.includes(key)) continue;
-      const result = findExperienceInObject(obj[key], depth + 1);
-      if (result) return result;
-    }
-    return null;
-  }
-  var fetchLog4;
-  var init_resume_fetch_json_utils = __esm({
-    "src/lib/resume-fetch-json-utils.js"() {
-      init_anti_hallucination();
-      fetchLog4 = createLogger("ResumeFetch");
-    }
-  });
-
-  // src/lib/resume-fetch-strategy5-scanners.js
-  function extractExperienceFromStructuredJson(text) {
-    const entries = [];
-    const expMatch = text.match(/"experience"\s*:\s*\[/);
-    if (expMatch) {
-      const startIdx = text.indexOf("[", expMatch.index + 12);
-      if (startIdx !== -1) {
-        const jsonStr = extractJsonArray(text, startIdx);
-        if (jsonStr) {
-          try {
-            const expArray = JSON.parse(jsonStr);
-            if (Array.isArray(expArray)) {
-              expArray.forEach((item) => {
-                const job = buildEntryFromApiItem(item);
-                if (job.position || job.company) entries.push(job);
-              });
-              if (entries.length > 0) return entries;
-            }
-          } catch (e) {
-            fetchLog5.info("Strategy 5: structured JSON parse failed: " + e.message);
-          }
-        }
-      }
-    }
-    return entries;
-  }
-  function extractExperienceFromArray(text) {
-    const entries = [];
-    let searchFrom = 0;
-    while (searchFrom < text.length) {
-      const arrStart = text.indexOf("[{", searchFrom);
-      if (arrStart === -1) break;
-      const jsonStr = extractJsonArray(text, arrStart);
-      if (!jsonStr || jsonStr.length < 50 || jsonStr.length > 2e5) {
-        searchFrom = arrStart + 2;
-        continue;
-      }
-      try {
-        const arr = JSON.parse(jsonStr);
-        if (!Array.isArray(arr) || arr.length === 0) {
-          searchFrom = arrStart + 2;
-          continue;
-        }
-        const firstItem = arr[0];
-        if (firstItem && typeof firstItem === "object") {
-          const hasExpFields = firstItem.position || firstItem.company || firstItem.startDate || firstItem.start || firstItem.organization || firstItem.name && (firstItem.start || firstItem.startDate);
-          if (hasExpFields) {
-            arr.forEach((item) => {
-              const job = buildEntryFromApiItem(item);
-              if (job.position || job.company) entries.push(job);
-            });
-            if (entries.length > 0) return entries;
-          }
-        }
-      } catch (e) {
-      }
-      searchFrom = arrStart + 2;
-    }
-    return entries;
-  }
-  function deepScanForExperience(html) {
-    const entries = [];
-    const yearArrayPattern = /\[\{[^]]*?"year"\s*:\s*\d{4}[^]]*?\}/g;
-    let match;
-    while ((match = yearArrayPattern.exec(html)) !== null) {
-      const startIdx = match.index;
-      let arrStart = startIdx;
-      while (arrStart > 0 && html[arrStart - 1] !== "[") arrStart--;
-      if (html[arrStart] !== "[") continue;
-      const jsonStr = extractJsonArrayFromHtml(html, arrStart);
-      if (!jsonStr) continue;
-      try {
-        const arr = JSON.parse(jsonStr);
-        if (!Array.isArray(arr) || arr.length === 0) continue;
-        const hasDates = arr.some(
-          (item) => item.year || item.start?.year || item.startDate?.year || item.end?.year || item.endDate?.year
-        );
-        if (!hasDates) continue;
-        const hasExpFields = arr.some(
-          (item) => item.position || item.company || item.name || item.organization || item.title
-        );
-        if (!hasExpFields) continue;
-        arr.forEach((item) => {
-          const job = buildEntryFromApiItem(item);
-          if (job.position || job.company) entries.push(job);
-        });
-        if (entries.length > 0) return entries;
-      } catch (e) {
-      }
-    }
-    return entries;
-  }
-  var fetchLog5;
-  var init_resume_fetch_strategy5_scanners = __esm({
-    "src/lib/resume-fetch-strategy5-scanners.js"() {
-      init_anti_hallucination();
-      init_resume_fetch_json_utils();
-      fetchLog5 = createLogger("ResumeFetch");
-    }
-  });
-
-  // src/lib/resume-fetch-strategy5-scripts.js
-  function parseExperienceFromScripts(doc, html) {
-    const entries = [];
-    const scripts = doc.querySelectorAll('script[type="application/json"], script:not([src])');
-    for (const script of scripts) {
-      const text = script.textContent || "";
-      if (text.length < 100) continue;
-      if (!/experience|работ[аеы]|компани|должност|career|position/i.test(text)) continue;
-      fetchLog6.info("Strategy 5: examining script (" + text.length + " chars, first 300: " + text.substring(0, 300).replace(/\n/g, " "));
-      const fromStructured = extractExperienceFromStructuredJson(text);
-      if (fromStructured.length > 0) {
-        fetchLog6.info("Strategy 5: found " + fromStructured.length + " from structured JSON");
-        return fromStructured;
-      }
-      const fromArray = extractExperienceFromArray(text);
-      if (fromArray.length > 0) {
-        fetchLog6.info("Strategy 5: found " + fromArray.length + " from JSON array scan");
-        return fromArray;
-      }
-    }
-    const statePatterns = [
-      /window\.__INITIAL_STATE__\s*=\s*(\{[\s\S]+?\});?\s*<\/script>/,
-      /window\.__PRELOADED_STATE__\s*=\s*(\{[\s\S]+?\});?\s*<\/script>/,
-      /window\.__NEXT_DATA__\s*=\s*(\{[\s\S]+?\});?\s*<\/script>/
-    ];
-    for (const pat of statePatterns) {
-      const m = html.match(pat);
-      if (m) {
-        try {
-          const state = JSON.parse(m[1]);
-          const exp = findExperienceInObject(state, 0);
-          if (exp && exp.length > 0) {
-            fetchLog6.info("Strategy 5: found " + exp.length + " from window state");
-            return exp;
-          }
-        } catch (e) {
-          fetchLog6.info("Strategy 5: state JSON parse failed: " + e.message);
-        }
-      }
-    }
-    const storePatterns = [
-      /"resumeStore"\s*:\s*(\{[\s\S]+?\})\s*[,}]/,
-      /"resume"\s*:\s*(\{[\s\S]{0,50000}?"experience"\s*:\s*\[[\s\S]+?\])\s*[,}]/
-    ];
-    for (const pat of storePatterns) {
-      const m = html.match(pat);
-      if (m) {
-        try {
-          const store = JSON.parse(m[1]);
-          const exp = findExperienceInObject(store, 0);
-          if (exp && exp.length > 0) {
-            fetchLog6.info("Strategy 5: found " + exp.length + " from store pattern");
-            return exp;
-          }
-        } catch (e) {
-          fetchLog6.info("Strategy 5: store JSON parse failed: " + e.message);
-        }
-      }
-    }
-    const deepScan = deepScanForExperience(html);
-    if (deepScan.length > 0) {
-      fetchLog6.info("Strategy 5: found " + deepScan.length + " from deep scan");
-      return deepScan;
-    }
-    return entries;
-  }
-  var fetchLog6;
-  var init_resume_fetch_strategy5_scripts = __esm({
-    "src/lib/resume-fetch-strategy5-scripts.js"() {
-      init_anti_hallucination();
-      init_resume_fetch_json_utils();
-      init_resume_fetch_strategy5_scanners();
-      fetchLog6 = createLogger("ResumeFetch");
-    }
-  });
-
-  // src/lib/resume-fetch-strategy6-iframe.js
-  async function fetchExpandedExperienceViaIframe(resumeUrl, currentCount) {
-    fetchLog7.info("Strategy 6 iframe: loading " + resumeUrl);
-    const iframe = document.createElement("iframe");
-    iframe.style.cssText = "position:fixed;top:-9999px;left:-9999px;width:1280px;height:800px;opacity:0;pointer-events:none;border:none;";
-    iframe.setAttribute("aria-hidden", "true");
-    iframe.setAttribute("tabindex", "-1");
-    iframe.src = resumeUrl;
-    document.body.appendChild(iframe);
-    try {
-      await new Promise((resolve, reject) => {
-        const timeout = setTimeout(() => reject(new Error("iframe load timeout (15s)")), 15e3);
-        iframe.addEventListener("load", () => {
-          clearTimeout(timeout);
-          resolve();
-        });
-        iframe.addEventListener("error", () => {
-          clearTimeout(timeout);
-          reject(new Error("iframe load error"));
-        });
-      });
-      await new Promise((r) => setTimeout(r, 4e3));
-      const iframeDoc = iframe.contentDocument;
-      if (!iframeDoc) {
-        throw new Error("Cannot access iframe document (cross-origin or blocked)");
-      }
-      const iframeDiag = {};
-      try {
-        iframeDiag.finalUrl = iframe.contentWindow?.location?.href || "(no access)";
-      } catch (e) {
-        iframeDiag.finalUrl = "(cross-origin blocked: " + e.message + ")";
-      }
-      iframeDiag.title = iframeDoc.title || "(no title)";
-      iframeDiag.bodyTextLen = iframeDoc.body ? (iframeDoc.body.textContent || "").length : 0;
-      iframeDiag.bodyTextSnippet = iframeDoc.body ? normalizeWs(iframeDoc.body.textContent || "").substring(0, 1500) : "(no body)";
-      const allQa = iframeDoc.querySelectorAll("[data-qa]");
-      iframeDiag.dataQaList = Array.from(allQa).slice(0, 50).map((el) => {
-        const qa = el.getAttribute("data-qa") || "";
-        const text = normalizeWs(el.textContent || "").substring(0, 60);
-        return qa + (text ? '="' + text + '"' : "");
-      });
-      const allActions = iframeDoc.querySelectorAll('button, a, [role="button"]');
-      iframeDiag.actionTexts = Array.from(allActions).slice(0, 30).map((el) => {
-        return normalizeWs(el.textContent || "").substring(0, 50);
-      }).filter((t) => t.length > 2);
-      fetchLog7.info("[VIS-IFRAME-DIAG] url=" + iframeDiag.finalUrl);
-      fetchLog7.info('[VIS-IFRAME-DIAG] title="' + iframeDiag.title + '"');
-      fetchLog7.info("[VIS-IFRAME-DIAG] bodyLen=" + iframeDiag.bodyTextLen);
-      fetchLog7.info("[VIS-IFRAME-DIAG] bodySnippet=" + iframeDiag.bodyTextSnippet.substring(0, 500));
-      fetchLog7.info("[VIS-IFRAME-DIAG] dataQa count=" + allQa.length + ", sample: " + JSON.stringify(iframeDiag.dataQaList.slice(0, 20)));
-      fetchLog7.info("[VIS-IFRAME-DIAG] actions: " + JSON.stringify(iframeDiag.actionTexts));
-      const iframeVisResult = detectVisibilityFromIframeDoc(iframeDoc);
-      iframeVisResult.iframeDiag = iframeDiag;
-      fetchLog7.info("[VIS-DIAG] iframe visibility: " + iframeVisResult.visibility + " (trace: " + iframeVisResult.trace.join(" \u2192 ") + ")");
-      const preCards = iframeDoc.querySelectorAll('[data-qa="profile-experience-company-card"]');
-      const preSteppers = iframeDoc.querySelectorAll('[data-qa="magritte-stepper-step-content"]');
-      fetchLog7.info("Strategy 6 iframe: before expand \u2014 " + preCards.length + " company-cards, " + preSteppers.length + " stepper-items");
-      const expandButtons = iframeDoc.querySelectorAll('[data-qa="profile-experience-viewAll"], button');
-      let clicked = 0;
-      expandButtons.forEach((btn) => {
-        const text = (btn.textContent || "").trim().toLowerCase();
-        if (text.includes("\u0440\u0430\u0437\u0432\u0435\u0440\u043D\u0443\u0442\u044C") || text.includes("\u043F\u043E\u043A\u0430\u0437\u0430\u0442\u044C \u0432\u0441\u0435") || text.includes("\u043F\u043E\u043A\u0430\u0437\u0430\u0442\u044C \u0435\u0449\u0451") || text.includes("\u043F\u043E\u0441\u043C\u043E\u0442\u0440\u0435\u0442\u044C \u0432\u0441\u0451") || text.includes("\u043F\u043E\u0441\u043C\u043E\u0442\u0440\u0435\u0442\u044C \u0432\u0441\u0435") || text.includes("expand")) {
-          try {
-            btn.click();
-            clicked++;
-          } catch (e) {
-          }
-        }
-      });
-      fetchLog7.info("Strategy 6 iframe: clicked " + clicked + " expand buttons");
-      if (clicked > 0) {
-        await new Promise((r) => setTimeout(r, 2e3));
-      }
-      const postCards = iframeDoc.querySelectorAll('[data-qa="profile-experience-company-card"]');
-      const postSteppers = iframeDoc.querySelectorAll('[data-qa="magritte-stepper-step-content"]');
-      fetchLog7.info("Strategy 6 iframe: after expand \u2014 " + postCards.length + " company-cards, " + postSteppers.length + " stepper-items");
-      const entries = parseExperienceFromIframeDoc(iframeDoc);
-      fetchLog7.info("Strategy 6 iframe: parsed " + entries.length + " experience entries");
-      return { entries, iframeVis: iframeVisResult.visibility, iframeVisTrace: iframeVisResult.trace, iframeDiag: iframeVisResult.iframeDiag };
-    } finally {
-      try {
-        if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
-      } catch (e) {
-      }
-    }
-  }
-  function detectVisibilityFromIframeDoc(iframeDoc) {
-    const trace = [];
-    const diagInfo = { buttons: [], visElements: [], hideElements: [] };
-    const visCard = iframeDoc.querySelector('[data-qa="resume-visibility-card"]');
-    if (visCard) {
-      const cardText = normalizeWs(visCard.textContent || "").toLowerCase();
-      fetchLog7.info('[VIS-IFRAME] resume-visibility-card text="' + cardText.substring(0, 100) + '"');
-      if (cardText.includes("\u043D\u0435 \u0432\u0438\u0434\u043D\u043E \u043D\u0438\u043A\u043E\u043C\u0443") || cardText.includes("\u043D\u0435\xA0\u0432\u0438\u0434\u043D\u043E \u043D\u0438\u043A\u043E\u043C\u0443")) {
-        trace.push('iframe-S0:visibility-card="\u043D\u0435 \u0432\u0438\u0434\u043D\u043E \u043D\u0438\u043A\u043E\u043C\u0443" \u2192 HIDDEN');
-        return { visibility: VISIBILITY_HIDDEN, trace };
-      }
-      if (cardText.includes("\u0432\u0438\u0434\u043D\u043E \u0432\u0441\u0435\u043C") || cardText.includes("\u0432\u0438\u0434\u043D\u043E\xA0\u0432\u0441\u0435\u043C")) {
-        trace.push('iframe-S0:visibility-card="\u0432\u0438\u0434\u043D\u043E \u0432\u0441\u0435\u043C" \u2192 VISIBLE');
-        return { visibility: VISIBILITY_VISIBLE, trace };
-      }
-      trace.push('iframe-S0:visibility-card-unknown-text="' + cardText.substring(0, 60) + '"');
-    } else {
-      trace.push("iframe-S0:no-visibility-card");
-    }
-    const allButtons = iframeDoc.querySelectorAll('button, a, [role="button"]');
-    for (const btn of allButtons) {
-      const text = normalizeWs(btn.textContent || "").toLowerCase();
-      const qa = (btn.getAttribute("data-qa") || "").toLowerCase();
-      const href = (btn.getAttribute("href") || "").toLowerCase();
-      if (text.includes("\u0432\u0438\u0434\u0438\u043C") || text.includes("\u0441\u043A\u0440\u044B\u0442\u044C") || text.includes("\u0441\u043A\u0440\u044B\u0442") || qa.includes("visible") || qa.includes("hide") || qa.includes("hidden") || qa.includes("show") || href.includes("visible") || href.includes("hide")) {
-        diagInfo.buttons.push({ text: text.substring(0, 50), qa, href: href.substring(0, 60), tag: btn.tagName });
-      }
-    }
-    fetchLog7.info("[VIS-IFRAME] Diagnostic buttons: " + JSON.stringify(diagInfo.buttons));
-    for (const sel of VISIBILITY_HIDDEN_DATA_QA) {
-      const found = iframeDoc.querySelector(sel);
-      if (found) {
-        trace.push("iframe-S1:data-qa=" + sel + " \u2192 HIDDEN");
-        return { visibility: VISIBILITY_HIDDEN, trace };
-      }
-    }
-    trace.push("iframe-S1:no-data-qa-hidden");
-    for (const btn of allButtons) {
-      const text = normalizeWs(btn.textContent || "").toLowerCase();
-      const qa = (btn.getAttribute("data-qa") || "").toLowerCase();
-      if (text.includes("\u0441\u0434\u0435\u043B\u0430\u0442\u044C \u0432\u0438\u0434\u0438\u043C\u044B\u043C") || qa.includes("make-visible") || qa.includes("show-resume")) {
-        trace.push('iframe-S2:btn="\u0441\u0434\u0435\u043B\u0430\u0442\u044C \u0432\u0438\u0434\u0438\u043C\u044B\u043C" \u2192 HIDDEN');
-        return { visibility: VISIBILITY_HIDDEN, trace };
-      }
-      if (text.includes("\u0441\u043A\u0440\u044B\u0442\u044C \u0440\u0435\u0437\u044E\u043C\u0435") || qa.includes("hide-resume") || qa.includes("resume-action-hide")) {
-        trace.push('iframe-S2:btn="\u0441\u043A\u0440\u044B\u0442\u044C \u0440\u0435\u0437\u044E\u043C\u0435" \u2192 VISIBLE');
-        return { visibility: VISIBILITY_VISIBLE, trace };
-      }
-    }
-    trace.push("iframe-S2:no-key-buttons");
-    const bodyText = iframeDoc.body ? normalizeWs(iframeDoc.body.textContent || "") : "";
-    if (hasHiddenIndicator(bodyText)) {
-      trace.push("iframe-S3:body-has-hidden-indicator \u2192 HIDDEN");
-      return { visibility: VISIBILITY_HIDDEN, trace };
-    }
-    if (hasVisibleIndicator(bodyText)) {
-      trace.push("iframe-S3:body-has-visible-indicator \u2192 VISIBLE");
-      return { visibility: VISIBILITY_VISIBLE, trace };
-    }
-    trace.push("iframe-S3:body-no-indicators");
-    const hideLink = iframeDoc.querySelector('[data-qa="resume-action-hide"], [data-qa*="resume-hide"], a[data-qa*="hide-resume"]');
-    if (hideLink) {
-      trace.push("iframe-S4:hide-link-found \u2192 VISIBLE");
-      return { visibility: VISIBILITY_VISIBLE, trace };
-    }
-    trace.push("iframe-S4:no-hide-link");
-    const bodyLower = bodyText.toLowerCase();
-    if (bodyLower.includes("\u043D\u0435 \u0432\u0438\u0434\u044F\u0442") || bodyLower.includes("\u043D\u0435\xA0\u0432\u0438\u0434\u044F\u0442") || bodyLower.includes("\u043D\u0435 \u0432\u0438\u0434\u043D\u043E")) {
-      trace.push('iframe-S5:body-has-"\u043D\u0435 \u0432\u0438\u0434\u044F\u0442/\u043D\u0435 \u0432\u0438\u0434\u043D\u043E" \u2192 HIDDEN');
-      return { visibility: VISIBILITY_HIDDEN, trace };
-    }
-    if (bodyLower.includes("\u0432\u0438\u0434\u043D\u043E \u0432\u0441\u0435\u043C")) {
-      trace.push('iframe-S5:body-has-"\u0432\u0438\u0434\u043D\u043E \u0432\u0441\u0435\u043C" \u2192 VISIBLE');
-      return { visibility: VISIBILITY_VISIBLE, trace };
-    }
-    try {
-      const scripts = iframeDoc.querySelectorAll("script:not([src])");
-      for (const script of scripts) {
-        const t = script.textContent || "";
-        if (t.length < 50) continue;
-        if (/"hidden"\s*:\s*true/.test(t) || /"isHidden"\s*:\s*true/.test(t) || /"visibility"\s*:\s*"hidden"/.test(t) || /"status"\s*:\s*"hidden"/.test(t)) {
-          trace.push("iframe-S6:script-has-hidden-pattern \u2192 HIDDEN");
-          return { visibility: VISIBILITY_HIDDEN, trace };
-        }
-        if (/"hidden"\s*:\s*false/.test(t) || /"visibility"\s*:\s*"visible"/.test(t)) {
-          trace.push("iframe-S6:script-has-visible-pattern \u2192 VISIBLE");
-          return { visibility: VISIBILITY_VISIBLE, trace };
-        }
-      }
-    } catch (e) {
-      trace.push("iframe-S6:script-check-error(" + e.message.substring(0, 30) + ")");
-    }
-    trace.push("iframe-S6:no-script-patterns");
-    const notifSelectors = [
-      '[data-qa="resume-visibility-notification"]',
-      '[data-qa*="visibility-notification"]',
-      '[data-qa*="resume-notification"]',
-      '[class*="resume-hidden"]',
-      '[class*="resume-visibility"]',
-      ".resume-status-hidden"
-    ];
-    for (const sel of notifSelectors) {
-      const el = iframeDoc.querySelector(sel);
-      if (el) {
-        const elText = normalizeWs(el.textContent || "").toLowerCase();
-        if (elText.includes("\u043D\u0435 \u0432\u0438\u0434\u044F\u0442") || elText.includes("\u0441\u043A\u0440\u044B\u0442") || elText.includes("\u0441\u0434\u0435\u043B\u0430\u0442\u044C \u0432\u0438\u0434\u0438\u043C")) {
-          trace.push("iframe-S7:notification=" + sel + ' text="' + elText.substring(0, 40) + '" \u2192 HIDDEN');
-          return { visibility: VISIBILITY_HIDDEN, trace };
-        }
-      }
-    }
-    trace.push("iframe-S7:no-notification-hidden");
-    const actionLinks = iframeDoc.querySelectorAll('a[href*="visible"], a[href*="show"], a[href*="publish"]');
-    for (const link of actionLinks) {
-      const href = (link.getAttribute("href") || "").toLowerCase();
-      const linkText = normalizeWs(link.textContent || "").toLowerCase();
-      if (href.includes("publish") || href.includes("make_visible") || href.includes("show")) {
-        trace.push('iframe-S8:action-link href="' + href.substring(0, 60) + '" text="' + linkText.substring(0, 40) + '" \u2192 HIDDEN');
-        return { visibility: VISIBILITY_HIDDEN, trace };
-      }
-    }
-    trace.push("iframe-S8:no-action-links");
-    const visRelated = iframeDoc.querySelectorAll('[data-qa*="resume"], [data-qa*="visibility"]');
-    for (const el of visRelated) {
-      const elQa = el.getAttribute("data-qa") || "";
-      const elText = normalizeWs(el.textContent || "").substring(0, 60);
-      if (elText.includes("\u0441\u043A\u0440\u044B\u0442") || elText.includes("\u0432\u0438\u0434\u0438\u043C") || elText.includes("\u043D\u0435 \u0432\u0438\u0434\u044F\u0442")) {
-        diagInfo.visElements.push({ qa: elQa, text: elText });
-      }
-    }
-    if (diagInfo.visElements.length > 0) {
-      fetchLog7.info("[VIS-IFRAME] Related elements: " + JSON.stringify(diagInfo.visElements));
-    }
-    trace.push("\u2192 UNKNOWN");
-    fetchLog7.info("[VIS-IFRAME] All strategies exhausted. Buttons found: " + diagInfo.buttons.length + ", Related elements: " + diagInfo.visElements.length);
-    return { visibility: VISIBILITY_UNKNOWN, trace };
-  }
-  function parseExperienceFromIframeDoc(iframeDoc) {
-    const allCards = iframeDoc.querySelectorAll('[data-qa="profile-experience-company-card"]');
-    const seen = /* @__PURE__ */ new Set();
-    const uniqueCards = [];
-    allCards.forEach((c) => {
-      if (!seen.has(c)) {
-        seen.add(c);
-        uniqueCards.push(c);
-      }
-    });
-    const entries = [];
-    const usedStepperElements = /* @__PURE__ */ new Set();
-    uniqueCards.forEach((card) => {
-      const job = parseCompanyCardFromDoc(card);
-      if (job) entries.push(job);
-      const stepEl = card.querySelector('[data-qa="magritte-stepper-step-content"]');
-      if (stepEl) usedStepperElements.add(stepEl);
-    });
-    const expCard = iframeDoc.querySelector('[data-qa="resume-list-card-experience"]');
-    if (expCard) {
-      const stepperItems = expCard.querySelectorAll('[data-qa="magritte-stepper-step-content"]');
-      stepperItems.forEach((step) => {
-        if (usedStepperElements.has(step)) return;
-        let parentCard = step.closest('[data-qa="profile-experience-company-card"]');
-        if (parentCard && uniqueCards.includes(parentCard)) return;
-        const cellLeft = step.querySelector('[data-qa="cell-left-side"]');
-        if (!cellLeft) return;
-        const texts = cellLeft.querySelectorAll('[data-qa="cell-text-content"]');
-        const job = {};
-        if (texts.length >= 1) job.position = (texts[0].textContent || "").trim();
-        if (texts.length >= 2) job.period = (texts[1].textContent || "").trim().replace(/\s*\(\d[^)]+\)$/, "").trim();
-        if (job.position || job.period) entries.push(job);
-      });
-    }
-    if (entries.length === 0 && expCard) {
-      const allStepperItems = expCard.querySelectorAll('[data-qa="magritte-stepper-step-content"]');
-      allStepperItems.forEach((step) => {
-        const cellLeft = step.querySelector('[data-qa="cell-left-side"]');
-        if (!cellLeft) return;
-        const texts = cellLeft.querySelectorAll('[data-qa="cell-text-content"]');
-        const job = {};
-        if (texts.length >= 1) job.position = (texts[0].textContent || "").trim();
-        if (texts.length >= 2) job.period = (texts[1].textContent || "").trim().replace(/\s*\(\d[^)]+\)$/, "").trim();
-        if (job.position) entries.push(job);
-      });
-    }
-    return entries;
-  }
-  var fetchLog7;
-  var init_resume_fetch_strategy6_iframe = __esm({
-    "src/lib/resume-fetch-strategy6-iframe.js"() {
-      init_anti_hallucination();
-      init_resume_fetch_parse();
-      init_resume_constants();
-      fetchLog7 = createLogger("ResumeFetch");
-    }
-  });
-
-  // src/lib/resume-fetch-strategy6-api.js
-  async function tryApplicantApi(resumeId, currentCount) {
-    if (!resumeId) return [];
-    const apiUrls = [
-      { url: "https://hh.ru/applicant/api/v1/resumes/" + resumeId, source: "applicant-api-v1" },
-      { url: "https://hh.ru/applicant/api/resumes/" + resumeId, source: "applicant-api" },
-      { url: "https://hh.ru/applicant/resumes/api/get?resumeId=" + resumeId, source: "resumes-api-get" }
-    ];
-    for (const { url, source } of apiUrls) {
-      try {
-        fetchLog8.info("Strategy 6: trying API [" + source + "] " + url);
-        const resp = await fetch(url, {
-          credentials: "include",
-          headers: {
-            "Accept": "application/json",
-            "X-Requested-With": "XMLHttpRequest"
-          }
-        });
-        if (!resp.ok) {
-          fetchLog8.info("Strategy 6: [" + source + "] returned " + resp.status);
-          continue;
-        }
-        const contentType = resp.headers.get("content-type") || "";
-        if (contentType.includes("json")) {
-          const data = await resp.json();
-          fetchLog8.info("Strategy 6: [" + source + "] returned JSON with keys: " + (typeof data === "object" ? Object.keys(data).slice(0, 10).join(",") : typeof data));
-          const jsonEntries = parseExperienceFromJson(data);
-          if (jsonEntries.length > currentCount) {
-            fetchLog8.info("Strategy 6: SUCCESS from " + source + " \u2014 got " + jsonEntries.length + " experiences");
-            return jsonEntries;
-          }
-          fetchLog8.info("Strategy 6: [" + source + "] JSON had " + jsonEntries.length + " experiences (need > " + currentCount + ")");
-        }
-      } catch (err) {
-        fetchLog8.info("Strategy 6: [" + source + "] error: " + err.message);
-      }
-    }
-    return [];
-  }
-  function parseExperienceFromJson(data) {
-    const entries = [];
-    const exp = data?.experience || data?.resume?.experience || data?.result?.experience || data?.items;
-    if (!Array.isArray(exp)) {
-      const found = findExperienceInObject(data, 0);
-      if (found) {
-        found.forEach((item) => {
-          const job = buildEntryFromApiItem(item);
-          if (job.position || job.company) entries.push(job);
-        });
-      }
-      return entries;
-    }
-    exp.forEach((item) => {
-      const job = buildEntryFromApiItem(item);
-      if (job.position || job.company) entries.push(job);
-    });
-    return entries;
-  }
-  function parseExperienceFromExpandedDoc(expandedDoc, expandedHtml, currentCount) {
-    const entries = [];
-    const usedStepperElements = /* @__PURE__ */ new Set();
-    const allCards = expandedDoc.querySelectorAll('[data-qa="profile-experience-company-card"]');
-    const seen = /* @__PURE__ */ new Set();
-    const uniqueCards = [];
-    allCards.forEach((c) => {
-      if (!seen.has(c)) {
-        seen.add(c);
-        uniqueCards.push(c);
-      }
-    });
-    uniqueCards.forEach((card) => {
-      const job = parseCompanyCardFromDoc(card);
-      if (job) entries.push(job);
-      const stepEl = card.querySelector('[data-qa="magritte-stepper-step-content"]');
-      if (stepEl) usedStepperElements.add(stepEl);
-    });
-    const expCard = expandedDoc.querySelector('[data-qa="resume-list-card-experience"]');
-    if (expCard) {
-      const stepperItems = expCard.querySelectorAll('[data-qa="magritte-stepper-step-content"]');
-      stepperItems.forEach((step) => {
-        if (usedStepperElements.has(step)) return;
-        let parentCard = step.closest('[data-qa="profile-experience-company-card"]');
-        if (parentCard && uniqueCards.includes(parentCard)) return;
-        const cellLeft = step.querySelector('[data-qa="cell-left-side"]');
-        if (!cellLeft) return;
-        const texts = cellLeft.querySelectorAll('[data-qa="cell-text-content"]');
-        const job = {};
-        if (texts.length >= 1) job.position = (texts[0].textContent || "").trim();
-        if (texts.length >= 2) job.period = (texts[1].textContent || "").trim().replace(/\s*\(\d[^)]+\)$/, "").trim();
-        if (job.position || job.period) entries.push(job);
-      });
-    }
-    if (entries.length <= currentCount && expandedHtml) {
-      const textParsed = parseExperienceFromHtmlText(expandedHtml, entries.length);
-      if (textParsed.length > entries.length) {
-        entries.length = 0;
-        entries.push(...textParsed);
-      }
-    }
-    return entries;
-  }
-  var fetchLog8;
-  var init_resume_fetch_strategy6_api = __esm({
-    "src/lib/resume-fetch-strategy6-api.js"() {
-      init_anti_hallucination();
-      init_resume_fetch_json_utils();
-      init_resume_fetch_parse();
-      init_resume_fetch_strategy4_text();
-      fetchLog8 = createLogger("ResumeFetch");
-    }
-  });
-
-  // src/lib/resume-fetch-strategy6-urls.js
-  function findExpansionUrls(doc, html, resumeId) {
-    const urls = [];
-    const seen = /* @__PURE__ */ new Set();
-    const addUrl = (url, source) => {
-      if (!url || url.length < 5) return;
-      const fullUrl = url.startsWith("http") ? url : "https://hh.ru" + url;
-      if (seen.has(fullUrl)) return;
-      seen.add(fullUrl);
-      urls.push({ url: fullUrl, source });
-    };
-    const expSection = doc.querySelector('[data-qa="resume-list-card-experience"]');
-    const searchRoot = expSection || doc;
-    const allButtons = searchRoot.querySelectorAll("button, a[href], [data-url], [data-action-url], [data-fetch-url]");
-    allButtons.forEach((btn) => {
-      const text = (btn.textContent || "").trim().toLowerCase();
-      const isExpandBtn = text.includes("\u043F\u043E\u043A\u0430\u0437\u0430\u0442\u044C \u0432\u0441\u0435") || text.includes("\u043F\u043E\u043A\u0430\u0437\u0430\u0442\u044C \u0435\u0449\u0451") || text.includes("\u043F\u043E\u0441\u043C\u043E\u0442\u0440\u0435\u0442\u044C \u0432\u0441\u0451") || text.includes("\u043F\u043E\u0441\u043C\u043E\u0442\u0440\u0435\u0442\u044C \u0432\u0441\u0435") || text.includes("\u0440\u0430\u0437\u0432\u0435\u0440\u043D\u0443\u0442\u044C") || text.includes("expand") || btn.getAttribute("data-qa") === "profile-experience-viewAll";
-      if (!isExpandBtn) return;
-      fetchLog9.info('Strategy 6: found expand button: text="' + text.substring(0, 50) + '" data-qa="' + (btn.getAttribute("data-qa") || "") + '" outerHTML=' + btn.outerHTML.substring(0, 200));
-      const href = btn.getAttribute("href") || "";
-      if (href && href !== "#" && href !== "javascript:void(0)") {
-        addUrl(href, "button-href");
-      }
-      const dataAttrs = [
-        "data-url",
-        "data-action-url",
-        "data-fetch-url",
-        "data-load-url",
-        "data-api-url",
-        "data-endpoint",
-        "data-href",
-        "data-target"
-      ];
-      let el = btn;
-      for (let i = 0; i < 5 && el; i++) {
-        for (const attr of dataAttrs) {
-          const val = el.getAttribute(attr) || "";
-          if (val && val.length > 5 && val !== "#") {
-            addUrl(val, "button-" + attr + "-ancestor" + i);
-          }
-        }
-        el = el.parentElement;
-      }
-    });
-    const scripts = doc.querySelectorAll("script:not([src])");
-    scripts.forEach((script) => {
-      const text = script.textContent || "";
-      if (text.length < 200) return;
-      const urlPatterns = [
-        /["'](?:url|fetchUrl|loadMore|nextPage|apiUrl|endpoint|actionUrl|href|target)["']\s*:\s*["']([^"']+)["']/gi,
-        /["'](?:loadMore|fetchUrl|nextPage|loadMoreUrl)["']\s*:\s*["']([^"']+)["']/gi
-      ];
-      for (const pat of urlPatterns) {
-        let m;
-        while ((m = pat.exec(text)) !== null) {
-          const val = m[1];
-          if (val && (val.includes("experience") || val.includes("resume") || val.includes("expand") || val.includes("show") || val.includes("load") || val.includes("applicant"))) {
-            addUrl(val, "script-url-pattern");
-          }
-        }
-      }
-      const pathMatches = text.matchAll(/["'](\/applicant\/[^"']+)["']/g);
-      for (const m of pathMatches) {
-        addUrl(m[1], "script-applicant-path");
-      }
-    });
-    if (resumeId) {
-      addUrl(
-        "https://hh.ru/applicant/resumes/view?resume=" + resumeId + "&expand=experience_items",
-        "known-pattern-expand-items"
-      );
-      addUrl(
-        "https://hh.ru/applicant/resumes/mine/" + resumeId + "/experience",
-        "known-pattern-experience-endpoint"
-      );
-    }
-    return urls;
-  }
-  async function tryFetchExpandedUrl(url, currentCount) {
-    const resp = await fetch(url, {
-      credentials: "include",
-      headers: {
-        "Accept": "text/html, application/json",
-        "X-Requested-With": "XMLHttpRequest"
-      }
-    });
-    if (!resp.ok) {
-      fetchLog9.info("Strategy 6: " + url + " returned " + resp.status);
-      return null;
-    }
-    const contentType = resp.headers.get("content-type") || "";
-    if (contentType.includes("application/json")) {
-      const data = await resp.json();
-      const jsonEntries = parseExperienceFromJson(data);
-      fetchLog9.info("Strategy 6: JSON response had " + jsonEntries.length + " experiences");
-      return jsonEntries;
-    }
-    const expandedHtml = await resp.text();
-    const expandedDoc = htmlToDoc(expandedHtml);
-    const expCards = expandedDoc.querySelectorAll('[data-qa="profile-experience-company-card"]');
-    const stepperItems = expandedDoc.querySelectorAll('[data-qa="magritte-stepper-step-content"]');
-    fetchLog9.info("Strategy 6: HTML response had " + expCards.length + " company-cards, " + stepperItems.length + " stepper-items (" + expandedHtml.length + " chars)");
-    if (expCards.length > currentCount || stepperItems.length > currentCount) {
-      return parseExperienceFromExpandedDoc(expandedDoc, expandedHtml, currentCount);
-    }
-    const scriptParsed = parseExperienceFromScripts(expandedDoc, expandedHtml);
-    if (scriptParsed.length > currentCount) {
-      return scriptParsed;
-    }
-    return null;
-  }
-  var fetchLog9;
-  var init_resume_fetch_strategy6_urls = __esm({
-    "src/lib/resume-fetch-strategy6-urls.js"() {
-      init_anti_hallucination();
-      init_resume_fetch_helpers();
-      init_resume_fetch_parse();
-      init_resume_fetch_strategy5_scripts();
-      init_resume_fetch_strategy6_api();
-      fetchLog9 = createLogger("ResumeFetch");
-    }
-  });
-
-  // src/lib/resume-fetch-strategy6-expand.js
-  async function fetchExpandedExperience(doc, html, resumeId, currentCount, resumeUrl) {
-    fetchLog10.info("Strategy 6: starting (currentCount=" + currentCount + ", resumeId=" + (resumeId || "none") + ")");
-    let iframeVis = null;
-    let iframeVisTrace = null;
-    let iframeDiag = null;
-    try {
-      const iframeResult = await fetchExpandedExperienceViaIframe(resumeUrl, currentCount);
-      iframeVis = iframeResult.iframeVis;
-      iframeVisTrace = iframeResult.iframeVisTrace;
-      iframeDiag = iframeResult.iframeDiag;
-      if (iframeResult.entries.length > currentCount) {
-        fetchLog10.info("Strategy 6: SUCCESS via iframe \u2014 got " + iframeResult.entries.length + " experiences, vis=" + iframeVis);
-        return {
-          entries: iframeResult.entries,
-          iframeVis,
-          iframeVisTrace,
-          iframeDiag
-        };
-      }
-      fetchLog10.info("Strategy 6: iframe got " + iframeResult.entries.length + " entries (not more than " + currentCount + "), but visibility=" + iframeVis);
-    } catch (err) {
-      fetchLog10.info("Strategy 6: iframe approach failed: " + err.message);
-    }
-    const withVis = (result) => {
-      if (iframeVis) {
-        result.iframeVis = iframeVis;
-        result.iframeVisTrace = iframeVisTrace;
-        result.iframeDiag = iframeDiag;
-      }
-      return result;
-    };
-    const expansionUrls = findExpansionUrls(doc, html, resumeId);
-    fetchLog10.info("Strategy 6: found " + expansionUrls.length + " candidate expansion URLs");
-    expansionUrls.forEach((u, i) => {
-      fetchLog10.info("  URL " + i + ": " + u.url + " (source: " + u.source + ")");
-    });
-    for (const { url, source } of expansionUrls) {
-      try {
-        fetchLog10.info("Strategy 6: fetching [" + source + "] " + url);
-        const urlEntries = await tryFetchExpandedUrl(url, currentCount);
-        if (urlEntries && urlEntries.length > currentCount) {
-          fetchLog10.info("Strategy 6: SUCCESS from " + source + " \u2014 got " + urlEntries.length + " experiences");
-          return withVis({ entries: urlEntries });
-        }
-      } catch (err) {
-        fetchLog10.info("Strategy 6: [" + source + "] error: " + err.message);
-      }
-    }
-    const apiEntries = await tryApplicantApi(resumeId, currentCount);
-    if (apiEntries.length > currentCount) {
-      return withVis({ entries: apiEntries });
-    }
-    if (resumeUrl) {
-      const expandVariants = [
-        { url: resumeUrl + "&expand=experience_items", source: "expand-experience-items" },
-        { url: resumeUrl + "&showAll=true", source: "showAll" },
-        { url: resumeUrl + "&full=true", source: "full" },
-        { url: resumeUrl + "&expand=all", source: "expand-all" }
-      ];
-      for (const { url, source } of expandVariants) {
-        try {
-          fetchLog10.info("Strategy 6: trying param [" + source + "] " + url);
-          const expandedHtml = await fetchHtml(url);
-          const expandedDoc = htmlToDoc(expandedHtml);
-          const expCards = expandedDoc.querySelectorAll('[data-qa="profile-experience-company-card"]');
-          const stepperItems = expandedDoc.querySelectorAll('[data-qa="magritte-stepper-step-content"]');
-          fetchLog10.info("Strategy 6: [" + source + "] returned HTML with " + expCards.length + " company-cards, " + stepperItems.length + " stepper-items");
-          if (expCards.length > currentCount || stepperItems.length > currentCount) {
-            const parsed = parseExperienceFromExpandedDoc(expandedDoc, expandedHtml, currentCount);
-            if (parsed.length > currentCount) {
-              fetchLog10.info("Strategy 6: SUCCESS from " + source + " \u2014 got " + parsed.length + " experiences");
-              return withVis({ entries: parsed });
-            }
-          }
-        } catch (err) {
-          fetchLog10.info("Strategy 6: [" + source + "] error: " + err.message);
-        }
-      }
-    }
-    fetchLog10.info("Strategy 6: all approaches exhausted, returning current count: " + currentCount + ", vis=" + iframeVis);
-    return withVis({ entries: [] });
-  }
-  var fetchLog10;
-  var init_resume_fetch_strategy6_expand = __esm({
-    "src/lib/resume-fetch-strategy6-expand.js"() {
-      init_anti_hallucination();
-      init_resume_fetch_helpers();
-      init_resume_fetch_strategy6_iframe();
-      init_resume_fetch_strategy6_urls();
-      init_resume_fetch_strategy6_api();
-      fetchLog10 = createLogger("ResumeFetch");
-    }
-  });
-
-  // src/lib/resume-fetch-education-languages.js
-  function parseEducationFromDocSection(doc, dbg, resume) {
-    const eduCard = doc.querySelector('[data-qa="resume-list-card-education"]');
-    if (!eduCard) {
-      resume._debug.missing.push("educationBlock");
-      return;
-    }
-    resume._debug.found.push("educationBlock");
-    const entries = parseEducationFromDoc(eduCard);
-    resume.education = entries;
-    if (entries.length > 0) resume._debug.found.push("education: " + entries.length);
-    else resume._debug.missing.push("education (0 entries)");
-  }
-  function parseLanguagesAndAbout2(doc, dbg, resume) {
-    const langTags = doc.querySelectorAll('[data-qa="resume-about-card"] .bloko-tag__text, [data-qa="resume-position-card"] .bloko-tag__text');
-    langTags.forEach((tag) => {
-      const t = (tag.textContent || "").trim();
-      if (t && t.length > 0 && !resume.skills.includes(t)) resume.languages.push(t);
-    });
-    if (resume.languages.length > 0) resume._debug.found.push("languages: " + resume.languages.join(", "));
-    const aboutCard = doc.querySelector('[data-qa="resume-about-card"]');
-    if (aboutCard) {
-      const text = (aboutCard.textContent || "").trim();
-      if (text.length > 10) {
-        resume.additionalInfo = text;
-        resume._debug.found.push("additionalBlock");
-      }
-    }
-  }
-  var init_resume_fetch_education_languages = __esm({
-    "src/lib/resume-fetch-education-languages.js"() {
-      init_resume_fetch_parse();
-    }
-  });
-
-  // src/lib/resume-fetch-resume.js
-  async function fetchAndParseResume(resumeUrl, listMeta) {
-    fetchLog11.info("Fetching resume: " + resumeUrl);
-    const html = await fetchHtml(resumeUrl);
-    const doc = htmlToDoc(html);
-    fetchLog11.info("Resume HTML: " + html.length + " chars");
-    const preDoc = htmlToDoc(html);
-    const preExpCards = preDoc.querySelectorAll('[data-qa="profile-experience-company-card"]');
-    const preStepperItems = preDoc.querySelectorAll('[data-qa="magritte-stepper-step-content"]');
-    const preShowAll = html.match(/Показать все|показать ещё|Посмотреть всё|Развернуть/gi);
-    fetchLog11.info("Pre-parse: " + preExpCards.length + " company-cards, " + preStepperItems.length + " stepper-items, " + (preShowAll ? preShowAll.length : 0) + ' "show all" buttons in HTML');
-    const expCardHtml = preDoc.querySelector('[data-qa="resume-list-card-experience"]');
-    if (expCardHtml) {
-      const snippet = expCardHtml.outerHTML.substring(0, 2e3);
-      fetchLog11.info("ExpCard HTML snippet (first 2000 chars): " + snippet);
-    }
-    const MONTHS_RE = /(?:январ[ьея]|феврал[ьья]|март[ае]?|апрел[ьья]|ма[йия]|июн[ьья]|июл[ьья]|август[ае]?|сентябр[ьья]|октябр[ьья]|ноябр[ьья]|декабр[ьья])\s*\d{4}\s*[—\-–]\s*(?:(?:январ[ьея]|феврал[ьья]|март[ае]?|апрел[ьья]|ма[йия]|июн[ьья]|июл[ьья]|август[ае]?|сентябр[ьья]|октябр[ьья]|ноябр[ьья]|декабр[ьья])\s*\d{4}|настоящее\s*время|по\s+настоящее\s+время|сейчас|по\s+сейчас)/gi;
-    const allDateRanges = html.match(MONTHS_RE) || [];
-    fetchLog11.info("Full HTML date ranges: " + allDateRanges.length + " found: " + JSON.stringify(allDateRanges));
-    const numDateRanges = html.match(/\d{2}\.\d{4}\s*[—\-–]\s*(?:\d{2}\.\d{4}|настоящее\s*время|по\s+настоящее\s*время|сейчас|по\s+сейчас)/gi) || [];
-    fetchLog11.info("Numeric date ranges: " + numDateRanges.length + " found: " + JSON.stringify(numDateRanges));
-    const scripts = preDoc.querySelectorAll("script:not([src])");
-    let expScriptCount = 0;
-    scripts.forEach((s) => {
-      const t = s.textContent || "";
-      if (/experience|работ[аеы]|компани|должност|career/i.test(t)) {
-        expScriptCount++;
-        if (expScriptCount <= 3) {
-          fetchLog11.info("Script with experience keywords (first 500 chars): " + t.substring(0, 500));
-        }
-      }
-    });
-    fetchLog11.info("Scripts with experience keywords: " + expScriptCount + " of " + scripts.length);
-    window.__hhLastFetchHtml = html;
-    window.__hhLastFetchDoc = doc;
-    let hashMatch = resumeUrl.match(/\/resume\/([a-f0-9]+)/);
-    if (!hashMatch) hashMatch = resumeUrl.match(/[?&]resume=([a-f0-9]+)/);
-    const id = hashMatch ? hashMatch[1] : "";
-    const resume = {
-      id,
-      url: resumeUrl,
-      title: "",
-      salary: "",
-      gender: "",
-      age: "",
-      address: "",
-      specializations: [],
-      skills: [],
-      skillLevels: {},
-      experience: [],
-      education: [],
-      languages: [],
-      additionalInfo: "",
-      parsedAt: (/* @__PURE__ */ new Date()).toISOString(),
-      visibility: VISIBILITY_UNKNOWN,
-      hidden: false,
-      _debug: { found: [], missing: [] }
-    };
-    const pageVisResult = detectVisibilityFromResumePage(doc, html);
-    const pageVis = pageVisResult.visibility;
-    const pageTrace = pageVisResult.trace || [];
-    const listVis = listMeta ? listMeta.visibility : "no-list-meta";
-    const listHidden = listMeta ? listMeta.hidden : void 0;
-    const visDiagEntry = {
-      id: id || "unknown",
-      title: "(will be set after parse)",
-      pageVis,
-      pageTrace,
-      listVis,
-      listHidden,
-      decision: null,
-      decisionReason: null,
-      timestamp: (/* @__PURE__ */ new Date()).toISOString()
-    };
-    fetchLog11.info("[VIS-DIAG] === Visibility decision for " + (id ? id.substring(0, 8) : "unknown") + " ===");
-    fetchLog11.info("[VIS-DIAG] Sources: page=" + pageVis + ", list=" + listVis + ", listHidden=" + listHidden);
-    if (pageVis === VISIBILITY_HIDDEN) {
-      resume.visibility = VISIBILITY_HIDDEN;
-      resume.hidden = true;
-      visDiagEntry.decision = VISIBILITY_HIDDEN;
-      visDiagEntry.decisionReason = "page-detected-hidden";
-      fetchLog11.info("[VIS-DIAG] Decision: HIDDEN (page detected)");
-    } else if (listMeta && listMeta.visibility === VISIBILITY_HIDDEN) {
-      resume.visibility = VISIBILITY_HIDDEN;
-      resume.hidden = true;
-      visDiagEntry.decision = VISIBILITY_HIDDEN;
-      visDiagEntry.decisionReason = "list-detected-hidden (page=" + pageVis + ")";
-      fetchLog11.info("[VIS-DIAG] Decision: HIDDEN (list detected, page=" + pageVis + ")");
-    } else if (pageVis === VISIBILITY_VISIBLE) {
-      resume.visibility = VISIBILITY_VISIBLE;
-      resume.hidden = false;
-      visDiagEntry.decision = VISIBILITY_VISIBLE;
-      visDiagEntry.decisionReason = "page-detected-visible";
-      fetchLog11.info("[VIS-DIAG] Decision: VISIBLE (page detected)");
-    } else if (listMeta && listMeta.visibility === VISIBILITY_VISIBLE) {
-      resume.visibility = VISIBILITY_VISIBLE;
-      resume.hidden = false;
-      visDiagEntry.decision = VISIBILITY_VISIBLE;
-      visDiagEntry.decisionReason = "list-detected-visible (page=UNKNOWN)";
-      fetchLog11.info("[VIS-DIAG] Decision: VISIBLE (list detected, page=UNKNOWN)");
-    } else {
-      resume.visibility = VISIBILITY_UNKNOWN;
-      resume.hidden = false;
-      visDiagEntry.decision = VISIBILITY_UNKNOWN;
-      visDiagEntry.decisionReason = "both-sources-unknown";
-      fetchLog11.info("[VIS-DIAG] Decision: UNKNOWN (both sources unknown)");
-    }
-    resume._visDiag = visDiagEntry;
-    if (listMeta && listMeta.title && listMeta.title !== "Untitled") {
-      resume._listTitle = listMeta.title;
-    }
-    const dbg = (key, val) => {
-      if (val) resume._debug.found.push(key + ": " + (typeof val === "string" ? '"' + val.substring(0, 60) + '"' : val));
-      else resume._debug.missing.push(key);
-      return val;
-    };
-    parseHeader(doc, dbg, resume);
-    if (resume.title) {
-      resume.title = resume.title.replace(TITLE_SUFFIX_NOISE, "").trim();
-    }
-    parsePersonalDataFromDoc(doc, doc.querySelector('[data-qa="resume-block-title-position"]'), dbg, resume);
-    parseSkillsFromDoc(doc, dbg, resume);
-    await parseExperienceFromDoc(doc, dbg, resume, html, resumeUrl);
-    parseEducationFromDocSection(doc, dbg, resume);
-    parseLanguagesAndAbout2(doc, dbg, resume);
-    if (resume._visDiag) {
-      resume._visDiag.title = resume.title || "(no title)";
-    }
-    fetchLog11.info("Parsed: " + resume.title + " | Skills: " + resume.skills.length + " | Exp: " + resume.experience.length + " | Edu: " + resume.education.length);
-    return resume;
-  }
-  function parseHeader(doc, dbg, resume) {
-    const titleEl = doc.querySelector('[data-qa="resume-block-title-position"]');
-    if (titleEl) resume.title = dbg("resumeTitle (data-qa)", safeGetText2(titleEl));
-    if (!resume.title) {
-      const h1 = doc.querySelector("h1");
-      if (h1) resume.title = dbg("resumeTitle (h1)", (h1.textContent || "").trim());
-    }
-    const salaryEl = doc.querySelector('[data-qa="resume-block-salary"]');
-    if (salaryEl) resume.salary = dbg("resumeSalary (data-qa)", safeGetText2(salaryEl));
-  }
-  function parseSkillsFromDoc(doc, dbg, resume) {
-    const skillsCard = doc.querySelector('[data-qa="skills-card"]');
-    if (!skillsCard) {
-      resume._debug.missing.push('skillsBlock (no data-qa="skills-card")');
-      return;
-    }
-    resume._debug.found.push('skillsBlock (data-qa="skills-card")');
-    const skillLevelEls = skillsCard.querySelectorAll('[data-qa^="skill-level-title-"]');
-    skillLevelEls.forEach((el) => {
-      const qa = el.getAttribute("data-qa") || "";
-      const lvlMatch = qa.match(/skill-level-title-(\d)/);
-      if (lvlMatch) {
-        const lvl = lvlMatch[1];
-        const labels = { "3": "\u041F\u0440\u043E\u0434\u0432\u0438\u043D\u0443\u0442\u044B\u0439", "2": "\u0421\u0440\u0435\u0434\u043D\u0438\u0439", "1": "\u041D\u0430\u0447\u0430\u043B\u044C\u043D\u044B\u0439" };
-        resume.skillLevels[lvl] = labels[lvl] || (el.textContent || "").trim();
-        resume._debug.found.push("skillLevel" + lvl);
-      }
-    });
-    skillsCard.querySelectorAll('[data-qa^="skill-tag-"], .bloko-tag__text').forEach((tag) => {
-      const text = (tag.textContent || "").trim();
-      if (text && text.length > 0 && text.length < 100 && !resume.skills.includes(text)) {
-        resume.skills.push(text);
-      }
-    });
-    if (resume.skills.length > 0) {
-      resume._debug.found.push("skills: " + resume.skills.length + " tags");
-    }
-  }
-  async function parseExperienceFromDoc(doc, dbg, resume, html, resumeUrl) {
-    const entries = parseExperienceFromDocStrategies1to3(doc, resume);
-    if (html && entries.length > 0) {
-      const textParsed = parseExperienceFromHtmlText(html, entries.length);
-      if (textParsed.length > entries.length) {
-        fetchLog11.info("Strategy 4 (text patterns): found " + textParsed.length + " experiences (was " + entries.length + ")");
-        resume._debug.found.push("experience (text pattern supplement): " + textParsed.length);
-        entries.length = 0;
-        entries.push(...textParsed);
-      }
-    }
-    if (html) {
-      const scriptParsed = parseExperienceFromScripts(doc, html);
-      if (scriptParsed.length > entries.length) {
-        fetchLog11.info("Strategy 5 (script JSON): found " + scriptParsed.length + " experiences (was " + entries.length + ")");
-        resume._debug.found.push("experience (script JSON): " + scriptParsed.length);
-        entries.length = 0;
-        entries.push(...scriptParsed);
-      } else if (scriptParsed.length > 0) {
-        fetchLog11.info("Strategy 5 (script JSON): found " + scriptParsed.length + " experiences (not more than " + entries.length + ", skipping)");
-      }
-    }
-    let iframeVis = null;
-    let iframeVisTrace = null;
-    let iframeDiag = null;
-    if (html && entries.length > 0 && entries.length < 20) {
-      try {
-        const s6result = await fetchExpandedExperience(doc, html, resume.id, entries.length, resumeUrl);
-        if (s6result.iframeVis) {
-          iframeVis = s6result.iframeVis;
-          iframeVisTrace = s6result.iframeVisTrace;
-          iframeDiag = s6result.iframeDiag || null;
-        }
-        if (s6result.entries && s6result.entries.length > entries.length) {
-          fetchLog11.info("Strategy 6 (expanded fetch): found " + s6result.entries.length + " experiences (was " + entries.length + ")");
-          resume._debug.found.push("experience (expanded fetch): " + s6result.entries.length);
-          entries.length = 0;
-          entries.push(...s6result.entries);
-        }
-      } catch (err) {
-        fetchLog11.warn("Strategy 6 failed: " + err.message);
-      }
-    }
-    resume.experience = entries;
-    if (entries.length > 0) resume._debug.found.push("experience: " + entries.length);
-    else resume._debug.missing.push("experience (0 entries)");
-    if (iframeVis) {
-      const prevVis = resume.visibility;
-      const prevReason = resume._visDiag?.decisionReason || "";
-      if (iframeVis === VISIBILITY_HIDDEN && prevVis !== VISIBILITY_HIDDEN) {
-        fetchLog11.info("[VIS-DIAG] iframe OVERRIDE: " + (resume.id ? resume.id.substring(0, 8) : "?") + " was " + prevVis + ", iframe says HIDDEN \u2192 overriding");
-        resume.visibility = VISIBILITY_HIDDEN;
-        resume.hidden = true;
-        if (resume._visDiag) {
-          resume._visDiag.decision = VISIBILITY_HIDDEN;
-          resume._visDiag.decisionReason = "iframe-detected-hidden (overrode " + prevVis + ", was: " + prevReason + ")";
-          resume._visDiag.pageTrace = (resume._visDiag.pageTrace || []).concat(iframeVisTrace || []);
-        }
-      } else if (iframeVis === VISIBILITY_VISIBLE && prevVis === VISIBILITY_UNKNOWN) {
-        fetchLog11.info("[VIS-DIAG] iframe OVERRIDE: " + (resume.id ? resume.id.substring(0, 8) : "?") + " was UNKNOWN, iframe says VISIBLE \u2192 overriding");
-        resume.visibility = VISIBILITY_VISIBLE;
-        resume.hidden = false;
-        if (resume._visDiag) {
-          resume._visDiag.decision = VISIBILITY_VISIBLE;
-          resume._visDiag.decisionReason = "iframe-detected-visible (overrode UNKNOWN, was: " + prevReason + ")";
-          resume._visDiag.pageTrace = (resume._visDiag.pageTrace || []).concat(iframeVisTrace || []);
-        }
-      } else {
-        fetchLog11.info("[VIS-DIAG] iframe CONFIRMED: " + (resume.id ? resume.id.substring(0, 8) : "?") + " is " + prevVis + ", iframe agrees (" + iframeVis + ")");
-        if (resume._visDiag && iframeVisTrace) {
-          resume._visDiag.pageTrace = (resume._visDiag.pageTrace || []).concat(iframeVisTrace);
-        }
-      }
-      if (resume._visDiag) {
-        resume._visDiag.iframeRan = true;
-        resume._visDiag.iframeVis = iframeVis;
-        if (iframeDiag) {
-          resume._visDiag.iframeDiag = iframeDiag;
-        }
-      }
-    }
-  }
-  function detectVisibilityFromResumePage(doc, html) {
-    const diag = [];
-    const visCard = doc.querySelector('[data-qa="resume-visibility-card"]');
-    if (visCard) {
-      const cardText = normalizeWs(visCard.textContent || "").toLowerCase();
-      if (cardText.includes("\u043D\u0435 \u0432\u0438\u0434\u043D\u043E \u043D\u0438\u043A\u043E\u043C\u0443") || cardText.includes("\u043D\u0435\xA0\u0432\u0438\u0434\u043D\u043E \u043D\u0438\u043A\u043E\u043C\u0443")) {
-        diag.push('S0:visibility-card="\u043D\u0435 \u0432\u0438\u0434\u043D\u043E \u043D\u0438\u043A\u043E\u043C\u0443" \u2192 HIDDEN');
-        fetchLog11.info("[VIS-DIAG] " + diag.join(" | "));
-        return { visibility: VISIBILITY_HIDDEN, trace: diag };
-      }
-      if (cardText.includes("\u0432\u0438\u0434\u043D\u043E \u0432\u0441\u0435\u043C") || cardText.includes("\u0432\u0438\u0434\u043D\u043E\xA0\u0432\u0441\u0435\u043C")) {
-        diag.push('S0:visibility-card="\u0432\u0438\u0434\u043D\u043E \u0432\u0441\u0435\u043C" \u2192 VISIBLE');
-        fetchLog11.info("[VIS-DIAG] " + diag.join(" | "));
-        return { visibility: VISIBILITY_VISIBLE, trace: diag };
-      }
-      diag.push('S0:visibility-card-unknown="' + cardText.substring(0, 40) + '"');
-    } else {
-      diag.push("S0:no-visibility-card");
-    }
-    for (const sel of VISIBILITY_HIDDEN_DATA_QA) {
-      const found = doc.querySelector(sel);
-      if (found) {
-        diag.push("S1:data-qa=" + sel + " \u2192 HIDDEN");
-        fetchLog11.info("[VIS-DIAG] " + diag.join(" | "));
-        return { visibility: VISIBILITY_HIDDEN, trace: diag };
-      }
-    }
-    diag.push("S1:no-data-qa-hidden");
-    const allButtons = doc.querySelectorAll("button, a");
-    let btnDetails = [];
-    for (const btn of allButtons) {
-      const text = normalizeWs(btn.textContent || "").toLowerCase();
-      const qa = (btn.getAttribute("data-qa") || "").toLowerCase();
-      if (text.includes("\u0441\u043A\u0440\u044B\u0442\u044C") || text.includes("\u0432\u0438\u0434\u0438\u043C")) {
-        btnDetails.push('"' + text.substring(0, 40) + '"' + (qa ? "[qa=" + qa + "]" : ""));
-      }
-      if (text.includes("\u0441\u0434\u0435\u043B\u0430\u0442\u044C \u0432\u0438\u0434\u0438\u043C\u044B\u043C")) {
-        diag.push('S2:btn="\u0441\u0434\u0435\u043B\u0430\u0442\u044C \u0432\u0438\u0434\u0438\u043C\u044B\u043C" \u2192 HIDDEN');
-        fetchLog11.info("[VIS-DIAG] " + diag.join(" | "));
-        fetchLog11.info("[VIS-DIAG] All vis-related buttons: " + JSON.stringify(btnDetails));
-        return { visibility: VISIBILITY_HIDDEN, trace: diag, btnDetails };
-      }
-      if (text.includes("\u0441\u043A\u0440\u044B\u0442\u044C \u0440\u0435\u0437\u044E\u043C\u0435")) {
-        diag.push('S2:btn="\u0441\u043A\u0440\u044B\u0442\u044C \u0440\u0435\u0437\u044E\u043C\u0435" \u2192 VISIBLE');
-        fetchLog11.info("[VIS-DIAG] " + diag.join(" | "));
-        fetchLog11.info("[VIS-DIAG] All vis-related buttons: " + JSON.stringify(btnDetails));
-        return { visibility: VISIBILITY_VISIBLE, trace: diag, btnDetails };
-      }
-    }
-    diag.push("S2:no-key-buttons" + (btnDetails.length ? "(saw:" + btnDetails.length + " partial)" : ""));
-    const bodyText = doc.body ? normalizeWs(doc.body.textContent || "") : "";
-    if (hasHiddenIndicator(bodyText)) {
-      const lower = bodyText.toLowerCase();
-      for (const ind of ["\u043C\u043D\u043E\u0433\u0438\u0435 \u043D\u0435 \u0432\u0438\u0434\u044F\u0442", "\u0441\u0434\u0435\u043B\u0430\u0442\u044C \u0432\u0438\u0434\u0438\u043C\u044B\u043C", "\u043D\u0435 \u0432\u0438\u0434\u043D\u043E"]) {
-        const pos = lower.indexOf(ind);
-        if (pos !== -1) {
-          diag.push('S3:body has "' + ind + '" @' + pos + " \u2192 HIDDEN");
-          break;
-        }
-      }
-      fetchLog11.info("[VIS-DIAG] " + diag.join(" | "));
-      return { visibility: VISIBILITY_HIDDEN, trace: diag };
-    }
-    if (hasVisibleIndicator(bodyText)) {
-      diag.push("S3:body has visible indicator \u2192 VISIBLE");
-      fetchLog11.info("[VIS-DIAG] " + diag.join(" | "));
-      return { visibility: VISIBILITY_VISIBLE, trace: diag };
-    }
-    diag.push("S3:body-no-indicators");
-    const htmlForSearch = html.replace(/&nbsp;/g, " ").toLowerCase();
-    const htmlNorm = normalizeWs(htmlForSearch);
-    if (hasHiddenIndicator(htmlNorm)) {
-      const lower = htmlNorm.toLowerCase();
-      for (const ind of ["\u043C\u043D\u043E\u0433\u0438\u0435 \u043D\u0435 \u0432\u0438\u0434\u044F\u0442", "\u0441\u0434\u0435\u043B\u0430\u0442\u044C \u0432\u0438\u0434\u0438\u043C\u044B\u043C", "\u043D\u0435 \u0432\u0438\u0434\u043D\u043E"]) {
-        const pos = lower.indexOf(ind);
-        if (pos !== -1) {
-          diag.push('S4:html has "' + ind + '" @' + pos + " \u2192 HIDDEN");
-          break;
-        }
-      }
-      fetchLog11.info("[VIS-DIAG] " + diag.join(" | "));
-      return { visibility: VISIBILITY_HIDDEN, trace: diag };
-    }
-    if (hasVisibleIndicator(htmlNorm)) {
-      diag.push("S4:html has visible indicator \u2192 VISIBLE");
-      fetchLog11.info("[VIS-DIAG] " + diag.join(" | "));
-      return { visibility: VISIBILITY_VISIBLE, trace: diag };
-    }
-    diag.push("S4:html-no-indicators");
-    const scriptEls = doc.querySelectorAll("script:not([src])");
-    let scriptPatterns = [];
-    for (const script of scriptEls) {
-      const t = script.textContent || "";
-      if (t.length < 50) continue;
-      const patterns = [
-        { re: /"hidden"\s*:\s*true/, name: '"hidden":true' },
-        { re: /"isHidden"\s*:\s*true/, name: '"isHidden":true' },
-        { re: /"visibility"\s*:\s*"hidden"/, name: '"visibility":"hidden"' },
-        { re: /"status"\s*:\s*"hidden"/, name: '"status":"hidden"' }
-      ];
-      for (const p of patterns) {
-        if (p.re.test(t)) {
-          scriptPatterns.push(p.name);
-        }
-      }
-    }
-    if (scriptPatterns.length > 0) {
-      diag.push("S5:script=" + scriptPatterns.join(",") + " \u2192 HIDDEN");
-      fetchLog11.info("[VIS-DIAG] " + diag.join(" | "));
-      return { visibility: VISIBILITY_HIDDEN, trace: diag, scriptPatterns };
-    }
-    diag.push("S5:no-script-patterns");
-    const hideLink = doc.querySelector('[data-qa="resume-action-hide"], [data-qa*="resume-hide"], a[data-qa*="hide-resume"]');
-    if (hideLink) {
-      const hideQa = hideLink.getAttribute("data-qa") || "";
-      diag.push("S6:hide-link qa=" + hideQa + " \u2192 VISIBLE");
-      fetchLog11.info("[VIS-DIAG] " + diag.join(" | "));
-      return { visibility: VISIBILITY_VISIBLE, trace: diag };
-    }
-    diag.push("S6:no-hide-link");
-    const allHideBtns = doc.querySelectorAll('[data-qa*="hide"], [data-qa*="hidden"]');
-    if (allHideBtns.length > 0) {
-      const hideQas = Array.from(allHideBtns).map((b) => b.getAttribute("data-qa")).filter(Boolean);
-      diag.push("EXTRA:hide-qa=" + hideQas.join(","));
-    }
-    diag.push("\u2192 UNKNOWN");
-    fetchLog11.info("[VIS-DIAG] " + diag.join(" | "));
-    return { visibility: VISIBILITY_UNKNOWN, trace: diag };
-  }
-  var fetchLog11;
-  var init_resume_fetch_resume = __esm({
-    "src/lib/resume-fetch-resume.js"() {
-      init_anti_hallucination();
-      init_resume_fetch_helpers();
-      init_resume_fetch_parse();
-      init_resume_constants();
-      init_resume_fetch_experience();
-      init_resume_fetch_strategy4_text();
-      init_resume_fetch_strategy5_scripts();
-      init_resume_fetch_strategy6_expand();
-      init_resume_fetch_education_languages();
-      fetchLog11 = createLogger("ResumeFetch");
-    }
-  });
-
-  // src/lib/resume-fetch.js
-  var resume_fetch_exports = {};
-  __export(resume_fetch_exports, {
-    fetchAndParseResume: () => fetchAndParseResume,
-    fetchResumeList: () => fetchResumeList,
-    syncAllResumes: () => syncAllResumes
-  });
-  async function syncAllResumes({ onProgress, onComplete, onError } = {}) {
-    fetchLog12.info("syncAllResumes: starting ...");
-    const visDiag = {
-      startedAt: (/* @__PURE__ */ new Date()).toISOString(),
-      finishedAt: null,
-      listSource: null,
-      listRawHtmlLength: 0,
-      resumes: [],
-      summary: { total: 0, visible: 0, hidden: 0, unknown: 0, unknownFallbackToVisible: 0 }
-    };
-    try {
-      const list = await fetchResumeList();
-      visDiag.listSource = "fetch";
-      visDiag.listRawHtmlLength = window.__hhLastFetchHtml?.length || 0;
-      if (list.length === 0) {
-        fetchLog12.warn("syncAllResumes: no resumes found");
-        visDiag.summary.total = 0;
-        visDiag.finishedAt = (/* @__PURE__ */ new Date()).toISOString();
-        window.__hhVisDiag = visDiag;
-        if (onComplete) onComplete([]);
-        return [];
-      }
-      list.forEach((item) => {
-        visDiag.resumes.push({
-          id: item.id,
-          title: item.title,
-          url: item.url,
-          listVis: item.visibility,
-          listHidden: item.hidden,
-          pageVis: null,
-          pageTrace: null,
-          decision: null,
-          decisionReason: null,
-          finalVisibility: null
-        });
-      });
-      const visibleCount = list.filter((r) => {
-        const vis = r.visibility || (r.hidden ? "hidden" : "unknown");
-        return vis !== "hidden";
-      }).length;
-      const hiddenCount = list.length - visibleCount;
-      if (hiddenCount > 0) {
-        fetchLog12.info("syncAllResumes: " + visibleCount + " visible, " + hiddenCount + " hidden");
-      }
-      if (onProgress) onProgress(0, list.length, "\u0417\u0430\u0433\u0440\u0443\u0437\u043A\u0430 \u0441\u043F\u0438\u0441\u043A\u0430 \u0440\u0435\u0437\u044E\u043C\u0435...");
-      const results = [];
-      for (let i = 0; i < list.length; i++) {
-        const item = list[i];
-        const vis = item.visibility || (item.hidden ? "hidden" : "unknown");
-        const label = vis === "hidden" ? "\u041F\u0430\u0440\u0441\u0438\u043D\u0433 (\u0441\u043A\u0440\u044B\u0442\u043E): " : "\u041F\u0430\u0440\u0441\u0438\u043D\u0433: ";
-        if (onProgress) onProgress(i, list.length, label + item.title);
-        try {
-          const resume = await fetchAndParseResume(item.url, item);
-          if ((!resume.title || resume.title === "") && resume._listTitle) {
-            resume.title = resume._listTitle;
-          }
-          delete resume._listTitle;
-          if (resume.id) results.push(resume);
-          else fetchLog12.warn("No id for " + item.url);
-          const diagEntry = visDiag.resumes.find((r) => r.id === resume.id);
-          if (diagEntry) {
-            if (resume.title && resume.title !== "" && resume.title !== "Untitled") {
-              diagEntry.title = resume.title;
-            }
-            if (resume._visDiag) {
-              diagEntry.pageVis = resume._visDiag.pageVis;
-              diagEntry.pageTrace = resume._visDiag.pageTrace;
-              diagEntry.decision = resume._visDiag.decision;
-              diagEntry.decisionReason = resume._visDiag.decisionReason;
-              if (resume._visDiag.iframeVis) {
-                diagEntry.iframeVis = resume._visDiag.iframeVis;
-              }
-              if (resume._visDiag.iframeDiag) {
-                diagEntry.iframeDiag = resume._visDiag.iframeDiag;
-              }
-            }
-          }
-        } catch (err) {
-          fetchLog12.error("Failed: " + item.url + ": " + err.message);
-          if (onError) onError(item, err);
-          const diagEntry = visDiag.resumes.find((r) => r.id === item.id);
-          if (diagEntry) {
-            diagEntry.pageVis = "error";
-            diagEntry.pageTrace = ["ERROR: " + err.message];
-            diagEntry.decision = "error";
-            diagEntry.decisionReason = "fetch-failed";
-          }
-        }
-        if (i < list.length - 1) await gaussianDelay(2e3, 5e3);
-      }
-      const stillUnknown = results.filter((r) => r.visibility === VISIBILITY_UNKNOWN);
-      if (stillUnknown.length > 0) {
-        const iframeRan = stillUnknown.filter((r) => r._visDiag?.iframeRan);
-        const iframeNotRan = stillUnknown.filter((r) => !r._visDiag?.iframeRan);
-        if (iframeNotRan.length > 0) {
-          fetchLog12.info("[VIS-DIAG] Final fallback: " + iframeNotRan.length + " resumes UNKNOWN (iframe not run) \u2192 defaulting to VISIBLE");
-          visDiag.summary.unknownFallbackToVisible = iframeNotRan.length;
-          iframeNotRan.forEach((r) => {
-            fetchLog12.info("[VIS-DIAG]   " + (r.id ? r.id.substring(0, 8) : "?") + ' "' + (r.title || "").substring(0, 30) + '" UNKNOWN\u2192VISIBLE (iframe not run)');
-            r.visibility = VISIBILITY_VISIBLE;
-            r.hidden = false;
-            const diagEntry = visDiag.resumes.find((d) => d.id === r.id);
-            if (diagEntry) {
-              diagEntry.finalVisibility = VISIBILITY_VISIBLE;
-              diagEntry.decisionReason += " [FALLBACK: UNKNOWN\u2192VISIBLE, iframe not run]";
-            }
-          });
-        }
-        if (iframeRan.length > 0) {
-          fetchLog12.info("[VIS-DIAG] Keeping UNKNOWN for " + iframeRan.length + " resumes (iframe ran but returned UNKNOWN)");
-          iframeRan.forEach((r) => {
-            fetchLog12.info("[VIS-DIAG]   " + (r.id ? r.id.substring(0, 8) : "?") + ' "' + (r.title || "").substring(0, 30) + '" \u2192 UNKNOWN (iframe ran, no indicators found)');
-            const diagEntry = visDiag.resumes.find((d) => d.id === r.id);
-            if (diagEntry) {
-              diagEntry.finalVisibility = VISIBILITY_UNKNOWN;
-              diagEntry.decisionReason += " [KEPT UNKNOWN: iframe ran, no indicators]";
-            }
-          });
-        }
-      }
-      results.forEach((r) => {
-        const diagEntry = visDiag.resumes.find((d) => d.id === r.id);
-        if (diagEntry && !diagEntry.finalVisibility) {
-          diagEntry.finalVisibility = r.visibility;
-        }
-      });
-      visDiag.summary.total = results.length;
-      visDiag.summary.visible = results.filter((r) => r.visibility === VISIBILITY_VISIBLE).length;
-      visDiag.summary.hidden = results.filter((r) => r.visibility === VISIBILITY_HIDDEN).length;
-      visDiag.summary.unknown = results.filter((r) => r.visibility === VISIBILITY_UNKNOWN).length;
-      visDiag.finishedAt = (/* @__PURE__ */ new Date()).toISOString();
-      fetchLog12.info("[VIS-DIAG] \u2550\u2550\u2550 FINAL VISIBILITY SUMMARY \u2550\u2550\u2550");
-      fetchLog12.info("[VIS-DIAG] Total: " + visDiag.summary.total + ", Visible: " + visDiag.summary.visible + ", Hidden: " + visDiag.summary.hidden + ", Unknown: " + visDiag.summary.unknown + ", Fallbacks: " + visDiag.summary.unknownFallbackToVisible);
-      results.forEach((r) => {
-        fetchLog12.info("[VIS-DIAG]   " + (r.id ? r.id.substring(0, 8) : "?") + ' "' + (r.title || "").substring(0, 30) + '" \u2192 ' + r.visibility);
-      });
-      window.__hhVisDiag = visDiag;
-      try {
-        window.postMessage({ type: "HH-AR-VISDIAG", payload: visDiag }, "*");
-      } catch (e) {
-        fetchLog12.warn("[VIS-DIAG] Could not send to page world: " + e.message);
-      }
-      fetchLog12.info("[VIS-DIAG] Diagnostic dump available: __hhVis() / __hhVisTable() / window.__hhVisDiag");
-      fetchLog12.info("Done. " + results.length + "/" + list.length + " parsed");
-      if (onProgress) onProgress(list.length, list.length, "\u0413\u043E\u0442\u043E\u0432\u043E");
-      if (onComplete) onComplete(results);
-      return results;
-    } catch (err) {
-      fetchLog12.error("Fatal: " + err.message);
-      visDiag.finishedAt = (/* @__PURE__ */ new Date()).toISOString();
-      visDiag.error = err.message;
-      window.__hhVisDiag = visDiag;
-      try {
-        window.postMessage({ type: "HH-AR-VISDIAG", payload: visDiag }, "*");
-      } catch (e) {
-      }
-      if (onError) onError(null, err);
-      throw err;
-    }
-  }
-  var fetchLog12;
-  var init_resume_fetch = __esm({
-    "src/lib/resume-fetch.js"() {
-      init_anti_hallucination();
-      init_timing();
-      init_resume_fetch_list();
-      init_resume_fetch_resume();
-      init_resume_constants();
-      fetchLog12 = createLogger("ResumeFetch");
     }
   });
 
@@ -6606,6 +4407,2290 @@
     }
   });
 
+  // src/lib/resume-fetch-helpers.js
+  async function fetchHtml(url) {
+    const resp = await fetch(url, {
+      credentials: "include",
+      headers: { "Accept": "text/html" }
+    });
+    if (!resp.ok) throw new Error("fetch " + url + " -> " + resp.status);
+    return resp.text();
+  }
+  function htmlToDoc(html) {
+    const parser = new DOMParser();
+    return parser.parseFromString(html, "text/html");
+  }
+  function safeGetText2(el, fallback) {
+    fallback = fallback || "";
+    if (!el || !(el instanceof Element)) return fallback;
+    const text = (el.textContent || "").trim();
+    return text.length > 0 ? text : fallback;
+  }
+  function extractResumeLinks(anchorList) {
+    const resumes = [];
+    anchorList.forEach((link) => {
+      const href = link.getAttribute("href") || "";
+      let hashMatch = href.match(/\/resume\/([a-f0-9]+)/);
+      if (!hashMatch) hashMatch = href.match(/[?&]resume=([a-f0-9]+)/);
+      if (!hashMatch) return;
+      const id = hashMatch[1];
+      if (id.length < MIN_HASH_LEN) return;
+      if (resumes.find((r) => r.id === id)) return;
+      const rawLinkText = link.textContent || "";
+      const vis = detectVisibilityFromLinkText(rawLinkText);
+      const visibility = vis.visibility;
+      const hidden = vis.hidden;
+      const title = cleanResumeTitle(rawLinkText);
+      const resumeUrl = "https://hh.ru/applicant/resumes/view?resume=" + id;
+      resumes.push({ id, title, url: resumeUrl, visibility, hidden });
+      if (visibility !== VISIBILITY_UNKNOWN) {
+        helperLog.info("LinkText visibility: " + id.substring(0, 8) + "=" + visibility + " (method=" + vis.method + ', title="' + title.substring(0, 30) + '")');
+      }
+    });
+    return resumes;
+  }
+  function extractFromScripts(doc, html) {
+    const resumes = [];
+    const scripts = doc.querySelectorAll("script");
+    scripts.forEach((script) => {
+      const text = script.textContent || "";
+      const matches = text.matchAll(/resume[=/]\\?"?([a-f0-9]{32,})/g);
+      for (const m of matches) {
+        const id = m[1];
+        if (!resumes.find((r) => r.id === id)) {
+          resumes.push({
+            id,
+            title: "Resume " + id.substring(0, 8),
+            url: "https://hh.ru/applicant/resumes/view?resume=" + id
+          });
+        }
+      }
+    });
+    if (resumes.length === 0) {
+      const jsonMatches = html.matchAll(/"resumeId"\s*:\s*"([a-f0-9]+)"/g);
+      for (const m of jsonMatches) {
+        const id = m[1];
+        if (!resumes.find((r) => r.id === id)) {
+          resumes.push({
+            id,
+            title: "Resume " + id.substring(0, 8),
+            url: "https://hh.ru/applicant/resumes/view?resume=" + id
+          });
+        }
+      }
+    }
+    if (resumes.length > 0) {
+      helperLog.info("Found " + resumes.length + " resumes from script/JSON data");
+    }
+    return resumes;
+  }
+  function extractVisibilityStatus(doc, resumes, html) {
+    if (resumes.length === 0) return;
+    if (!html) {
+      helperLog.warn("extractVisibilityStatus: no raw HTML provided, skipping");
+      return;
+    }
+    const htmlLower = html.toLowerCase();
+    let alreadyDetected = 0;
+    let needDetection = 0;
+    resumes.forEach((r) => {
+      if (r.visibility === VISIBILITY_HIDDEN || r.visibility === VISIBILITY_VISIBLE) {
+        alreadyDetected++;
+      } else {
+        needDetection++;
+      }
+    });
+    resumes.forEach((r) => {
+      const link = Array.from(doc.querySelectorAll("a[href]")).find((a) => {
+        const h = a.getAttribute("href") || "";
+        return h.includes(r.id);
+      });
+      if (link) {
+        const raw = link.textContent || "";
+        const norm = normalizeWs(raw);
+        const hasInd = hasHiddenIndicator(raw);
+        helperLog.info("  DEBUG " + r.id.substring(0, 8) + ": rawLen=" + raw.length + " hasNbsp=" + (raw.indexOf("\xA0") !== -1) + ' normalized="' + norm.substring(0, 80) + '" hasHidden=' + hasInd + " vis=" + r.visibility);
+      }
+    });
+    helperLog.info("Visibility scan: " + resumes.length + " resumes (" + alreadyDetected + " already from link text, " + needDetection + " need detection)");
+    if (needDetection === 0) {
+      helperLog.info("All resumes already detected from link text \u2014 skipping other strategies");
+      const summary2 = resumes.map(
+        (r) => r.id.substring(0, 8) + "=" + r.visibility
+      ).join(", ");
+      helperLog.info("Visibility result: [" + summary2 + "]");
+      return;
+    }
+    const globalIndicators = HIDDEN_INDICATORS.map((ind) => ({
+      text: ind,
+      pos: htmlLower.indexOf(ind)
+    }));
+    const hasAnyIndicators = globalIndicators.some((i) => i.pos !== -1);
+    helperLog.info("Indicators in HTML: " + (hasAnyIndicators ? globalIndicators.filter((i) => i.pos !== -1).map((i) => '"' + i.text + '"@' + i.pos).join(", ") : "NONE FOUND"));
+    let strategyUsed = false;
+    for (const sel of RESUME_CARD_SELECTORS) {
+      const cards = doc.querySelectorAll(sel);
+      if (cards.length === 0) continue;
+      helperLog.info("Strategy 1: Found " + cards.length + " cards with selector: " + sel);
+      let matched = 0;
+      cards.forEach((card) => {
+        const link = card.querySelector('a[href*="/resume/"], a[href*="resume="]');
+        if (!link) return;
+        const href = link.getAttribute("href") || "";
+        let hashMatch = href.match(/\/resume\/([a-f0-9]+)/);
+        if (!hashMatch) hashMatch = href.match(/[?&]resume=([a-f0-9]+)/);
+        if (!hashMatch) return;
+        const id = hashMatch[1];
+        const resume = resumes.find((r) => r.id === id);
+        if (!resume) return;
+        if (resume.visibility !== VISIBILITY_UNKNOWN) return;
+        const result = detectVisibilityFromCard(card);
+        resume.visibility = result.visibility;
+        resume.hidden = result.hidden;
+        matched++;
+        helperLog.info("  Card: " + id.substring(0, 8) + "=" + result.visibility + " (method=" + result.method + ", cardTextLen=" + (card.textContent || "").length + ")");
+      });
+      if (matched > 0) {
+        helperLog.info("Strategy 1: matched " + matched + "/" + needDetection + " unknown resumes via data-qa cards");
+        break;
+      }
+    }
+    const stillUnknown = resumes.filter((r) => r.visibility === VISIBILITY_UNKNOWN).length;
+    if (stillUnknown === 0) {
+      strategyUsed = true;
+    } else if (!strategyUsed) {
+      helperLog.info("Strategy 1: no data-qa cards matched, trying next strategy");
+    }
+    if (!strategyUsed) {
+      const scriptResult = extractVisibilityFromScripts(doc, resumes, html);
+      if (scriptResult) {
+        helperLog.info("Strategy 2: found visibility in script/hydration state");
+        strategyUsed = true;
+      }
+    }
+    if (!strategyUsed) {
+      helperLog.info("Strategy 3: proximity search with <script> stripping");
+      const cleanHtml = stripScripts(html);
+      const cleanLower = cleanHtml.toLowerCase();
+      const cleanForSearch = cleanLower.replace(/&nbsp;/g, " ");
+      const cleanIndicators = HIDDEN_INDICATORS.map((ind) => ({
+        text: ind,
+        pos: cleanForSearch.indexOf(ind)
+      }));
+      const hasCleanIndicators = cleanIndicators.some((i) => i.pos !== -1);
+      helperLog.info("  Cleaned HTML: " + cleanHtml.length + " chars (was " + html.length + "), indicators: " + (hasCleanIndicators ? cleanIndicators.filter((i) => i.pos !== -1).map((i) => '"' + i.text + '"@' + i.pos).join(", ") : "NONE"));
+      const hashPositions = resumes.map((r) => {
+        const pos = cleanLower.indexOf(r.id.toLowerCase());
+        return { id: r.id, pos };
+      }).filter((h) => h.pos !== -1).sort((a, b) => a.pos - b.pos);
+      if (hashPositions.length > 0) {
+        helperLog.info("  Hash positions in cleaned HTML: " + hashPositions.map((h) => h.id.substring(0, 8) + "@" + h.pos).join(", "));
+      }
+      resumes.forEach((r) => {
+        if (r.visibility !== VISIBILITY_UNKNOWN) return;
+        const myPos = cleanForSearch.indexOf(r.id.toLowerCase());
+        if (myPos === -1) {
+          helperLog.info("  " + r.id.substring(0, 8) + ": hash not found in cleaned HTML");
+          return;
+        }
+        const nextResume = hashPositions.find((h) => h.pos > myPos && h.id !== r.id);
+        const boundary = nextResume ? nextResume.pos : cleanForSearch.length;
+        const searchStart = Math.max(0, myPos - 500);
+        const searchEnd = Math.min(myPos + SEARCH_RADIUS, boundary);
+        const zone = cleanForSearch.substring(searchStart, searchEnd);
+        const isHidden = hasHiddenIndicator(zone);
+        r.visibility = isHidden ? VISIBILITY_HIDDEN : VISIBILITY_UNKNOWN;
+        r.hidden = isHidden;
+        helperLog.info("  " + r.id.substring(0, 8) + "=" + r.visibility + " (zone " + searchStart + "-" + searchEnd + ", next=" + (nextResume ? nextResume.id.substring(0, 8) : "none") + ", indicators=" + (isHidden ? "FOUND" : "none") + ")");
+      });
+      strategyUsed = true;
+    }
+    const unknownAfterAll = resumes.filter((r) => r.visibility === VISIBILITY_UNKNOWN);
+    if (unknownAfterAll.length > 0) {
+      helperLog.info("[VIS-DIAG] List: " + unknownAfterAll.length + " resumes still UNKNOWN \u2014 will be resolved by detail page detection");
+      unknownAfterAll.forEach((r) => {
+        helperLog.info("[VIS-DIAG]   List: " + r.id.substring(0, 8) + ' "' + (r.title || "").substring(0, 30) + '" \u2192 ' + r.visibility);
+      });
+    }
+    const summary = resumes.map(
+      (r) => r.id.substring(0, 8) + "=" + r.visibility
+    ).join(", ");
+    helperLog.info("Visibility result: [" + summary + "]");
+  }
+  function extractVisibilityFromScripts(doc, resumes, html) {
+    let found = false;
+    const scripts = doc.querySelectorAll("script");
+    scripts.forEach((script) => {
+      const text = script.textContent || "";
+      if (!text || text.length < 100) return;
+      resumes.forEach((r) => {
+        if (r.visibility !== VISIBILITY_UNKNOWN) return;
+        const hashIdx = text.indexOf(r.id);
+        if (hashIdx === -1) return;
+        const nearby = text.substring(
+          Math.max(0, hashIdx - 200),
+          Math.min(text.length, hashIdx + 500)
+        );
+        if (/"hidden"\s*:\s*true/.test(nearby) || /"visibility"\s*:\s*"hidden"/.test(nearby) || /"status"\s*:\s*"hidden"/.test(nearby) || /"isHidden"\s*:\s*true/.test(nearby)) {
+          r.visibility = VISIBILITY_HIDDEN;
+          r.hidden = true;
+          found = true;
+          helperLog.info("  Script visibility: " + r.id.substring(0, 8) + "=hidden (JSON pattern)");
+        }
+      });
+    });
+    for (const sel of VISIBILITY_HIDDEN_DATA_QA) {
+      const qaMatch = sel.match(/data-qa="([^"]+)"/) || sel.match(/data-qa\*="([^"]+)"/);
+      if (!qaMatch) continue;
+      const qaValue = qaMatch[1];
+      const qaPattern = 'data-qa="' + qaValue;
+      const qaIdx = htmlLower_all(html, qaPattern);
+      if (qaIdx.length > 0) {
+        helperLog.info('  Found data-qa="' + qaValue + '" at positions: ' + qaIdx.join(", "));
+        qaIdx.forEach((pos) => {
+          const before = html.substring(Math.max(0, pos - 3e3), pos).toLowerCase();
+          let nearestId = null;
+          let nearestDist = Infinity;
+          resumes.forEach((r) => {
+            const idx = before.lastIndexOf(r.id.toLowerCase());
+            if (idx !== -1 && before.length - idx < nearestDist) {
+              nearestDist = before.length - idx;
+              nearestId = r;
+            }
+          });
+          if (nearestId && nearestId.visibility === VISIBILITY_UNKNOWN) {
+            nearestId.visibility = VISIBILITY_HIDDEN;
+            nearestId.hidden = true;
+            found = true;
+            helperLog.info("  data-qa visibility: " + nearestId.id.substring(0, 8) + "=hidden");
+          }
+        });
+      }
+    }
+    return found;
+  }
+  function htmlLower_all(html, pattern) {
+    const positions = [];
+    const lower = html.toLowerCase();
+    let idx = 0;
+    while ((idx = lower.indexOf(pattern, idx)) !== -1) {
+      positions.push(idx);
+      idx += pattern.length;
+    }
+    return positions;
+  }
+  var helperLog, SEARCH_RADIUS;
+  var init_resume_fetch_helpers = __esm({
+    "src/lib/resume-fetch-helpers.js"() {
+      init_anti_hallucination();
+      init_resume_constants();
+      helperLog = createLogger("ResumeFetchH");
+      SEARCH_RADIUS = 5e3;
+    }
+  });
+
+  // src/lib/resume-fetch-list.js
+  async function fetchResumeList() {
+    fetchLog.info("Fetching /applicant/resumes ...");
+    let html;
+    try {
+      html = await fetchHtml("https://hh.ru/applicant/resumes");
+    } catch (err) {
+      fetchLog.error("Failed to fetch /applicant/resumes: " + err.message);
+      return [];
+    }
+    if (!html || html.length < 500) {
+      fetchLog.warn("Got very short response (" + (html ? html.length : 0) + " chars), likely redirect");
+      return [];
+    }
+    const doc = htmlToDoc(html);
+    const allAnchors = doc.querySelectorAll("a[href]");
+    fetchLog.info("Fetched HTML: " + html.length + " chars, " + allAnchors.length + " links");
+    const resumes = extractResumeLinks(allAnchors);
+    extractVisibilityStatus(doc, resumes, html);
+    if (resumes.length === 0) {
+      fetchLog.info("No links found, trying embedded script data...");
+      const scriptResumes = extractFromScripts(doc, html);
+      if (scriptResumes.length > 0) return scriptResumes;
+    }
+    if (resumes.length === 0 && window.location.pathname.includes("/applicant/resumes")) {
+      fetchLog.info("No links from fetch, trying current page DOM...");
+      const domLinks = document.querySelectorAll("a[href]");
+      const domResumes = extractResumeLinks(domLinks);
+      if (domResumes.length > 0) {
+        fetchLog.info("Found " + domResumes.length + " resumes from current page DOM");
+        return domResumes;
+      }
+    }
+    fetchLog.info("Resume list: " + resumes.length + " resumes found");
+    return resumes;
+  }
+  var fetchLog;
+  var init_resume_fetch_list = __esm({
+    "src/lib/resume-fetch-list.js"() {
+      init_anti_hallucination();
+      init_resume_fetch_helpers();
+      fetchLog = createLogger("ResumeFetch");
+    }
+  });
+
+  // src/lib/resume-fetch-parse.js
+  function parseCompanyCardFromDoc(card) {
+    const job = {};
+    const cellLeft = card.querySelector('[data-qa="cell-left-side"]');
+    if (cellLeft) {
+      const cellTexts = cellLeft.querySelectorAll('[data-qa="cell-text-content"]');
+      if (cellTexts.length >= 1) {
+        job.company = (cellTexts[0].textContent || "").trim();
+      }
+      if (cellTexts.length >= 2) {
+        job.duration = (cellTexts[1].textContent || "").trim();
+      }
+    }
+    const stepContent = card.querySelector('[data-qa="magritte-stepper-step-content"]');
+    if (stepContent) {
+      const stepCellLeft = stepContent.querySelector('[data-qa="cell-left-side"]');
+      if (stepCellLeft) {
+        const stepTexts = stepCellLeft.querySelectorAll('[data-qa="cell-text-content"]');
+        if (stepTexts.length >= 1) {
+          job.position = (stepTexts[0].textContent || "").trim();
+        }
+        if (stepTexts.length >= 2) {
+          let rawPeriod = (stepTexts[1].textContent || "").trim();
+          rawPeriod = rawPeriod.replace(/\s*\(\d[^)]+\)$/, "").trim();
+          job.period = rawPeriod;
+        }
+      }
+      const fullStepText = (stepContent.textContent || "").trim();
+      let desc = fullStepText;
+      const posText = job.position || "";
+      const periodText = job.period || "";
+      if (posText && desc.startsWith(posText)) {
+        desc = desc.substring(posText.length);
+      }
+      if (periodText && desc.startsWith(periodText)) {
+        desc = desc.substring(periodText.length);
+      }
+      desc = desc.trim();
+      if (desc.length > 20) {
+        job.description = desc;
+      }
+    }
+    return job.company || job.position ? job : null;
+  }
+  function parseEducationFromDoc(eduCard) {
+    const eduEntries = [];
+    const eduCells = eduCard.querySelectorAll('[data-qa="cell-left-side"]');
+    eduCells.forEach((cell) => {
+      const edu = parseEduCell(cell);
+      if (edu) eduEntries.push(edu);
+    });
+    if (eduEntries.length === 0) {
+      Array.from(eduCard.children).forEach((child) => {
+        const edu = parseEduChild(child);
+        if (edu) eduEntries.push(edu);
+      });
+    }
+    if (eduEntries.length === 0) {
+      const fullText = (eduCard.textContent || "").trim();
+      const lines = fullText.split(/[\n\r]+/).map((l) => l.trim()).filter((l) => l.length > 3);
+      for (const line of lines) {
+        if (/[А-Яа-яЁё]{3,}/.test(line) && line.length < 200) {
+          const yearMatch = line.match(/(\d{4})/);
+          eduEntries.push({
+            name: line.replace(/\d{4}/g, "").trim().substring(0, 100),
+            year: yearMatch ? yearMatch[1] : ""
+          });
+        }
+      }
+    }
+    return eduEntries;
+  }
+  function parseEduCell(cell) {
+    const edu = {};
+    const cellTexts = cell.querySelectorAll('[data-qa="cell-text-content"]');
+    cellTexts.forEach((ct) => {
+      const t = (ct.textContent || "").trim();
+      if (!t || t.length < 2) return;
+      if (EDU_UI_TEXTS.test(t)) return;
+      if (!edu.name) {
+        edu.name = t;
+      } else if (!edu.description) {
+        edu.description = t;
+      } else if (!edu.year && /\d{4}/.test(t)) {
+        edu.year = t.match(/\d{4}/)?.[0] || t;
+      }
+    });
+    if (edu.name && !EDU_UI_TEXTS.test(edu.name) && edu.name.length > 3) {
+      return edu;
+    }
+    return null;
+  }
+  function parseEduChild(child) {
+    const edu = {};
+    const linkEl = child.querySelector("a");
+    if (linkEl) {
+      const t = (linkEl.textContent || "").trim();
+      if (!EDU_UI_TEXTS.test(t)) edu.name = t;
+    }
+    if (!edu.name) {
+      const textEls = child.querySelectorAll("span, div, p");
+      for (const el of textEls) {
+        const t = (el.textContent || "").trim();
+        if (t.length > 3 && /[А-Яа-яЁё]/.test(t) && !/^\d/.test(t) && !/\d{4}/.test(t) && !EDU_UI_TEXTS.test(t)) {
+          edu.name = t;
+          break;
+        }
+      }
+    }
+    const spans = child.querySelectorAll("span, div");
+    for (const sp of spans) {
+      const t = (sp.textContent || "").trim();
+      if (/^\d{4}$/.test(t) || /\d{4}/.test(t) && t.length < 15) {
+        edu.year = t;
+        break;
+      }
+    }
+    if (edu.name && !EDU_UI_TEXTS.test(edu.name) && edu.name.length > 2) {
+      return edu;
+    }
+    return null;
+  }
+  function parsePersonalDataFromDoc(doc, titleEl, dbg, resume) {
+    const personalText = [];
+    const posCard = doc.querySelector('[data-qa="resume-position-card"]');
+    if (posCard) {
+      posCard.querySelectorAll("span, div, p, a").forEach((el) => {
+        const t = (el.textContent || "").trim();
+        if (t && t.length > 0 && t.length < 200) personalText.push(t);
+      });
+    }
+    const titleContainer = titleEl ? titleEl.closest("div[data-qa], section") || titleEl.parentElement : null;
+    if (titleContainer) {
+      titleContainer.querySelectorAll("span, div, p, a").forEach((el) => {
+        if (el === titleEl || titleEl.contains(el)) return;
+        const t = (el.textContent || "").trim();
+        if (t && t.length > 0 && t.length < 200 && !personalText.includes(t)) personalText.push(t);
+      });
+    }
+    for (const t of personalText) {
+      if (!resume.gender) {
+        for (const gp of GENDER_PATTERNS) {
+          const m = t.match(gp);
+          if (m) {
+            resume.gender = dbg("resumeGender", m[0]);
+            break;
+          }
+        }
+      }
+      if (!resume.age) {
+        const m = t.match(AGE_PATTERN) || t.match(AGE_PATTERN2);
+        if (m) {
+          resume.age = dbg("resumeAge", m[1] + " \u043B\u0435\u0442");
+        }
+      }
+      if (!resume.address && t.length > 3) {
+        const isGender = GENDER_PATTERNS.some((p) => p.test(t));
+        const isAge = AGE_PATTERN.test(t) || AGE_PATTERN2.test(t);
+        if (!isGender && !isAge && !t.includes("\u0440\u0443\u0431") && !t.includes("USD") && !t.includes("\u0437/\u043F") && !t.includes("\u0443\u0440\u043E\u0432\u0435\u043D\u044C") && !t.includes("\u0434\u043E\u0445\u043E\u0434") && t !== resume.salary && t !== resume.title) {
+          if (/[А-Яа-яЁё]{2,}/.test(t) && t.length < 80) {
+            resume.address = dbg("resumeAddress", t);
+          }
+        }
+      }
+    }
+  }
+  var EDU_UI_TEXTS, GENDER_PATTERNS, AGE_PATTERN, AGE_PATTERN2;
+  var init_resume_fetch_parse = __esm({
+    "src/lib/resume-fetch-parse.js"() {
+      init_resume_fetch_helpers();
+      EDU_UI_TEXTS = /^(посмотреть всё|редактировать|образование|доп\.? образование|высшее|среднее|среднее специальное|добавить|добавить образование|среднее профессиональное)$/i;
+      GENDER_PATTERNS = [/\bмужчина\b/i, /\bженщина\b/i, /\bмужской\b/i, /\bженский\b/i, /\bmale\b/i, /\bfemale\b/i];
+      AGE_PATTERN = /(?:полных\s*)?(\d{2})\s*(?:лет|год|года)/i;
+      AGE_PATTERN2 = /(\d{2})\s*years?\s*old/i;
+    }
+  });
+
+  // src/lib/resume-fetch-experience.js
+  function parseExperienceFromDocStrategies1to3(doc, resume) {
+    const allCards = doc.querySelectorAll('[data-qa="profile-experience-company-card"]');
+    const seen = /* @__PURE__ */ new Set();
+    const uniqueCards = [];
+    allCards.forEach((c) => {
+      if (!seen.has(c)) {
+        seen.add(c);
+        uniqueCards.push(c);
+      }
+    });
+    const entries = [];
+    const usedStepperElements = /* @__PURE__ */ new Set();
+    uniqueCards.forEach((card) => {
+      const job = parseCompanyCardFromDoc(card);
+      if (job) entries.push(job);
+      const stepEl = card.querySelector('[data-qa="magritte-stepper-step-content"]');
+      if (stepEl) usedStepperElements.add(stepEl);
+    });
+    const expCard = doc.querySelector('[data-qa="resume-list-card-experience"]');
+    if (expCard) {
+      resume._debug.found.push("experienceBlock");
+      const stepperItems = expCard.querySelectorAll('[data-qa="magritte-stepper-step-content"]');
+      const alreadyParsed = entries.length;
+      stepperItems.forEach((step) => {
+        if (usedStepperElements.has(step)) return;
+        let parentCard = step.closest('[data-qa="profile-experience-company-card"]');
+        if (parentCard && uniqueCards.includes(parentCard)) return;
+        const cellLeft = step.querySelector('[data-qa="cell-left-side"]');
+        if (!cellLeft) return;
+        const texts = cellLeft.querySelectorAll('[data-qa="cell-text-content"]');
+        const job = {};
+        if (texts.length >= 1) job.position = (texts[0].textContent || "").trim();
+        if (texts.length >= 2) job.period = (texts[1].textContent || "").trim().replace(/\s*\(\d[^)]+\)$/, "").trim();
+        if (job.position || job.period) entries.push(job);
+      });
+      const stepperAdded = entries.length - alreadyParsed;
+      if (stepperAdded > 0) {
+        resume._debug.found.push("experience (stepper supplement): +" + stepperAdded);
+      }
+      if (entries.length === 0) {
+        const allStepperItems = expCard.querySelectorAll('[data-qa="magritte-stepper-step-content"]');
+        allStepperItems.forEach((step) => {
+          const cellLeft = step.querySelector('[data-qa="cell-left-side"]');
+          if (!cellLeft) return;
+          const texts = cellLeft.querySelectorAll('[data-qa="cell-text-content"]');
+          const job = {};
+          if (texts.length >= 1) job.position = (texts[0].textContent || "").trim();
+          if (texts.length >= 2) job.period = (texts[1].textContent || "").trim().replace(/\s*\(\d[^)]+\)$/, "").trim();
+          if (job.position) entries.push(job);
+        });
+        if (entries.length > 0) {
+          resume._debug.found.push("experience (stepper full fallback): " + entries.length);
+        }
+      }
+    } else {
+      resume._debug.missing.push("experienceBlock (no container, " + uniqueCards.length + " cards)");
+    }
+    return entries;
+  }
+  var fetchLog2;
+  var init_resume_fetch_experience = __esm({
+    "src/lib/resume-fetch-experience.js"() {
+      init_anti_hallucination();
+      init_resume_fetch_parse();
+      fetchLog2 = createLogger("ResumeFetch");
+    }
+  });
+
+  // src/lib/resume-fetch-strategy4-text.js
+  function parseExperienceFromHtmlText(html, alreadyFound) {
+    const MONTHS = "\u044F\u043D\u0432\u0430\u0440[\u044C\u0435\u044F]|\u0444\u0435\u0432\u0440\u0430\u043B[\u044C\u044C\u044F]|\u043C\u0430\u0440\u0442[\u0430\u0435]?|\u0430\u043F\u0440\u0435\u043B[\u044C\u044C\u044F]|\u043C\u0430[\u0439\u0438\u044F]|\u0438\u044E\u043D[\u044C\u044C\u044F]|\u0438\u044E\u043B[\u044C\u044C\u044F]|\u0430\u0432\u0433\u0443\u0441\u0442[\u0430\u0435]?|\u0441\u0435\u043D\u0442\u044F\u0431\u0440[\u044C\u044C\u044F]|\u043E\u043A\u0442\u044F\u0431\u0440[\u044C\u044C\u044F]|\u043D\u043E\u044F\u0431\u0440[\u044C\u044C\u044F]|\u0434\u0435\u043A\u0430\u0431\u0440[\u044C\u044C\u044F]";
+    const DATE_RANGE_RE = new RegExp(
+      "(" + MONTHS + ")\\s*\\d{4}\\s*[\u2014\\-\u2013]\\s*(?:(" + MONTHS + ")\\s*\\d{4}|\u043D\u0430\u0441\u0442\u043E\u044F\u0449\u0435\u0435\\s*\u0432\u0440\u0435\u043C\u044F|\u043F\u043E\\s+\u043D\u0430\u0441\u0442\u043E\u044F\u0449\u0435\u0435\\s+\u0432\u0440\u0435\u043C\u044F)",
+      "gi"
+    );
+    const NUM_DATE_RE = /\d{2}\.\d{4}\s*[—\-–]\s*(?:\d{2}\.\d{4}|настоящее\s*время|по\s+настоящее\s+время)/gi;
+    const allDateRanges = [];
+    let match;
+    while ((match = DATE_RANGE_RE.exec(html)) !== null) {
+      allDateRanges.push({ index: match.index, text: match[0] });
+    }
+    while ((match = NUM_DATE_RE.exec(html)) !== null) {
+      allDateRanges.push({ index: match.index, text: match[0] });
+    }
+    fetchLog3.info("Text pattern: found " + allDateRanges.length + " date ranges in FULL HTML");
+    if (allDateRanges.length <= alreadyFound) {
+      fetchLog3.info("Text pattern: no more date ranges than already found (" + alreadyFound + ")");
+      return [];
+    }
+    const expStartPatterns = [
+      /data-qa="resume-list-card-experience"/i,
+      /<h[23][^>]*>.*?опыт\s+работы.*?<\/h[23]>/i,
+      /data-qa="resume-block-experience"/i,
+      /Опыт\s+работы/i
+    ];
+    const expEndPatterns = [
+      /data-qa="resume-list-card-education"/i,
+      /data-qa="resume-block-education"/i,
+      /<h[23][^>]*>.*?образование.*?<\/h[23]>/i,
+      /Образование/i
+    ];
+    let expStart = -1;
+    for (const pat of expStartPatterns) {
+      const m = html.match(pat);
+      if (m) {
+        expStart = m.index;
+        break;
+      }
+    }
+    let expEnd = html.length;
+    if (expStart !== -1) {
+      for (const pat of expEndPatterns) {
+        const m = html.match(pat);
+        if (m && m.index > expStart && m.index < expEnd) {
+          expEnd = m.index;
+        }
+      }
+    }
+    fetchLog3.info("Text pattern: experience section " + expStart + "-" + expEnd);
+    const expDateRanges = allDateRanges.filter((dr) => {
+      if (expStart === -1) return true;
+      return dr.index >= expStart - 200 && dr.index <= expEnd + 200;
+    });
+    fetchLog3.info("Text pattern: " + expDateRanges.length + " date ranges in experience section");
+    if (expDateRanges.length <= alreadyFound) {
+      return [];
+    }
+    const entries = [];
+    for (let i = 0; i < expDateRanges.length; i++) {
+      const dr = expDateRanges[i];
+      const searchBase = expStart !== -1 ? html.substring(expStart, expEnd) : html;
+      const searchOffset = expStart !== -1 ? expStart : 0;
+      const relIndex = dr.index - searchOffset;
+      const lookBack = searchBase.substring(Math.max(0, relIndex - 800), relIndex);
+      const nextIdx = i + 1 < expDateRanges.length ? expDateRanges[i + 1].index - searchOffset : searchBase.length;
+      const lookForward = searchBase.substring(relIndex + dr.text.length, Math.min(nextIdx, relIndex + dr.text.length + 800));
+      const textBefore = stripHtmlTags(lookBack);
+      const textAfter = stripHtmlTags(lookForward);
+      const job = {};
+      job.period = dr.text;
+      const linesBefore = textBefore.split(/\n/).map((l) => l.trim()).filter((l) => l.length > 3);
+      for (let j = linesBefore.length - 1; j >= 0; j--) {
+        const line = linesBefore[j];
+        if (/^\d{4}/.test(line) || /\d+\s*(год|лет|мес)/.test(line)) continue;
+        if (/^(Показать|Смотреть|Развернуть|Ещё|Все)/i.test(line)) continue;
+        if (line.length < 3 || line.length > 200) continue;
+        job.position = line;
+        break;
+      }
+      if (job.position) {
+        const posIdx = linesBefore.lastIndexOf(job.position);
+        for (let j = posIdx - 1; j >= Math.max(0, posIdx - 4); j--) {
+          const line = linesBefore[j];
+          if (/^\d{4}/.test(line) || /\d+\s*(год|лет|мес)/.test(line)) continue;
+          if (/^(Показать|Смотреть|Развернуть|Ещё|Все)/i.test(line)) continue;
+          if (line.length < 3 || line.length > 200) continue;
+          if (line === job.position) continue;
+          job.company = line;
+          break;
+        }
+      }
+      const linesAfter = textAfter.split(/\n/).map((l) => l.trim()).filter((l) => l.length > 10);
+      if (linesAfter.length > 0 && linesAfter[0].length > 20) {
+        job.description = linesAfter[0].substring(0, 300);
+      }
+      if (job.position || job.company || job.period) {
+        entries.push(job);
+      }
+    }
+    return entries;
+  }
+  function stripHtmlTags(html) {
+    return html.replace(/<br\s*\/?>/gi, "\n").replace(/<\/p>/gi, "\n").replace(/<\/div>/gi, "\n").replace(/<\/li>/gi, "\n").replace(/<[^>]+>/g, "").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/\s+/g, " ").trim();
+  }
+  var fetchLog3;
+  var init_resume_fetch_strategy4_text = __esm({
+    "src/lib/resume-fetch-strategy4-text.js"() {
+      init_anti_hallucination();
+      fetchLog3 = createLogger("ResumeFetch");
+    }
+  });
+
+  // src/lib/resume-fetch-json-utils.js
+  function extractJsonArray(text, startIdx) {
+    if (text[startIdx] !== "[") return null;
+    let depth = 0;
+    let inString = false;
+    let escapeNext = false;
+    for (let i = startIdx; i < text.length; i++) {
+      const ch = text[i];
+      if (escapeNext) {
+        escapeNext = false;
+        continue;
+      }
+      if (ch === "\\") {
+        escapeNext = true;
+        continue;
+      }
+      if (ch === '"' && !escapeNext) {
+        inString = !inString;
+        continue;
+      }
+      if (inString) continue;
+      if (ch === "[") depth++;
+      if (ch === "]") depth--;
+      if (depth === 0) return text.substring(startIdx, i + 1);
+    }
+    return null;
+  }
+  function extractJsonArrayFromHtml(html, startIdx) {
+    if (startIdx >= html.length || html[startIdx] !== "[") return null;
+    let depth = 0;
+    let inString = false;
+    for (let i = startIdx; i < html.length && i < startIdx + 5e5; i++) {
+      const ch = html[i];
+      if (ch === '"' && (i === 0 || html[i - 1] !== "\\")) {
+        inString = !inString;
+        continue;
+      }
+      if (inString) continue;
+      if (ch === "[") depth++;
+      if (ch === "]") depth--;
+      if (depth === 0) return html.substring(startIdx, i + 1);
+    }
+    return null;
+  }
+  function buildEntryFromApiItem(item) {
+    const job = {};
+    if (item.position) job.position = item.position;
+    if (item.name && !job.position) job.position = item.name;
+    if (item.company) job.company = typeof item.company === "string" ? item.company : item.company?.name || "";
+    if (item.organization && !job.company) job.company = item.organization;
+    if (item.start || item.startDate) {
+      const start = item.start || item.startDate;
+      const isCurrent = !!(item.current || item.untilNow);
+      const rawEnd = item.end || item.endDate;
+      const end = rawEnd || (isCurrent ? "\u043D\u0430\u0441\u0442\u043E\u044F\u0449\u0435\u0435 \u0432\u0440\u0435\u043C\u044F" : "");
+      if (typeof start === "string") {
+        job.period = start + " \u2014 " + end;
+      } else if (start && start.year) {
+        const months = ["\u044F\u043D\u0432\u0430\u0440\u044C", "\u0444\u0435\u0432\u0440\u0430\u043B\u044C", "\u043C\u0430\u0440\u0442", "\u0430\u043F\u0440\u0435\u043B\u044C", "\u043C\u0430\u0439", "\u0438\u044E\u043D\u044C", "\u0438\u044E\u043B\u044C", "\u0430\u0432\u0433\u0443\u0441\u0442", "\u0441\u0435\u043D\u0442\u044F\u0431\u0440\u044C", "\u043E\u043A\u0442\u044F\u0431\u0440\u044C", "\u043D\u043E\u044F\u0431\u0440\u044C", "\u0434\u0435\u043A\u0430\u0431\u0440\u044C"];
+        const startStr = (start.month ? months[start.month - 1] + " " : "") + start.year;
+        let endStr = "\u043D\u0430\u0441\u0442\u043E\u044F\u0449\u0435\u0435 \u0432\u0440\u0435\u043C\u044F";
+        if (end && typeof end === "object" && end.year) {
+          endStr = (end.month ? months[end.month - 1] + " " : "") + end.year;
+        } else if (end && typeof end === "string" && end.length > 0) {
+          endStr = end;
+        }
+        job.period = startStr + " \u2014 " + endStr;
+      }
+    }
+    if (item.description) job.description = item.description;
+    return job;
+  }
+  function findExperienceInObject(obj, depth) {
+    if (depth > 6 || !obj || typeof obj !== "object") return null;
+    if (Array.isArray(obj)) {
+      if (obj.length > 0 && obj[0] && typeof obj[0] === "object") {
+        const first = obj[0];
+        if (first.position || first.company || first.startDate || first.start || first.organization) {
+          const entries = [];
+          obj.forEach((item) => {
+            const job = buildEntryFromApiItem(item);
+            if (job.position || job.company) entries.push(job);
+          });
+          return entries.length > 0 ? entries : null;
+        }
+      }
+      return null;
+    }
+    const priorityKeys = ["experience", "jobs", "positions", "career", "workHistory"];
+    for (const key of priorityKeys) {
+      if (obj[key]) {
+        const result = findExperienceInObject(obj[key], depth + 1);
+        if (result) return result;
+      }
+    }
+    for (const key of Object.keys(obj)) {
+      if (priorityKeys.includes(key)) continue;
+      const result = findExperienceInObject(obj[key], depth + 1);
+      if (result) return result;
+    }
+    return null;
+  }
+  var fetchLog4;
+  var init_resume_fetch_json_utils = __esm({
+    "src/lib/resume-fetch-json-utils.js"() {
+      init_anti_hallucination();
+      fetchLog4 = createLogger("ResumeFetch");
+    }
+  });
+
+  // src/lib/resume-fetch-strategy5-scanners.js
+  function extractExperienceFromStructuredJson(text) {
+    const entries = [];
+    const expMatch = text.match(/"experience"\s*:\s*\[/);
+    if (expMatch) {
+      const startIdx = text.indexOf("[", expMatch.index + 12);
+      if (startIdx !== -1) {
+        const jsonStr = extractJsonArray(text, startIdx);
+        if (jsonStr) {
+          try {
+            const expArray = JSON.parse(jsonStr);
+            if (Array.isArray(expArray)) {
+              expArray.forEach((item) => {
+                const job = buildEntryFromApiItem(item);
+                if (job.position || job.company) entries.push(job);
+              });
+              if (entries.length > 0) return entries;
+            }
+          } catch (e) {
+            fetchLog5.info("Strategy 5: structured JSON parse failed: " + e.message);
+          }
+        }
+      }
+    }
+    return entries;
+  }
+  function extractExperienceFromArray(text) {
+    const entries = [];
+    let searchFrom = 0;
+    while (searchFrom < text.length) {
+      const arrStart = text.indexOf("[{", searchFrom);
+      if (arrStart === -1) break;
+      const jsonStr = extractJsonArray(text, arrStart);
+      if (!jsonStr || jsonStr.length < 50 || jsonStr.length > 2e5) {
+        searchFrom = arrStart + 2;
+        continue;
+      }
+      try {
+        const arr = JSON.parse(jsonStr);
+        if (!Array.isArray(arr) || arr.length === 0) {
+          searchFrom = arrStart + 2;
+          continue;
+        }
+        const firstItem = arr[0];
+        if (firstItem && typeof firstItem === "object") {
+          const hasExpFields = firstItem.position || firstItem.company || firstItem.startDate || firstItem.start || firstItem.organization || firstItem.name && (firstItem.start || firstItem.startDate);
+          if (hasExpFields) {
+            arr.forEach((item) => {
+              const job = buildEntryFromApiItem(item);
+              if (job.position || job.company) entries.push(job);
+            });
+            if (entries.length > 0) return entries;
+          }
+        }
+      } catch (e) {
+      }
+      searchFrom = arrStart + 2;
+    }
+    return entries;
+  }
+  function deepScanForExperience(html) {
+    const entries = [];
+    const yearArrayPattern = /\[\{[^]]*?"year"\s*:\s*\d{4}[^]]*?\}/g;
+    let match;
+    while ((match = yearArrayPattern.exec(html)) !== null) {
+      const startIdx = match.index;
+      let arrStart = startIdx;
+      while (arrStart > 0 && html[arrStart - 1] !== "[") arrStart--;
+      if (html[arrStart] !== "[") continue;
+      const jsonStr = extractJsonArrayFromHtml(html, arrStart);
+      if (!jsonStr) continue;
+      try {
+        const arr = JSON.parse(jsonStr);
+        if (!Array.isArray(arr) || arr.length === 0) continue;
+        const hasDates = arr.some(
+          (item) => item.year || item.start?.year || item.startDate?.year || item.end?.year || item.endDate?.year
+        );
+        if (!hasDates) continue;
+        const hasExpFields = arr.some(
+          (item) => item.position || item.company || item.name || item.organization || item.title
+        );
+        if (!hasExpFields) continue;
+        arr.forEach((item) => {
+          const job = buildEntryFromApiItem(item);
+          if (job.position || job.company) entries.push(job);
+        });
+        if (entries.length > 0) return entries;
+      } catch (e) {
+      }
+    }
+    return entries;
+  }
+  var fetchLog5;
+  var init_resume_fetch_strategy5_scanners = __esm({
+    "src/lib/resume-fetch-strategy5-scanners.js"() {
+      init_anti_hallucination();
+      init_resume_fetch_json_utils();
+      fetchLog5 = createLogger("ResumeFetch");
+    }
+  });
+
+  // src/lib/resume-fetch-strategy5-scripts.js
+  function parseExperienceFromScripts(doc, html) {
+    const entries = [];
+    const scripts = doc.querySelectorAll('script[type="application/json"], script:not([src])');
+    for (const script of scripts) {
+      const text = script.textContent || "";
+      if (text.length < 100) continue;
+      if (!/experience|работ[аеы]|компани|должност|career|position/i.test(text)) continue;
+      fetchLog6.info("Strategy 5: examining script (" + text.length + " chars, first 300: " + text.substring(0, 300).replace(/\n/g, " "));
+      const fromStructured = extractExperienceFromStructuredJson(text);
+      if (fromStructured.length > 0) {
+        fetchLog6.info("Strategy 5: found " + fromStructured.length + " from structured JSON");
+        return fromStructured;
+      }
+      const fromArray = extractExperienceFromArray(text);
+      if (fromArray.length > 0) {
+        fetchLog6.info("Strategy 5: found " + fromArray.length + " from JSON array scan");
+        return fromArray;
+      }
+    }
+    const statePatterns = [
+      /window\.__INITIAL_STATE__\s*=\s*(\{[\s\S]+?\});?\s*<\/script>/,
+      /window\.__PRELOADED_STATE__\s*=\s*(\{[\s\S]+?\});?\s*<\/script>/,
+      /window\.__NEXT_DATA__\s*=\s*(\{[\s\S]+?\});?\s*<\/script>/
+    ];
+    for (const pat of statePatterns) {
+      const m = html.match(pat);
+      if (m) {
+        try {
+          const state = JSON.parse(m[1]);
+          const exp = findExperienceInObject(state, 0);
+          if (exp && exp.length > 0) {
+            fetchLog6.info("Strategy 5: found " + exp.length + " from window state");
+            return exp;
+          }
+        } catch (e) {
+          fetchLog6.info("Strategy 5: state JSON parse failed: " + e.message);
+        }
+      }
+    }
+    const storePatterns = [
+      /"resumeStore"\s*:\s*(\{[\s\S]+?\})\s*[,}]/,
+      /"resume"\s*:\s*(\{[\s\S]{0,50000}?"experience"\s*:\s*\[[\s\S]+?\])\s*[,}]/
+    ];
+    for (const pat of storePatterns) {
+      const m = html.match(pat);
+      if (m) {
+        try {
+          const store = JSON.parse(m[1]);
+          const exp = findExperienceInObject(store, 0);
+          if (exp && exp.length > 0) {
+            fetchLog6.info("Strategy 5: found " + exp.length + " from store pattern");
+            return exp;
+          }
+        } catch (e) {
+          fetchLog6.info("Strategy 5: store JSON parse failed: " + e.message);
+        }
+      }
+    }
+    const deepScan = deepScanForExperience(html);
+    if (deepScan.length > 0) {
+      fetchLog6.info("Strategy 5: found " + deepScan.length + " from deep scan");
+      return deepScan;
+    }
+    return entries;
+  }
+  var fetchLog6;
+  var init_resume_fetch_strategy5_scripts = __esm({
+    "src/lib/resume-fetch-strategy5-scripts.js"() {
+      init_anti_hallucination();
+      init_resume_fetch_json_utils();
+      init_resume_fetch_strategy5_scanners();
+      fetchLog6 = createLogger("ResumeFetch");
+    }
+  });
+
+  // src/lib/resume-fetch-strategy6-iframe.js
+  async function fetchExpandedExperienceViaIframe(resumeUrl, currentCount) {
+    fetchLog7.info("Strategy 6 iframe: loading " + resumeUrl);
+    const iframe = document.createElement("iframe");
+    iframe.style.cssText = "position:fixed;top:-9999px;left:-9999px;width:1280px;height:800px;opacity:0;pointer-events:none;border:none;";
+    iframe.setAttribute("aria-hidden", "true");
+    iframe.setAttribute("tabindex", "-1");
+    iframe.src = resumeUrl;
+    document.body.appendChild(iframe);
+    try {
+      await new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error("iframe load timeout (15s)")), 15e3);
+        iframe.addEventListener("load", () => {
+          clearTimeout(timeout);
+          resolve();
+        });
+        iframe.addEventListener("error", () => {
+          clearTimeout(timeout);
+          reject(new Error("iframe load error"));
+        });
+      });
+      await new Promise((r) => setTimeout(r, 4e3));
+      const iframeDoc = iframe.contentDocument;
+      if (!iframeDoc) {
+        throw new Error("Cannot access iframe document (cross-origin or blocked)");
+      }
+      const iframeDiag = {};
+      try {
+        iframeDiag.finalUrl = iframe.contentWindow?.location?.href || "(no access)";
+      } catch (e) {
+        iframeDiag.finalUrl = "(cross-origin blocked: " + e.message + ")";
+      }
+      iframeDiag.title = iframeDoc.title || "(no title)";
+      iframeDiag.bodyTextLen = iframeDoc.body ? (iframeDoc.body.textContent || "").length : 0;
+      iframeDiag.bodyTextSnippet = iframeDoc.body ? normalizeWs(iframeDoc.body.textContent || "").substring(0, 1500) : "(no body)";
+      const allQa = iframeDoc.querySelectorAll("[data-qa]");
+      iframeDiag.dataQaList = Array.from(allQa).slice(0, 50).map((el) => {
+        const qa = el.getAttribute("data-qa") || "";
+        const text = normalizeWs(el.textContent || "").substring(0, 60);
+        return qa + (text ? '="' + text + '"' : "");
+      });
+      const allActions = iframeDoc.querySelectorAll('button, a, [role="button"]');
+      iframeDiag.actionTexts = Array.from(allActions).slice(0, 30).map((el) => {
+        return normalizeWs(el.textContent || "").substring(0, 50);
+      }).filter((t) => t.length > 2);
+      fetchLog7.info("[VIS-IFRAME-DIAG] url=" + iframeDiag.finalUrl);
+      fetchLog7.info('[VIS-IFRAME-DIAG] title="' + iframeDiag.title + '"');
+      fetchLog7.info("[VIS-IFRAME-DIAG] bodyLen=" + iframeDiag.bodyTextLen);
+      fetchLog7.info("[VIS-IFRAME-DIAG] bodySnippet=" + iframeDiag.bodyTextSnippet.substring(0, 500));
+      fetchLog7.info("[VIS-IFRAME-DIAG] dataQa count=" + allQa.length + ", sample: " + JSON.stringify(iframeDiag.dataQaList.slice(0, 20)));
+      fetchLog7.info("[VIS-IFRAME-DIAG] actions: " + JSON.stringify(iframeDiag.actionTexts));
+      const iframeVisResult = detectVisibilityFromIframeDoc(iframeDoc);
+      iframeVisResult.iframeDiag = iframeDiag;
+      fetchLog7.info("[VIS-DIAG] iframe visibility: " + iframeVisResult.visibility + " (trace: " + iframeVisResult.trace.join(" \u2192 ") + ")");
+      const preCards = iframeDoc.querySelectorAll('[data-qa="profile-experience-company-card"]');
+      const preSteppers = iframeDoc.querySelectorAll('[data-qa="magritte-stepper-step-content"]');
+      fetchLog7.info("Strategy 6 iframe: before expand \u2014 " + preCards.length + " company-cards, " + preSteppers.length + " stepper-items");
+      const expandButtons = iframeDoc.querySelectorAll('[data-qa="profile-experience-viewAll"], button');
+      let clicked = 0;
+      expandButtons.forEach((btn) => {
+        const text = (btn.textContent || "").trim().toLowerCase();
+        if (text.includes("\u0440\u0430\u0437\u0432\u0435\u0440\u043D\u0443\u0442\u044C") || text.includes("\u043F\u043E\u043A\u0430\u0437\u0430\u0442\u044C \u0432\u0441\u0435") || text.includes("\u043F\u043E\u043A\u0430\u0437\u0430\u0442\u044C \u0435\u0449\u0451") || text.includes("\u043F\u043E\u0441\u043C\u043E\u0442\u0440\u0435\u0442\u044C \u0432\u0441\u0451") || text.includes("\u043F\u043E\u0441\u043C\u043E\u0442\u0440\u0435\u0442\u044C \u0432\u0441\u0435") || text.includes("expand")) {
+          try {
+            btn.click();
+            clicked++;
+          } catch (e) {
+          }
+        }
+      });
+      fetchLog7.info("Strategy 6 iframe: clicked " + clicked + " expand buttons");
+      if (clicked > 0) {
+        await new Promise((r) => setTimeout(r, 2e3));
+      }
+      const postCards = iframeDoc.querySelectorAll('[data-qa="profile-experience-company-card"]');
+      const postSteppers = iframeDoc.querySelectorAll('[data-qa="magritte-stepper-step-content"]');
+      fetchLog7.info("Strategy 6 iframe: after expand \u2014 " + postCards.length + " company-cards, " + postSteppers.length + " stepper-items");
+      const entries = parseExperienceFromIframeDoc(iframeDoc);
+      fetchLog7.info("Strategy 6 iframe: parsed " + entries.length + " experience entries");
+      return { entries, iframeVis: iframeVisResult.visibility, iframeVisTrace: iframeVisResult.trace, iframeDiag: iframeVisResult.iframeDiag };
+    } finally {
+      try {
+        if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+      } catch (e) {
+      }
+    }
+  }
+  function detectVisibilityFromIframeDoc(iframeDoc) {
+    const trace = [];
+    const diagInfo = { buttons: [], visElements: [], hideElements: [] };
+    const visCard = iframeDoc.querySelector('[data-qa="resume-visibility-card"]');
+    if (visCard) {
+      const cardText = normalizeWs(visCard.textContent || "").toLowerCase();
+      fetchLog7.info('[VIS-IFRAME] resume-visibility-card text="' + cardText.substring(0, 100) + '"');
+      if (cardText.includes("\u043D\u0435 \u0432\u0438\u0434\u043D\u043E \u043D\u0438\u043A\u043E\u043C\u0443") || cardText.includes("\u043D\u0435\xA0\u0432\u0438\u0434\u043D\u043E \u043D\u0438\u043A\u043E\u043C\u0443")) {
+        trace.push('iframe-S0:visibility-card="\u043D\u0435 \u0432\u0438\u0434\u043D\u043E \u043D\u0438\u043A\u043E\u043C\u0443" \u2192 HIDDEN');
+        return { visibility: VISIBILITY_HIDDEN, trace };
+      }
+      if (cardText.includes("\u0432\u0438\u0434\u043D\u043E \u0432\u0441\u0435\u043C") || cardText.includes("\u0432\u0438\u0434\u043D\u043E\xA0\u0432\u0441\u0435\u043C")) {
+        trace.push('iframe-S0:visibility-card="\u0432\u0438\u0434\u043D\u043E \u0432\u0441\u0435\u043C" \u2192 VISIBLE');
+        return { visibility: VISIBILITY_VISIBLE, trace };
+      }
+      trace.push('iframe-S0:visibility-card-unknown-text="' + cardText.substring(0, 60) + '"');
+    } else {
+      trace.push("iframe-S0:no-visibility-card");
+    }
+    const allButtons = iframeDoc.querySelectorAll('button, a, [role="button"]');
+    for (const btn of allButtons) {
+      const text = normalizeWs(btn.textContent || "").toLowerCase();
+      const qa = (btn.getAttribute("data-qa") || "").toLowerCase();
+      const href = (btn.getAttribute("href") || "").toLowerCase();
+      if (text.includes("\u0432\u0438\u0434\u0438\u043C") || text.includes("\u0441\u043A\u0440\u044B\u0442\u044C") || text.includes("\u0441\u043A\u0440\u044B\u0442") || qa.includes("visible") || qa.includes("hide") || qa.includes("hidden") || qa.includes("show") || href.includes("visible") || href.includes("hide")) {
+        diagInfo.buttons.push({ text: text.substring(0, 50), qa, href: href.substring(0, 60), tag: btn.tagName });
+      }
+    }
+    fetchLog7.info("[VIS-IFRAME] Diagnostic buttons: " + JSON.stringify(diagInfo.buttons));
+    for (const sel of VISIBILITY_HIDDEN_DATA_QA) {
+      const found = iframeDoc.querySelector(sel);
+      if (found) {
+        trace.push("iframe-S1:data-qa=" + sel + " \u2192 HIDDEN");
+        return { visibility: VISIBILITY_HIDDEN, trace };
+      }
+    }
+    trace.push("iframe-S1:no-data-qa-hidden");
+    for (const btn of allButtons) {
+      const text = normalizeWs(btn.textContent || "").toLowerCase();
+      const qa = (btn.getAttribute("data-qa") || "").toLowerCase();
+      if (text.includes("\u0441\u0434\u0435\u043B\u0430\u0442\u044C \u0432\u0438\u0434\u0438\u043C\u044B\u043C") || qa.includes("make-visible") || qa.includes("show-resume")) {
+        trace.push('iframe-S2:btn="\u0441\u0434\u0435\u043B\u0430\u0442\u044C \u0432\u0438\u0434\u0438\u043C\u044B\u043C" \u2192 HIDDEN');
+        return { visibility: VISIBILITY_HIDDEN, trace };
+      }
+      if (text.includes("\u0441\u043A\u0440\u044B\u0442\u044C \u0440\u0435\u0437\u044E\u043C\u0435") || qa.includes("hide-resume") || qa.includes("resume-action-hide")) {
+        trace.push('iframe-S2:btn="\u0441\u043A\u0440\u044B\u0442\u044C \u0440\u0435\u0437\u044E\u043C\u0435" \u2192 VISIBLE');
+        return { visibility: VISIBILITY_VISIBLE, trace };
+      }
+    }
+    trace.push("iframe-S2:no-key-buttons");
+    const bodyText = iframeDoc.body ? normalizeWs(iframeDoc.body.textContent || "") : "";
+    if (hasHiddenIndicator(bodyText)) {
+      trace.push("iframe-S3:body-has-hidden-indicator \u2192 HIDDEN");
+      return { visibility: VISIBILITY_HIDDEN, trace };
+    }
+    if (hasVisibleIndicator(bodyText)) {
+      trace.push("iframe-S3:body-has-visible-indicator \u2192 VISIBLE");
+      return { visibility: VISIBILITY_VISIBLE, trace };
+    }
+    trace.push("iframe-S3:body-no-indicators");
+    const hideLink = iframeDoc.querySelector('[data-qa="resume-action-hide"], [data-qa*="resume-hide"], a[data-qa*="hide-resume"]');
+    if (hideLink) {
+      trace.push("iframe-S4:hide-link-found \u2192 VISIBLE");
+      return { visibility: VISIBILITY_VISIBLE, trace };
+    }
+    trace.push("iframe-S4:no-hide-link");
+    const bodyLower = bodyText.toLowerCase();
+    if (bodyLower.includes("\u043D\u0435 \u0432\u0438\u0434\u044F\u0442") || bodyLower.includes("\u043D\u0435\xA0\u0432\u0438\u0434\u044F\u0442") || bodyLower.includes("\u043D\u0435 \u0432\u0438\u0434\u043D\u043E")) {
+      trace.push('iframe-S5:body-has-"\u043D\u0435 \u0432\u0438\u0434\u044F\u0442/\u043D\u0435 \u0432\u0438\u0434\u043D\u043E" \u2192 HIDDEN');
+      return { visibility: VISIBILITY_HIDDEN, trace };
+    }
+    if (bodyLower.includes("\u0432\u0438\u0434\u043D\u043E \u0432\u0441\u0435\u043C")) {
+      trace.push('iframe-S5:body-has-"\u0432\u0438\u0434\u043D\u043E \u0432\u0441\u0435\u043C" \u2192 VISIBLE');
+      return { visibility: VISIBILITY_VISIBLE, trace };
+    }
+    try {
+      const scripts = iframeDoc.querySelectorAll("script:not([src])");
+      for (const script of scripts) {
+        const t = script.textContent || "";
+        if (t.length < 50) continue;
+        if (/"hidden"\s*:\s*true/.test(t) || /"isHidden"\s*:\s*true/.test(t) || /"visibility"\s*:\s*"hidden"/.test(t) || /"status"\s*:\s*"hidden"/.test(t)) {
+          trace.push("iframe-S6:script-has-hidden-pattern \u2192 HIDDEN");
+          return { visibility: VISIBILITY_HIDDEN, trace };
+        }
+        if (/"hidden"\s*:\s*false/.test(t) || /"visibility"\s*:\s*"visible"/.test(t)) {
+          trace.push("iframe-S6:script-has-visible-pattern \u2192 VISIBLE");
+          return { visibility: VISIBILITY_VISIBLE, trace };
+        }
+      }
+    } catch (e) {
+      trace.push("iframe-S6:script-check-error(" + e.message.substring(0, 30) + ")");
+    }
+    trace.push("iframe-S6:no-script-patterns");
+    const notifSelectors = [
+      '[data-qa="resume-visibility-notification"]',
+      '[data-qa*="visibility-notification"]',
+      '[data-qa*="resume-notification"]',
+      '[class*="resume-hidden"]',
+      '[class*="resume-visibility"]',
+      ".resume-status-hidden"
+    ];
+    for (const sel of notifSelectors) {
+      const el = iframeDoc.querySelector(sel);
+      if (el) {
+        const elText = normalizeWs(el.textContent || "").toLowerCase();
+        if (elText.includes("\u043D\u0435 \u0432\u0438\u0434\u044F\u0442") || elText.includes("\u0441\u043A\u0440\u044B\u0442") || elText.includes("\u0441\u0434\u0435\u043B\u0430\u0442\u044C \u0432\u0438\u0434\u0438\u043C")) {
+          trace.push("iframe-S7:notification=" + sel + ' text="' + elText.substring(0, 40) + '" \u2192 HIDDEN');
+          return { visibility: VISIBILITY_HIDDEN, trace };
+        }
+      }
+    }
+    trace.push("iframe-S7:no-notification-hidden");
+    const actionLinks = iframeDoc.querySelectorAll('a[href*="visible"], a[href*="show"], a[href*="publish"]');
+    for (const link of actionLinks) {
+      const href = (link.getAttribute("href") || "").toLowerCase();
+      const linkText = normalizeWs(link.textContent || "").toLowerCase();
+      if (href.includes("publish") || href.includes("make_visible") || href.includes("show")) {
+        trace.push('iframe-S8:action-link href="' + href.substring(0, 60) + '" text="' + linkText.substring(0, 40) + '" \u2192 HIDDEN');
+        return { visibility: VISIBILITY_HIDDEN, trace };
+      }
+    }
+    trace.push("iframe-S8:no-action-links");
+    const visRelated = iframeDoc.querySelectorAll('[data-qa*="resume"], [data-qa*="visibility"]');
+    for (const el of visRelated) {
+      const elQa = el.getAttribute("data-qa") || "";
+      const elText = normalizeWs(el.textContent || "").substring(0, 60);
+      if (elText.includes("\u0441\u043A\u0440\u044B\u0442") || elText.includes("\u0432\u0438\u0434\u0438\u043C") || elText.includes("\u043D\u0435 \u0432\u0438\u0434\u044F\u0442")) {
+        diagInfo.visElements.push({ qa: elQa, text: elText });
+      }
+    }
+    if (diagInfo.visElements.length > 0) {
+      fetchLog7.info("[VIS-IFRAME] Related elements: " + JSON.stringify(diagInfo.visElements));
+    }
+    trace.push("\u2192 UNKNOWN");
+    fetchLog7.info("[VIS-IFRAME] All strategies exhausted. Buttons found: " + diagInfo.buttons.length + ", Related elements: " + diagInfo.visElements.length);
+    return { visibility: VISIBILITY_UNKNOWN, trace };
+  }
+  function parseExperienceFromIframeDoc(iframeDoc) {
+    const allCards = iframeDoc.querySelectorAll('[data-qa="profile-experience-company-card"]');
+    const seen = /* @__PURE__ */ new Set();
+    const uniqueCards = [];
+    allCards.forEach((c) => {
+      if (!seen.has(c)) {
+        seen.add(c);
+        uniqueCards.push(c);
+      }
+    });
+    const entries = [];
+    const usedStepperElements = /* @__PURE__ */ new Set();
+    uniqueCards.forEach((card) => {
+      const job = parseCompanyCardFromDoc(card);
+      if (job) entries.push(job);
+      const stepEl = card.querySelector('[data-qa="magritte-stepper-step-content"]');
+      if (stepEl) usedStepperElements.add(stepEl);
+    });
+    const expCard = iframeDoc.querySelector('[data-qa="resume-list-card-experience"]');
+    if (expCard) {
+      const stepperItems = expCard.querySelectorAll('[data-qa="magritte-stepper-step-content"]');
+      stepperItems.forEach((step) => {
+        if (usedStepperElements.has(step)) return;
+        let parentCard = step.closest('[data-qa="profile-experience-company-card"]');
+        if (parentCard && uniqueCards.includes(parentCard)) return;
+        const cellLeft = step.querySelector('[data-qa="cell-left-side"]');
+        if (!cellLeft) return;
+        const texts = cellLeft.querySelectorAll('[data-qa="cell-text-content"]');
+        const job = {};
+        if (texts.length >= 1) job.position = (texts[0].textContent || "").trim();
+        if (texts.length >= 2) job.period = (texts[1].textContent || "").trim().replace(/\s*\(\d[^)]+\)$/, "").trim();
+        if (job.position || job.period) entries.push(job);
+      });
+    }
+    if (entries.length === 0 && expCard) {
+      const allStepperItems = expCard.querySelectorAll('[data-qa="magritte-stepper-step-content"]');
+      allStepperItems.forEach((step) => {
+        const cellLeft = step.querySelector('[data-qa="cell-left-side"]');
+        if (!cellLeft) return;
+        const texts = cellLeft.querySelectorAll('[data-qa="cell-text-content"]');
+        const job = {};
+        if (texts.length >= 1) job.position = (texts[0].textContent || "").trim();
+        if (texts.length >= 2) job.period = (texts[1].textContent || "").trim().replace(/\s*\(\d[^)]+\)$/, "").trim();
+        if (job.position) entries.push(job);
+      });
+    }
+    return entries;
+  }
+  var fetchLog7;
+  var init_resume_fetch_strategy6_iframe = __esm({
+    "src/lib/resume-fetch-strategy6-iframe.js"() {
+      init_anti_hallucination();
+      init_resume_fetch_parse();
+      init_resume_constants();
+      fetchLog7 = createLogger("ResumeFetch");
+    }
+  });
+
+  // src/lib/resume-fetch-strategy6-api.js
+  async function tryApplicantApi(resumeId, currentCount) {
+    if (!resumeId) return [];
+    const apiUrls = [
+      { url: "https://hh.ru/applicant/api/v1/resumes/" + resumeId, source: "applicant-api-v1" },
+      { url: "https://hh.ru/applicant/api/resumes/" + resumeId, source: "applicant-api" },
+      { url: "https://hh.ru/applicant/resumes/api/get?resumeId=" + resumeId, source: "resumes-api-get" }
+    ];
+    for (const { url, source } of apiUrls) {
+      try {
+        fetchLog8.info("Strategy 6: trying API [" + source + "] " + url);
+        const resp = await fetch(url, {
+          credentials: "include",
+          headers: {
+            "Accept": "application/json",
+            "X-Requested-With": "XMLHttpRequest"
+          }
+        });
+        if (!resp.ok) {
+          fetchLog8.info("Strategy 6: [" + source + "] returned " + resp.status);
+          continue;
+        }
+        const contentType = resp.headers.get("content-type") || "";
+        if (contentType.includes("json")) {
+          const data = await resp.json();
+          fetchLog8.info("Strategy 6: [" + source + "] returned JSON with keys: " + (typeof data === "object" ? Object.keys(data).slice(0, 10).join(",") : typeof data));
+          const jsonEntries = parseExperienceFromJson(data);
+          if (jsonEntries.length > currentCount) {
+            fetchLog8.info("Strategy 6: SUCCESS from " + source + " \u2014 got " + jsonEntries.length + " experiences");
+            return jsonEntries;
+          }
+          fetchLog8.info("Strategy 6: [" + source + "] JSON had " + jsonEntries.length + " experiences (need > " + currentCount + ")");
+        }
+      } catch (err) {
+        fetchLog8.info("Strategy 6: [" + source + "] error: " + err.message);
+      }
+    }
+    return [];
+  }
+  function parseExperienceFromJson(data) {
+    const entries = [];
+    const exp = data?.experience || data?.resume?.experience || data?.result?.experience || data?.items;
+    if (!Array.isArray(exp)) {
+      const found = findExperienceInObject(data, 0);
+      if (found) {
+        found.forEach((item) => {
+          const job = buildEntryFromApiItem(item);
+          if (job.position || job.company) entries.push(job);
+        });
+      }
+      return entries;
+    }
+    exp.forEach((item) => {
+      const job = buildEntryFromApiItem(item);
+      if (job.position || job.company) entries.push(job);
+    });
+    return entries;
+  }
+  function parseExperienceFromExpandedDoc(expandedDoc, expandedHtml, currentCount) {
+    const entries = [];
+    const usedStepperElements = /* @__PURE__ */ new Set();
+    const allCards = expandedDoc.querySelectorAll('[data-qa="profile-experience-company-card"]');
+    const seen = /* @__PURE__ */ new Set();
+    const uniqueCards = [];
+    allCards.forEach((c) => {
+      if (!seen.has(c)) {
+        seen.add(c);
+        uniqueCards.push(c);
+      }
+    });
+    uniqueCards.forEach((card) => {
+      const job = parseCompanyCardFromDoc(card);
+      if (job) entries.push(job);
+      const stepEl = card.querySelector('[data-qa="magritte-stepper-step-content"]');
+      if (stepEl) usedStepperElements.add(stepEl);
+    });
+    const expCard = expandedDoc.querySelector('[data-qa="resume-list-card-experience"]');
+    if (expCard) {
+      const stepperItems = expCard.querySelectorAll('[data-qa="magritte-stepper-step-content"]');
+      stepperItems.forEach((step) => {
+        if (usedStepperElements.has(step)) return;
+        let parentCard = step.closest('[data-qa="profile-experience-company-card"]');
+        if (parentCard && uniqueCards.includes(parentCard)) return;
+        const cellLeft = step.querySelector('[data-qa="cell-left-side"]');
+        if (!cellLeft) return;
+        const texts = cellLeft.querySelectorAll('[data-qa="cell-text-content"]');
+        const job = {};
+        if (texts.length >= 1) job.position = (texts[0].textContent || "").trim();
+        if (texts.length >= 2) job.period = (texts[1].textContent || "").trim().replace(/\s*\(\d[^)]+\)$/, "").trim();
+        if (job.position || job.period) entries.push(job);
+      });
+    }
+    if (entries.length <= currentCount && expandedHtml) {
+      const textParsed = parseExperienceFromHtmlText(expandedHtml, entries.length);
+      if (textParsed.length > entries.length) {
+        entries.length = 0;
+        entries.push(...textParsed);
+      }
+    }
+    return entries;
+  }
+  var fetchLog8;
+  var init_resume_fetch_strategy6_api = __esm({
+    "src/lib/resume-fetch-strategy6-api.js"() {
+      init_anti_hallucination();
+      init_resume_fetch_json_utils();
+      init_resume_fetch_parse();
+      init_resume_fetch_strategy4_text();
+      fetchLog8 = createLogger("ResumeFetch");
+    }
+  });
+
+  // src/lib/resume-fetch-strategy6-urls.js
+  function findExpansionUrls(doc, html, resumeId) {
+    const urls = [];
+    const seen = /* @__PURE__ */ new Set();
+    const addUrl = (url, source) => {
+      if (!url || url.length < 5) return;
+      const fullUrl = url.startsWith("http") ? url : "https://hh.ru" + url;
+      if (seen.has(fullUrl)) return;
+      seen.add(fullUrl);
+      urls.push({ url: fullUrl, source });
+    };
+    const expSection = doc.querySelector('[data-qa="resume-list-card-experience"]');
+    const searchRoot = expSection || doc;
+    const allButtons = searchRoot.querySelectorAll("button, a[href], [data-url], [data-action-url], [data-fetch-url]");
+    allButtons.forEach((btn) => {
+      const text = (btn.textContent || "").trim().toLowerCase();
+      const isExpandBtn = text.includes("\u043F\u043E\u043A\u0430\u0437\u0430\u0442\u044C \u0432\u0441\u0435") || text.includes("\u043F\u043E\u043A\u0430\u0437\u0430\u0442\u044C \u0435\u0449\u0451") || text.includes("\u043F\u043E\u0441\u043C\u043E\u0442\u0440\u0435\u0442\u044C \u0432\u0441\u0451") || text.includes("\u043F\u043E\u0441\u043C\u043E\u0442\u0440\u0435\u0442\u044C \u0432\u0441\u0435") || text.includes("\u0440\u0430\u0437\u0432\u0435\u0440\u043D\u0443\u0442\u044C") || text.includes("expand") || btn.getAttribute("data-qa") === "profile-experience-viewAll";
+      if (!isExpandBtn) return;
+      fetchLog9.info('Strategy 6: found expand button: text="' + text.substring(0, 50) + '" data-qa="' + (btn.getAttribute("data-qa") || "") + '" outerHTML=' + btn.outerHTML.substring(0, 200));
+      const href = btn.getAttribute("href") || "";
+      if (href && href !== "#" && href !== "javascript:void(0)") {
+        addUrl(href, "button-href");
+      }
+      const dataAttrs = [
+        "data-url",
+        "data-action-url",
+        "data-fetch-url",
+        "data-load-url",
+        "data-api-url",
+        "data-endpoint",
+        "data-href",
+        "data-target"
+      ];
+      let el = btn;
+      for (let i = 0; i < 5 && el; i++) {
+        for (const attr of dataAttrs) {
+          const val = el.getAttribute(attr) || "";
+          if (val && val.length > 5 && val !== "#") {
+            addUrl(val, "button-" + attr + "-ancestor" + i);
+          }
+        }
+        el = el.parentElement;
+      }
+    });
+    const scripts = doc.querySelectorAll("script:not([src])");
+    scripts.forEach((script) => {
+      const text = script.textContent || "";
+      if (text.length < 200) return;
+      const urlPatterns = [
+        /["'](?:url|fetchUrl|loadMore|nextPage|apiUrl|endpoint|actionUrl|href|target)["']\s*:\s*["']([^"']+)["']/gi,
+        /["'](?:loadMore|fetchUrl|nextPage|loadMoreUrl)["']\s*:\s*["']([^"']+)["']/gi
+      ];
+      for (const pat of urlPatterns) {
+        let m;
+        while ((m = pat.exec(text)) !== null) {
+          const val = m[1];
+          if (val && (val.includes("experience") || val.includes("resume") || val.includes("expand") || val.includes("show") || val.includes("load") || val.includes("applicant"))) {
+            addUrl(val, "script-url-pattern");
+          }
+        }
+      }
+      const pathMatches = text.matchAll(/["'](\/applicant\/[^"']+)["']/g);
+      for (const m of pathMatches) {
+        addUrl(m[1], "script-applicant-path");
+      }
+    });
+    if (resumeId) {
+      addUrl(
+        "https://hh.ru/applicant/resumes/view?resume=" + resumeId + "&expand=experience_items",
+        "known-pattern-expand-items"
+      );
+      addUrl(
+        "https://hh.ru/applicant/resumes/mine/" + resumeId + "/experience",
+        "known-pattern-experience-endpoint"
+      );
+    }
+    return urls;
+  }
+  async function tryFetchExpandedUrl(url, currentCount) {
+    const resp = await fetch(url, {
+      credentials: "include",
+      headers: {
+        "Accept": "text/html, application/json",
+        "X-Requested-With": "XMLHttpRequest"
+      }
+    });
+    if (!resp.ok) {
+      fetchLog9.info("Strategy 6: " + url + " returned " + resp.status);
+      return null;
+    }
+    const contentType = resp.headers.get("content-type") || "";
+    if (contentType.includes("application/json")) {
+      const data = await resp.json();
+      const jsonEntries = parseExperienceFromJson(data);
+      fetchLog9.info("Strategy 6: JSON response had " + jsonEntries.length + " experiences");
+      return jsonEntries;
+    }
+    const expandedHtml = await resp.text();
+    const expandedDoc = htmlToDoc(expandedHtml);
+    const expCards = expandedDoc.querySelectorAll('[data-qa="profile-experience-company-card"]');
+    const stepperItems = expandedDoc.querySelectorAll('[data-qa="magritte-stepper-step-content"]');
+    fetchLog9.info("Strategy 6: HTML response had " + expCards.length + " company-cards, " + stepperItems.length + " stepper-items (" + expandedHtml.length + " chars)");
+    if (expCards.length > currentCount || stepperItems.length > currentCount) {
+      return parseExperienceFromExpandedDoc(expandedDoc, expandedHtml, currentCount);
+    }
+    const scriptParsed = parseExperienceFromScripts(expandedDoc, expandedHtml);
+    if (scriptParsed.length > currentCount) {
+      return scriptParsed;
+    }
+    return null;
+  }
+  var fetchLog9;
+  var init_resume_fetch_strategy6_urls = __esm({
+    "src/lib/resume-fetch-strategy6-urls.js"() {
+      init_anti_hallucination();
+      init_resume_fetch_helpers();
+      init_resume_fetch_parse();
+      init_resume_fetch_strategy5_scripts();
+      init_resume_fetch_strategy6_api();
+      fetchLog9 = createLogger("ResumeFetch");
+    }
+  });
+
+  // src/lib/resume-fetch-strategy6-expand.js
+  async function fetchExpandedExperience(doc, html, resumeId, currentCount, resumeUrl) {
+    fetchLog10.info("Strategy 6: starting (currentCount=" + currentCount + ", resumeId=" + (resumeId || "none") + ")");
+    let iframeVis = null;
+    let iframeVisTrace = null;
+    let iframeDiag = null;
+    try {
+      const iframeResult = await fetchExpandedExperienceViaIframe(resumeUrl, currentCount);
+      iframeVis = iframeResult.iframeVis;
+      iframeVisTrace = iframeResult.iframeVisTrace;
+      iframeDiag = iframeResult.iframeDiag;
+      if (iframeResult.entries.length > currentCount) {
+        fetchLog10.info("Strategy 6: SUCCESS via iframe \u2014 got " + iframeResult.entries.length + " experiences, vis=" + iframeVis);
+        return {
+          entries: iframeResult.entries,
+          iframeVis,
+          iframeVisTrace,
+          iframeDiag
+        };
+      }
+      fetchLog10.info("Strategy 6: iframe got " + iframeResult.entries.length + " entries (not more than " + currentCount + "), but visibility=" + iframeVis);
+    } catch (err) {
+      fetchLog10.info("Strategy 6: iframe approach failed: " + err.message);
+    }
+    const withVis = (result) => {
+      if (iframeVis) {
+        result.iframeVis = iframeVis;
+        result.iframeVisTrace = iframeVisTrace;
+        result.iframeDiag = iframeDiag;
+      }
+      return result;
+    };
+    const expansionUrls = findExpansionUrls(doc, html, resumeId);
+    fetchLog10.info("Strategy 6: found " + expansionUrls.length + " candidate expansion URLs");
+    expansionUrls.forEach((u, i) => {
+      fetchLog10.info("  URL " + i + ": " + u.url + " (source: " + u.source + ")");
+    });
+    for (const { url, source } of expansionUrls) {
+      try {
+        fetchLog10.info("Strategy 6: fetching [" + source + "] " + url);
+        const urlEntries = await tryFetchExpandedUrl(url, currentCount);
+        if (urlEntries && urlEntries.length > currentCount) {
+          fetchLog10.info("Strategy 6: SUCCESS from " + source + " \u2014 got " + urlEntries.length + " experiences");
+          return withVis({ entries: urlEntries });
+        }
+      } catch (err) {
+        fetchLog10.info("Strategy 6: [" + source + "] error: " + err.message);
+      }
+    }
+    const apiEntries = await tryApplicantApi(resumeId, currentCount);
+    if (apiEntries.length > currentCount) {
+      return withVis({ entries: apiEntries });
+    }
+    if (resumeUrl) {
+      const expandVariants = [
+        { url: resumeUrl + "&expand=experience_items", source: "expand-experience-items" },
+        { url: resumeUrl + "&showAll=true", source: "showAll" },
+        { url: resumeUrl + "&full=true", source: "full" },
+        { url: resumeUrl + "&expand=all", source: "expand-all" }
+      ];
+      for (const { url, source } of expandVariants) {
+        try {
+          fetchLog10.info("Strategy 6: trying param [" + source + "] " + url);
+          const expandedHtml = await fetchHtml(url);
+          const expandedDoc = htmlToDoc(expandedHtml);
+          const expCards = expandedDoc.querySelectorAll('[data-qa="profile-experience-company-card"]');
+          const stepperItems = expandedDoc.querySelectorAll('[data-qa="magritte-stepper-step-content"]');
+          fetchLog10.info("Strategy 6: [" + source + "] returned HTML with " + expCards.length + " company-cards, " + stepperItems.length + " stepper-items");
+          if (expCards.length > currentCount || stepperItems.length > currentCount) {
+            const parsed = parseExperienceFromExpandedDoc(expandedDoc, expandedHtml, currentCount);
+            if (parsed.length > currentCount) {
+              fetchLog10.info("Strategy 6: SUCCESS from " + source + " \u2014 got " + parsed.length + " experiences");
+              return withVis({ entries: parsed });
+            }
+          }
+        } catch (err) {
+          fetchLog10.info("Strategy 6: [" + source + "] error: " + err.message);
+        }
+      }
+    }
+    fetchLog10.info("Strategy 6: all approaches exhausted, returning current count: " + currentCount + ", vis=" + iframeVis);
+    return withVis({ entries: [] });
+  }
+  var fetchLog10;
+  var init_resume_fetch_strategy6_expand = __esm({
+    "src/lib/resume-fetch-strategy6-expand.js"() {
+      init_anti_hallucination();
+      init_resume_fetch_helpers();
+      init_resume_fetch_strategy6_iframe();
+      init_resume_fetch_strategy6_urls();
+      init_resume_fetch_strategy6_api();
+      fetchLog10 = createLogger("ResumeFetch");
+    }
+  });
+
+  // src/lib/resume-fetch-education-languages.js
+  function parseEducationFromDocSection(doc, dbg, resume) {
+    const eduCard = doc.querySelector('[data-qa="resume-list-card-education"]');
+    if (!eduCard) {
+      resume._debug.missing.push("educationBlock");
+      return;
+    }
+    resume._debug.found.push("educationBlock");
+    const entries = parseEducationFromDoc(eduCard);
+    resume.education = entries;
+    if (entries.length > 0) resume._debug.found.push("education: " + entries.length);
+    else resume._debug.missing.push("education (0 entries)");
+  }
+  function parseLanguagesAndAbout2(doc, dbg, resume) {
+    const langTags = doc.querySelectorAll('[data-qa="resume-about-card"] .bloko-tag__text, [data-qa="resume-position-card"] .bloko-tag__text');
+    langTags.forEach((tag) => {
+      const t = (tag.textContent || "").trim();
+      if (t && t.length > 0 && !resume.skills.includes(t)) resume.languages.push(t);
+    });
+    if (resume.languages.length > 0) resume._debug.found.push("languages: " + resume.languages.join(", "));
+    const aboutCard = doc.querySelector('[data-qa="resume-about-card"]');
+    if (aboutCard) {
+      const text = (aboutCard.textContent || "").trim();
+      if (text.length > 10) {
+        resume.additionalInfo = text;
+        resume._debug.found.push("additionalBlock");
+      }
+    }
+  }
+  var init_resume_fetch_education_languages = __esm({
+    "src/lib/resume-fetch-education-languages.js"() {
+      init_resume_fetch_parse();
+    }
+  });
+
+  // src/lib/resume-fetch-resume.js
+  async function fetchAndParseResume(resumeUrl, listMeta) {
+    fetchLog11.info("Fetching resume: " + resumeUrl);
+    const html = await fetchHtml(resumeUrl);
+    const doc = htmlToDoc(html);
+    fetchLog11.info("Resume HTML: " + html.length + " chars");
+    const preDoc = htmlToDoc(html);
+    const preExpCards = preDoc.querySelectorAll('[data-qa="profile-experience-company-card"]');
+    const preStepperItems = preDoc.querySelectorAll('[data-qa="magritte-stepper-step-content"]');
+    const preShowAll = html.match(/Показать все|показать ещё|Посмотреть всё|Развернуть/gi);
+    fetchLog11.info("Pre-parse: " + preExpCards.length + " company-cards, " + preStepperItems.length + " stepper-items, " + (preShowAll ? preShowAll.length : 0) + ' "show all" buttons in HTML');
+    const expCardHtml = preDoc.querySelector('[data-qa="resume-list-card-experience"]');
+    if (expCardHtml) {
+      const snippet = expCardHtml.outerHTML.substring(0, 2e3);
+      fetchLog11.info("ExpCard HTML snippet (first 2000 chars): " + snippet);
+    }
+    const MONTHS_RE = /(?:январ[ьея]|феврал[ьья]|март[ае]?|апрел[ьья]|ма[йия]|июн[ьья]|июл[ьья]|август[ае]?|сентябр[ьья]|октябр[ьья]|ноябр[ьья]|декабр[ьья])\s*\d{4}\s*[—\-–]\s*(?:(?:январ[ьея]|феврал[ьья]|март[ае]?|апрел[ьья]|ма[йия]|июн[ьья]|июл[ьья]|август[ае]?|сентябр[ьья]|октябр[ьья]|ноябр[ьья]|декабр[ьья])\s*\d{4}|настоящее\s*время|по\s+настоящее\s+время|сейчас|по\s+сейчас)/gi;
+    const allDateRanges = html.match(MONTHS_RE) || [];
+    fetchLog11.info("Full HTML date ranges: " + allDateRanges.length + " found: " + JSON.stringify(allDateRanges));
+    const numDateRanges = html.match(/\d{2}\.\d{4}\s*[—\-–]\s*(?:\d{2}\.\d{4}|настоящее\s*время|по\s+настоящее\s*время|сейчас|по\s+сейчас)/gi) || [];
+    fetchLog11.info("Numeric date ranges: " + numDateRanges.length + " found: " + JSON.stringify(numDateRanges));
+    const scripts = preDoc.querySelectorAll("script:not([src])");
+    let expScriptCount = 0;
+    scripts.forEach((s) => {
+      const t = s.textContent || "";
+      if (/experience|работ[аеы]|компани|должност|career/i.test(t)) {
+        expScriptCount++;
+        if (expScriptCount <= 3) {
+          fetchLog11.info("Script with experience keywords (first 500 chars): " + t.substring(0, 500));
+        }
+      }
+    });
+    fetchLog11.info("Scripts with experience keywords: " + expScriptCount + " of " + scripts.length);
+    window.__hhLastFetchHtml = html;
+    window.__hhLastFetchDoc = doc;
+    let hashMatch = resumeUrl.match(/\/resume\/([a-f0-9]+)/);
+    if (!hashMatch) hashMatch = resumeUrl.match(/[?&]resume=([a-f0-9]+)/);
+    const id = hashMatch ? hashMatch[1] : "";
+    const resume = {
+      id,
+      url: resumeUrl,
+      title: "",
+      salary: "",
+      gender: "",
+      age: "",
+      address: "",
+      specializations: [],
+      skills: [],
+      skillLevels: {},
+      experience: [],
+      education: [],
+      languages: [],
+      additionalInfo: "",
+      parsedAt: (/* @__PURE__ */ new Date()).toISOString(),
+      visibility: VISIBILITY_UNKNOWN,
+      hidden: false,
+      _debug: { found: [], missing: [] }
+    };
+    const pageVisResult = detectVisibilityFromResumePage(doc, html);
+    const pageVis = pageVisResult.visibility;
+    const pageTrace = pageVisResult.trace || [];
+    const listVis = listMeta ? listMeta.visibility : "no-list-meta";
+    const listHidden = listMeta ? listMeta.hidden : void 0;
+    const visDiagEntry = {
+      id: id || "unknown",
+      title: "(will be set after parse)",
+      pageVis,
+      pageTrace,
+      listVis,
+      listHidden,
+      decision: null,
+      decisionReason: null,
+      timestamp: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    fetchLog11.info("[VIS-DIAG] === Visibility decision for " + (id ? id.substring(0, 8) : "unknown") + " ===");
+    fetchLog11.info("[VIS-DIAG] Sources: page=" + pageVis + ", list=" + listVis + ", listHidden=" + listHidden);
+    if (pageVis === VISIBILITY_HIDDEN) {
+      resume.visibility = VISIBILITY_HIDDEN;
+      resume.hidden = true;
+      visDiagEntry.decision = VISIBILITY_HIDDEN;
+      visDiagEntry.decisionReason = "page-detected-hidden";
+      fetchLog11.info("[VIS-DIAG] Decision: HIDDEN (page detected)");
+    } else if (listMeta && listMeta.visibility === VISIBILITY_HIDDEN) {
+      resume.visibility = VISIBILITY_HIDDEN;
+      resume.hidden = true;
+      visDiagEntry.decision = VISIBILITY_HIDDEN;
+      visDiagEntry.decisionReason = "list-detected-hidden (page=" + pageVis + ")";
+      fetchLog11.info("[VIS-DIAG] Decision: HIDDEN (list detected, page=" + pageVis + ")");
+    } else if (pageVis === VISIBILITY_VISIBLE) {
+      resume.visibility = VISIBILITY_VISIBLE;
+      resume.hidden = false;
+      visDiagEntry.decision = VISIBILITY_VISIBLE;
+      visDiagEntry.decisionReason = "page-detected-visible";
+      fetchLog11.info("[VIS-DIAG] Decision: VISIBLE (page detected)");
+    } else if (listMeta && listMeta.visibility === VISIBILITY_VISIBLE) {
+      resume.visibility = VISIBILITY_VISIBLE;
+      resume.hidden = false;
+      visDiagEntry.decision = VISIBILITY_VISIBLE;
+      visDiagEntry.decisionReason = "list-detected-visible (page=UNKNOWN)";
+      fetchLog11.info("[VIS-DIAG] Decision: VISIBLE (list detected, page=UNKNOWN)");
+    } else {
+      resume.visibility = VISIBILITY_UNKNOWN;
+      resume.hidden = false;
+      visDiagEntry.decision = VISIBILITY_UNKNOWN;
+      visDiagEntry.decisionReason = "both-sources-unknown";
+      fetchLog11.info("[VIS-DIAG] Decision: UNKNOWN (both sources unknown)");
+    }
+    resume._visDiag = visDiagEntry;
+    if (listMeta && listMeta.title && listMeta.title !== "Untitled") {
+      resume._listTitle = listMeta.title;
+    }
+    const dbg = (key, val) => {
+      if (val) resume._debug.found.push(key + ": " + (typeof val === "string" ? '"' + val.substring(0, 60) + '"' : val));
+      else resume._debug.missing.push(key);
+      return val;
+    };
+    parseHeader(doc, dbg, resume);
+    if (resume.title) {
+      resume.title = resume.title.replace(TITLE_SUFFIX_NOISE, "").trim();
+    }
+    parsePersonalDataFromDoc(doc, doc.querySelector('[data-qa="resume-block-title-position"]'), dbg, resume);
+    parseSkillsFromDoc(doc, dbg, resume);
+    await parseExperienceFromDoc(doc, dbg, resume, html, resumeUrl);
+    parseEducationFromDocSection(doc, dbg, resume);
+    parseLanguagesAndAbout2(doc, dbg, resume);
+    if (resume._visDiag) {
+      resume._visDiag.title = resume.title || "(no title)";
+    }
+    fetchLog11.info("Parsed: " + resume.title + " | Skills: " + resume.skills.length + " | Exp: " + resume.experience.length + " | Edu: " + resume.education.length);
+    return resume;
+  }
+  function parseHeader(doc, dbg, resume) {
+    const titleEl = doc.querySelector('[data-qa="resume-block-title-position"]');
+    if (titleEl) resume.title = dbg("resumeTitle (data-qa)", safeGetText2(titleEl));
+    if (!resume.title) {
+      const h1 = doc.querySelector("h1");
+      if (h1) resume.title = dbg("resumeTitle (h1)", (h1.textContent || "").trim());
+    }
+    const salaryEl = doc.querySelector('[data-qa="resume-block-salary"]');
+    if (salaryEl) resume.salary = dbg("resumeSalary (data-qa)", safeGetText2(salaryEl));
+  }
+  function parseSkillsFromDoc(doc, dbg, resume) {
+    const skillsCard = doc.querySelector('[data-qa="skills-card"]');
+    if (!skillsCard) {
+      resume._debug.missing.push('skillsBlock (no data-qa="skills-card")');
+      return;
+    }
+    resume._debug.found.push('skillsBlock (data-qa="skills-card")');
+    const skillLevelEls = skillsCard.querySelectorAll('[data-qa^="skill-level-title-"]');
+    skillLevelEls.forEach((el) => {
+      const qa = el.getAttribute("data-qa") || "";
+      const lvlMatch = qa.match(/skill-level-title-(\d)/);
+      if (lvlMatch) {
+        const lvl = lvlMatch[1];
+        const labels = { "3": "\u041F\u0440\u043E\u0434\u0432\u0438\u043D\u0443\u0442\u044B\u0439", "2": "\u0421\u0440\u0435\u0434\u043D\u0438\u0439", "1": "\u041D\u0430\u0447\u0430\u043B\u044C\u043D\u044B\u0439" };
+        resume.skillLevels[lvl] = labels[lvl] || (el.textContent || "").trim();
+        resume._debug.found.push("skillLevel" + lvl);
+      }
+    });
+    skillsCard.querySelectorAll('[data-qa^="skill-tag-"], .bloko-tag__text').forEach((tag) => {
+      const text = (tag.textContent || "").trim();
+      if (text && text.length > 0 && text.length < 100 && !resume.skills.includes(text)) {
+        resume.skills.push(text);
+      }
+    });
+    if (resume.skills.length > 0) {
+      resume._debug.found.push("skills: " + resume.skills.length + " tags");
+    }
+  }
+  async function parseExperienceFromDoc(doc, dbg, resume, html, resumeUrl) {
+    const entries = parseExperienceFromDocStrategies1to3(doc, resume);
+    if (html && entries.length > 0) {
+      const textParsed = parseExperienceFromHtmlText(html, entries.length);
+      if (textParsed.length > entries.length) {
+        fetchLog11.info("Strategy 4 (text patterns): found " + textParsed.length + " experiences (was " + entries.length + ")");
+        resume._debug.found.push("experience (text pattern supplement): " + textParsed.length);
+        entries.length = 0;
+        entries.push(...textParsed);
+      }
+    }
+    if (html) {
+      const scriptParsed = parseExperienceFromScripts(doc, html);
+      if (scriptParsed.length > entries.length) {
+        fetchLog11.info("Strategy 5 (script JSON): found " + scriptParsed.length + " experiences (was " + entries.length + ")");
+        resume._debug.found.push("experience (script JSON): " + scriptParsed.length);
+        entries.length = 0;
+        entries.push(...scriptParsed);
+      } else if (scriptParsed.length > 0) {
+        fetchLog11.info("Strategy 5 (script JSON): found " + scriptParsed.length + " experiences (not more than " + entries.length + ", skipping)");
+      }
+    }
+    let iframeVis = null;
+    let iframeVisTrace = null;
+    let iframeDiag = null;
+    if (html && entries.length > 0 && entries.length < 20) {
+      try {
+        const s6result = await fetchExpandedExperience(doc, html, resume.id, entries.length, resumeUrl);
+        if (s6result.iframeVis) {
+          iframeVis = s6result.iframeVis;
+          iframeVisTrace = s6result.iframeVisTrace;
+          iframeDiag = s6result.iframeDiag || null;
+        }
+        if (s6result.entries && s6result.entries.length > entries.length) {
+          fetchLog11.info("Strategy 6 (expanded fetch): found " + s6result.entries.length + " experiences (was " + entries.length + ")");
+          resume._debug.found.push("experience (expanded fetch): " + s6result.entries.length);
+          entries.length = 0;
+          entries.push(...s6result.entries);
+        }
+      } catch (err) {
+        fetchLog11.warn("Strategy 6 failed: " + err.message);
+      }
+    }
+    resume.experience = entries;
+    if (entries.length > 0) resume._debug.found.push("experience: " + entries.length);
+    else resume._debug.missing.push("experience (0 entries)");
+    if (iframeVis) {
+      const prevVis = resume.visibility;
+      const prevReason = resume._visDiag?.decisionReason || "";
+      if (iframeVis === VISIBILITY_HIDDEN && prevVis !== VISIBILITY_HIDDEN) {
+        fetchLog11.info("[VIS-DIAG] iframe OVERRIDE: " + (resume.id ? resume.id.substring(0, 8) : "?") + " was " + prevVis + ", iframe says HIDDEN \u2192 overriding");
+        resume.visibility = VISIBILITY_HIDDEN;
+        resume.hidden = true;
+        if (resume._visDiag) {
+          resume._visDiag.decision = VISIBILITY_HIDDEN;
+          resume._visDiag.decisionReason = "iframe-detected-hidden (overrode " + prevVis + ", was: " + prevReason + ")";
+          resume._visDiag.pageTrace = (resume._visDiag.pageTrace || []).concat(iframeVisTrace || []);
+        }
+      } else if (iframeVis === VISIBILITY_VISIBLE && prevVis === VISIBILITY_UNKNOWN) {
+        fetchLog11.info("[VIS-DIAG] iframe OVERRIDE: " + (resume.id ? resume.id.substring(0, 8) : "?") + " was UNKNOWN, iframe says VISIBLE \u2192 overriding");
+        resume.visibility = VISIBILITY_VISIBLE;
+        resume.hidden = false;
+        if (resume._visDiag) {
+          resume._visDiag.decision = VISIBILITY_VISIBLE;
+          resume._visDiag.decisionReason = "iframe-detected-visible (overrode UNKNOWN, was: " + prevReason + ")";
+          resume._visDiag.pageTrace = (resume._visDiag.pageTrace || []).concat(iframeVisTrace || []);
+        }
+      } else {
+        fetchLog11.info("[VIS-DIAG] iframe CONFIRMED: " + (resume.id ? resume.id.substring(0, 8) : "?") + " is " + prevVis + ", iframe agrees (" + iframeVis + ")");
+        if (resume._visDiag && iframeVisTrace) {
+          resume._visDiag.pageTrace = (resume._visDiag.pageTrace || []).concat(iframeVisTrace);
+        }
+      }
+      if (resume._visDiag) {
+        resume._visDiag.iframeRan = true;
+        resume._visDiag.iframeVis = iframeVis;
+        if (iframeDiag) {
+          resume._visDiag.iframeDiag = iframeDiag;
+        }
+      }
+    }
+  }
+  function detectVisibilityFromResumePage(doc, html) {
+    const diag = [];
+    const visCard = doc.querySelector('[data-qa="resume-visibility-card"]');
+    if (visCard) {
+      const cardText = normalizeWs(visCard.textContent || "").toLowerCase();
+      if (cardText.includes("\u043D\u0435 \u0432\u0438\u0434\u043D\u043E \u043D\u0438\u043A\u043E\u043C\u0443") || cardText.includes("\u043D\u0435\xA0\u0432\u0438\u0434\u043D\u043E \u043D\u0438\u043A\u043E\u043C\u0443")) {
+        diag.push('S0:visibility-card="\u043D\u0435 \u0432\u0438\u0434\u043D\u043E \u043D\u0438\u043A\u043E\u043C\u0443" \u2192 HIDDEN');
+        fetchLog11.info("[VIS-DIAG] " + diag.join(" | "));
+        return { visibility: VISIBILITY_HIDDEN, trace: diag };
+      }
+      if (cardText.includes("\u0432\u0438\u0434\u043D\u043E \u0432\u0441\u0435\u043C") || cardText.includes("\u0432\u0438\u0434\u043D\u043E\xA0\u0432\u0441\u0435\u043C")) {
+        diag.push('S0:visibility-card="\u0432\u0438\u0434\u043D\u043E \u0432\u0441\u0435\u043C" \u2192 VISIBLE');
+        fetchLog11.info("[VIS-DIAG] " + diag.join(" | "));
+        return { visibility: VISIBILITY_VISIBLE, trace: diag };
+      }
+      diag.push('S0:visibility-card-unknown="' + cardText.substring(0, 40) + '"');
+    } else {
+      diag.push("S0:no-visibility-card");
+    }
+    for (const sel of VISIBILITY_HIDDEN_DATA_QA) {
+      const found = doc.querySelector(sel);
+      if (found) {
+        diag.push("S1:data-qa=" + sel + " \u2192 HIDDEN");
+        fetchLog11.info("[VIS-DIAG] " + diag.join(" | "));
+        return { visibility: VISIBILITY_HIDDEN, trace: diag };
+      }
+    }
+    diag.push("S1:no-data-qa-hidden");
+    const allButtons = doc.querySelectorAll("button, a");
+    let btnDetails = [];
+    for (const btn of allButtons) {
+      const text = normalizeWs(btn.textContent || "").toLowerCase();
+      const qa = (btn.getAttribute("data-qa") || "").toLowerCase();
+      if (text.includes("\u0441\u043A\u0440\u044B\u0442\u044C") || text.includes("\u0432\u0438\u0434\u0438\u043C")) {
+        btnDetails.push('"' + text.substring(0, 40) + '"' + (qa ? "[qa=" + qa + "]" : ""));
+      }
+      if (text.includes("\u0441\u0434\u0435\u043B\u0430\u0442\u044C \u0432\u0438\u0434\u0438\u043C\u044B\u043C")) {
+        diag.push('S2:btn="\u0441\u0434\u0435\u043B\u0430\u0442\u044C \u0432\u0438\u0434\u0438\u043C\u044B\u043C" \u2192 HIDDEN');
+        fetchLog11.info("[VIS-DIAG] " + diag.join(" | "));
+        fetchLog11.info("[VIS-DIAG] All vis-related buttons: " + JSON.stringify(btnDetails));
+        return { visibility: VISIBILITY_HIDDEN, trace: diag, btnDetails };
+      }
+      if (text.includes("\u0441\u043A\u0440\u044B\u0442\u044C \u0440\u0435\u0437\u044E\u043C\u0435")) {
+        diag.push('S2:btn="\u0441\u043A\u0440\u044B\u0442\u044C \u0440\u0435\u0437\u044E\u043C\u0435" \u2192 VISIBLE');
+        fetchLog11.info("[VIS-DIAG] " + diag.join(" | "));
+        fetchLog11.info("[VIS-DIAG] All vis-related buttons: " + JSON.stringify(btnDetails));
+        return { visibility: VISIBILITY_VISIBLE, trace: diag, btnDetails };
+      }
+    }
+    diag.push("S2:no-key-buttons" + (btnDetails.length ? "(saw:" + btnDetails.length + " partial)" : ""));
+    const bodyText = doc.body ? normalizeWs(doc.body.textContent || "") : "";
+    if (hasHiddenIndicator(bodyText)) {
+      const lower = bodyText.toLowerCase();
+      for (const ind of ["\u043C\u043D\u043E\u0433\u0438\u0435 \u043D\u0435 \u0432\u0438\u0434\u044F\u0442", "\u0441\u0434\u0435\u043B\u0430\u0442\u044C \u0432\u0438\u0434\u0438\u043C\u044B\u043C", "\u043D\u0435 \u0432\u0438\u0434\u043D\u043E"]) {
+        const pos = lower.indexOf(ind);
+        if (pos !== -1) {
+          diag.push('S3:body has "' + ind + '" @' + pos + " \u2192 HIDDEN");
+          break;
+        }
+      }
+      fetchLog11.info("[VIS-DIAG] " + diag.join(" | "));
+      return { visibility: VISIBILITY_HIDDEN, trace: diag };
+    }
+    if (hasVisibleIndicator(bodyText)) {
+      diag.push("S3:body has visible indicator \u2192 VISIBLE");
+      fetchLog11.info("[VIS-DIAG] " + diag.join(" | "));
+      return { visibility: VISIBILITY_VISIBLE, trace: diag };
+    }
+    diag.push("S3:body-no-indicators");
+    const htmlForSearch = html.replace(/&nbsp;/g, " ").toLowerCase();
+    const htmlNorm = normalizeWs(htmlForSearch);
+    if (hasHiddenIndicator(htmlNorm)) {
+      const lower = htmlNorm.toLowerCase();
+      for (const ind of ["\u043C\u043D\u043E\u0433\u0438\u0435 \u043D\u0435 \u0432\u0438\u0434\u044F\u0442", "\u0441\u0434\u0435\u043B\u0430\u0442\u044C \u0432\u0438\u0434\u0438\u043C\u044B\u043C", "\u043D\u0435 \u0432\u0438\u0434\u043D\u043E"]) {
+        const pos = lower.indexOf(ind);
+        if (pos !== -1) {
+          diag.push('S4:html has "' + ind + '" @' + pos + " \u2192 HIDDEN");
+          break;
+        }
+      }
+      fetchLog11.info("[VIS-DIAG] " + diag.join(" | "));
+      return { visibility: VISIBILITY_HIDDEN, trace: diag };
+    }
+    if (hasVisibleIndicator(htmlNorm)) {
+      diag.push("S4:html has visible indicator \u2192 VISIBLE");
+      fetchLog11.info("[VIS-DIAG] " + diag.join(" | "));
+      return { visibility: VISIBILITY_VISIBLE, trace: diag };
+    }
+    diag.push("S4:html-no-indicators");
+    const scriptEls = doc.querySelectorAll("script:not([src])");
+    let scriptPatterns = [];
+    for (const script of scriptEls) {
+      const t = script.textContent || "";
+      if (t.length < 50) continue;
+      const patterns = [
+        { re: /"hidden"\s*:\s*true/, name: '"hidden":true' },
+        { re: /"isHidden"\s*:\s*true/, name: '"isHidden":true' },
+        { re: /"visibility"\s*:\s*"hidden"/, name: '"visibility":"hidden"' },
+        { re: /"status"\s*:\s*"hidden"/, name: '"status":"hidden"' }
+      ];
+      for (const p of patterns) {
+        if (p.re.test(t)) {
+          scriptPatterns.push(p.name);
+        }
+      }
+    }
+    if (scriptPatterns.length > 0) {
+      diag.push("S5:script=" + scriptPatterns.join(",") + " \u2192 HIDDEN");
+      fetchLog11.info("[VIS-DIAG] " + diag.join(" | "));
+      return { visibility: VISIBILITY_HIDDEN, trace: diag, scriptPatterns };
+    }
+    diag.push("S5:no-script-patterns");
+    const hideLink = doc.querySelector('[data-qa="resume-action-hide"], [data-qa*="resume-hide"], a[data-qa*="hide-resume"]');
+    if (hideLink) {
+      const hideQa = hideLink.getAttribute("data-qa") || "";
+      diag.push("S6:hide-link qa=" + hideQa + " \u2192 VISIBLE");
+      fetchLog11.info("[VIS-DIAG] " + diag.join(" | "));
+      return { visibility: VISIBILITY_VISIBLE, trace: diag };
+    }
+    diag.push("S6:no-hide-link");
+    const allHideBtns = doc.querySelectorAll('[data-qa*="hide"], [data-qa*="hidden"]');
+    if (allHideBtns.length > 0) {
+      const hideQas = Array.from(allHideBtns).map((b) => b.getAttribute("data-qa")).filter(Boolean);
+      diag.push("EXTRA:hide-qa=" + hideQas.join(","));
+    }
+    diag.push("\u2192 UNKNOWN");
+    fetchLog11.info("[VIS-DIAG] " + diag.join(" | "));
+    return { visibility: VISIBILITY_UNKNOWN, trace: diag };
+  }
+  var fetchLog11;
+  var init_resume_fetch_resume = __esm({
+    "src/lib/resume-fetch-resume.js"() {
+      init_anti_hallucination();
+      init_resume_fetch_helpers();
+      init_resume_fetch_parse();
+      init_resume_constants();
+      init_resume_fetch_experience();
+      init_resume_fetch_strategy4_text();
+      init_resume_fetch_strategy5_scripts();
+      init_resume_fetch_strategy6_expand();
+      init_resume_fetch_education_languages();
+      fetchLog11 = createLogger("ResumeFetch");
+    }
+  });
+
+  // src/lib/resume-fetch.js
+  var resume_fetch_exports = {};
+  __export(resume_fetch_exports, {
+    fetchAndParseResume: () => fetchAndParseResume,
+    fetchResumeList: () => fetchResumeList,
+    syncAllResumes: () => syncAllResumes
+  });
+  async function syncAllResumes({ onProgress, onComplete, onError } = {}) {
+    fetchLog12.info("syncAllResumes: starting ...");
+    const visDiag = {
+      startedAt: (/* @__PURE__ */ new Date()).toISOString(),
+      finishedAt: null,
+      listSource: null,
+      listRawHtmlLength: 0,
+      resumes: [],
+      summary: { total: 0, visible: 0, hidden: 0, unknown: 0, unknownFallbackToVisible: 0 }
+    };
+    try {
+      const list = await fetchResumeList();
+      visDiag.listSource = "fetch";
+      visDiag.listRawHtmlLength = window.__hhLastFetchHtml?.length || 0;
+      if (list.length === 0) {
+        fetchLog12.warn("syncAllResumes: no resumes found");
+        visDiag.summary.total = 0;
+        visDiag.finishedAt = (/* @__PURE__ */ new Date()).toISOString();
+        window.__hhVisDiag = visDiag;
+        if (onComplete) onComplete([]);
+        return [];
+      }
+      list.forEach((item) => {
+        visDiag.resumes.push({
+          id: item.id,
+          title: item.title,
+          url: item.url,
+          listVis: item.visibility,
+          listHidden: item.hidden,
+          pageVis: null,
+          pageTrace: null,
+          decision: null,
+          decisionReason: null,
+          finalVisibility: null
+        });
+      });
+      const visibleCount = list.filter((r) => {
+        const vis = r.visibility || (r.hidden ? "hidden" : "unknown");
+        return vis !== "hidden";
+      }).length;
+      const hiddenCount = list.length - visibleCount;
+      if (hiddenCount > 0) {
+        fetchLog12.info("syncAllResumes: " + visibleCount + " visible, " + hiddenCount + " hidden");
+      }
+      if (onProgress) onProgress(0, list.length, "\u0417\u0430\u0433\u0440\u0443\u0437\u043A\u0430 \u0441\u043F\u0438\u0441\u043A\u0430 \u0440\u0435\u0437\u044E\u043C\u0435...");
+      const results = [];
+      for (let i = 0; i < list.length; i++) {
+        const item = list[i];
+        const vis = item.visibility || (item.hidden ? "hidden" : "unknown");
+        const label = vis === "hidden" ? "\u041F\u0430\u0440\u0441\u0438\u043D\u0433 (\u0441\u043A\u0440\u044B\u0442\u043E): " : "\u041F\u0430\u0440\u0441\u0438\u043D\u0433: ";
+        if (onProgress) onProgress(i, list.length, label + item.title);
+        try {
+          const resume = await fetchAndParseResume(item.url, item);
+          if ((!resume.title || resume.title === "") && resume._listTitle) {
+            resume.title = resume._listTitle;
+          }
+          delete resume._listTitle;
+          if (resume.id) results.push(resume);
+          else fetchLog12.warn("No id for " + item.url);
+          const diagEntry = visDiag.resumes.find((r) => r.id === resume.id);
+          if (diagEntry) {
+            if (resume.title && resume.title !== "" && resume.title !== "Untitled") {
+              diagEntry.title = resume.title;
+            }
+            if (resume._visDiag) {
+              diagEntry.pageVis = resume._visDiag.pageVis;
+              diagEntry.pageTrace = resume._visDiag.pageTrace;
+              diagEntry.decision = resume._visDiag.decision;
+              diagEntry.decisionReason = resume._visDiag.decisionReason;
+              if (resume._visDiag.iframeVis) {
+                diagEntry.iframeVis = resume._visDiag.iframeVis;
+              }
+              if (resume._visDiag.iframeDiag) {
+                diagEntry.iframeDiag = resume._visDiag.iframeDiag;
+              }
+            }
+          }
+        } catch (err) {
+          fetchLog12.error("Failed: " + item.url + ": " + err.message);
+          if (onError) onError(item, err);
+          const diagEntry = visDiag.resumes.find((r) => r.id === item.id);
+          if (diagEntry) {
+            diagEntry.pageVis = "error";
+            diagEntry.pageTrace = ["ERROR: " + err.message];
+            diagEntry.decision = "error";
+            diagEntry.decisionReason = "fetch-failed";
+          }
+        }
+        if (i < list.length - 1) await gaussianDelay(2e3, 5e3);
+      }
+      const stillUnknown = results.filter((r) => r.visibility === VISIBILITY_UNKNOWN);
+      if (stillUnknown.length > 0) {
+        const iframeRan = stillUnknown.filter((r) => r._visDiag?.iframeRan);
+        const iframeNotRan = stillUnknown.filter((r) => !r._visDiag?.iframeRan);
+        if (iframeNotRan.length > 0) {
+          fetchLog12.info("[VIS-DIAG] Final fallback: " + iframeNotRan.length + " resumes UNKNOWN (iframe not run) \u2192 defaulting to VISIBLE");
+          visDiag.summary.unknownFallbackToVisible = iframeNotRan.length;
+          iframeNotRan.forEach((r) => {
+            fetchLog12.info("[VIS-DIAG]   " + (r.id ? r.id.substring(0, 8) : "?") + ' "' + (r.title || "").substring(0, 30) + '" UNKNOWN\u2192VISIBLE (iframe not run)');
+            r.visibility = VISIBILITY_VISIBLE;
+            r.hidden = false;
+            const diagEntry = visDiag.resumes.find((d) => d.id === r.id);
+            if (diagEntry) {
+              diagEntry.finalVisibility = VISIBILITY_VISIBLE;
+              diagEntry.decisionReason += " [FALLBACK: UNKNOWN\u2192VISIBLE, iframe not run]";
+            }
+          });
+        }
+        if (iframeRan.length > 0) {
+          fetchLog12.info("[VIS-DIAG] Keeping UNKNOWN for " + iframeRan.length + " resumes (iframe ran but returned UNKNOWN)");
+          iframeRan.forEach((r) => {
+            fetchLog12.info("[VIS-DIAG]   " + (r.id ? r.id.substring(0, 8) : "?") + ' "' + (r.title || "").substring(0, 30) + '" \u2192 UNKNOWN (iframe ran, no indicators found)');
+            const diagEntry = visDiag.resumes.find((d) => d.id === r.id);
+            if (diagEntry) {
+              diagEntry.finalVisibility = VISIBILITY_UNKNOWN;
+              diagEntry.decisionReason += " [KEPT UNKNOWN: iframe ran, no indicators]";
+            }
+          });
+        }
+      }
+      results.forEach((r) => {
+        const diagEntry = visDiag.resumes.find((d) => d.id === r.id);
+        if (diagEntry && !diagEntry.finalVisibility) {
+          diagEntry.finalVisibility = r.visibility;
+        }
+      });
+      visDiag.summary.total = results.length;
+      visDiag.summary.visible = results.filter((r) => r.visibility === VISIBILITY_VISIBLE).length;
+      visDiag.summary.hidden = results.filter((r) => r.visibility === VISIBILITY_HIDDEN).length;
+      visDiag.summary.unknown = results.filter((r) => r.visibility === VISIBILITY_UNKNOWN).length;
+      visDiag.finishedAt = (/* @__PURE__ */ new Date()).toISOString();
+      fetchLog12.info("[VIS-DIAG] \u2550\u2550\u2550 FINAL VISIBILITY SUMMARY \u2550\u2550\u2550");
+      fetchLog12.info("[VIS-DIAG] Total: " + visDiag.summary.total + ", Visible: " + visDiag.summary.visible + ", Hidden: " + visDiag.summary.hidden + ", Unknown: " + visDiag.summary.unknown + ", Fallbacks: " + visDiag.summary.unknownFallbackToVisible);
+      results.forEach((r) => {
+        fetchLog12.info("[VIS-DIAG]   " + (r.id ? r.id.substring(0, 8) : "?") + ' "' + (r.title || "").substring(0, 30) + '" \u2192 ' + r.visibility);
+      });
+      window.__hhVisDiag = visDiag;
+      try {
+        window.postMessage({ type: "HH-AR-VISDIAG", payload: visDiag }, "*");
+      } catch (e) {
+        fetchLog12.warn("[VIS-DIAG] Could not send to page world: " + e.message);
+      }
+      fetchLog12.info("[VIS-DIAG] Diagnostic dump available: __hhVis() / __hhVisTable() / window.__hhVisDiag");
+      fetchLog12.info("Done. " + results.length + "/" + list.length + " parsed");
+      if (onProgress) onProgress(list.length, list.length, "\u0413\u043E\u0442\u043E\u0432\u043E");
+      if (onComplete) onComplete(results);
+      return results;
+    } catch (err) {
+      fetchLog12.error("Fatal: " + err.message);
+      visDiag.finishedAt = (/* @__PURE__ */ new Date()).toISOString();
+      visDiag.error = err.message;
+      window.__hhVisDiag = visDiag;
+      try {
+        window.postMessage({ type: "HH-AR-VISDIAG", payload: visDiag }, "*");
+      } catch (e) {
+      }
+      if (onError) onError(null, err);
+      throw err;
+    }
+  }
+  var fetchLog12;
+  var init_resume_fetch = __esm({
+    "src/lib/resume-fetch.js"() {
+      init_anti_hallucination();
+      init_timing();
+      init_resume_fetch_list();
+      init_resume_fetch_resume();
+      init_resume_constants();
+      fetchLog12 = createLogger("ResumeFetch");
+    }
+  });
+
+  // src/ui/panel/panel-diagnostics.js
+  function setStatusLine(text) {
+    const el = refs.shadowRoot?.getElementById("res-status-line");
+    if (el) el.textContent = text;
+  }
+  function clearResumeData() {
+    console.log("[HH-AR][Diag] Clearing resume data...");
+    panelState.resume = null;
+    panelState._resumeCleared = true;
+    panelState.resumeList = [];
+    clearActiveResume().then(() => {
+      console.log("[HH-AR][Diag] myResume removed from storage");
+      setStatusLine("\u0420\u0435\u0437\u044E\u043C\u0435 \u043E\u0447\u0438\u0449\u0435\u043D\u043E \u0438\u0437 \u043F\u0430\u043C\u044F\u0442\u0438 \u0438 storage");
+      renderResumePanel();
+    });
+  }
+  function dumpResumeToConsole() {
+    console.log("[HH-AR][Diag] === DUMP START ===");
+    console.log("[HH-AR][Diag] panelState.resume:", JSON.stringify(panelState.resume, null, 2));
+    console.log("[HH-AR][Diag] panelState.resumeList:", panelState.resumeList?.length);
+    console.log("[HH-AR][Diag] panelState.myResumes:", panelState.myResumes?.length);
+    console.log("[HH-AR][Diag] panelState.vacancies:", panelState.vacancies?.length);
+    console.log("[HH-AR][Diag] URL:", window.location.href);
+    console.log("[HH-AR][Diag] Auth:", panelState.isLoggedIn);
+    console.log("[HH-AR][Diag] === DUMP END ===");
+    setStatusLine("\u0414\u0430\u043C\u043F \u0432\u044B\u0432\u0435\u0434\u0435\u043D \u0432 \u043A\u043E\u043D\u0441\u043E\u043B\u044C (F12)");
+  }
+  async function testParseResume() {
+    console.log("[HH-AR][Diag] === TEST PARSE START ===");
+    setStatusLine("\u0422\u0435\u0441\u0442 \u043F\u0430\u0440\u0441\u0438\u043D\u0433\u0430...");
+    const path = window.location.pathname;
+    console.log("[HH-AR][Diag] Current path:", path);
+    console.log("[HH-AR][Diag] Is resume page:", /\/resume\/[a-f0-9]+/.test(path));
+    console.log("[HH-AR][Diag] Is edit page:", /\/resume\/edit\//.test(path));
+    console.log("[HH-AR][Diag] Is resumes list:", path.includes("/applicant/resumes"));
+    if (/\/resume\/[a-f0-9]+/.test(path)) {
+      try {
+        let resume;
+        if (/\/resume\/edit\//.test(path)) {
+          const editMatch = path.match(/\/resume\/([a-f0-9]+)/);
+          if (editMatch) {
+            const viewUrl = "https://hh.ru/applicant/resumes/view?resume=" + editMatch[1];
+            console.log("[HH-AR][Diag] Edit page, fetching view:", viewUrl);
+            const { fetchAndParseResume: fetchAndParseResume2 } = await Promise.resolve().then(() => (init_resume_fetch(), resume_fetch_exports));
+            resume = await fetchAndParseResume2(viewUrl);
+          } else {
+            setStatusLine("\u041E\u0448\u0438\u0431\u043A\u0430: \u043D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0438\u0437\u0432\u043B\u0435\u0447\u044C ID \u0438\u0437 URL");
+            return;
+          }
+        } else {
+          const { expandHiddenSections: expandHiddenSections2 } = await Promise.resolve().then(() => (init_resume_detail(), resume_detail_exports));
+          const { parseResume: parseResume2 } = await Promise.resolve().then(() => (init_parse_resume(), parse_resume_exports));
+          await expandHiddenSections2();
+          resume = parseResume2();
+        }
+        console.log("[HH-AR][Diag] Parse result:", JSON.stringify(resume, null, 2));
+        console.log("[HH-AR][Diag] Experience count:", resume.experience?.length);
+        console.log("[HH-AR][Diag] Skills count:", resume.skills?.length);
+        console.log("[HH-AR][Diag] Debug found:", resume._debug?.found);
+        console.log("[HH-AR][Diag] Debug missing:", resume._debug?.missing);
+        const hasUsefulData = resume.id && (resume.title || resume.skills.length > 0 || resume.experience.length > 0);
+        if (hasUsefulData) {
+          panelState.resume = resume;
+          panelState._resumeCleared = false;
+          await setActiveResume(resume);
+          renderResumePanel();
+          setStatusLine("\u0421\u043F\u0430\u0440\u0441\u0435\u043D\u043E: " + resume.experience?.length + " \u043C\u0435\u0441\u0442, " + resume.skills?.length + " \u043D\u0430\u0432\u044B\u043A\u043E\u0432");
+        } else {
+          setStatusLine("\u041E\u0448\u0438\u0431\u043A\u0430: \u043D\u0435\u0442 \u043F\u043E\u043B\u0435\u0437\u043D\u044B\u0445 \u0434\u0430\u043D\u043D\u044B\u0445 (id=" + resume.id + ")");
+        }
+      } catch (err) {
+        console.error("[HH-AR][Diag] Parse error:", err);
+        setStatusLine("\u041E\u0448\u0438\u0431\u043A\u0430 \u043F\u0430\u0440\u0441\u0438\u043D\u0433\u0430: " + err.message);
+      }
+    } else {
+      setStatusLine("\u041E\u0442\u043A\u0440\u043E\u0439\u0442\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0443 /resume/{hash} \u0434\u043B\u044F \u0442\u0435\u0441\u0442\u0430");
+      console.log("[HH-AR][Diag] Not on resume page, cannot test parse");
+    }
+    console.log("[HH-AR][Diag] === TEST PARSE END ===");
+  }
+  var init_panel_diagnostics = __esm({
+    "src/ui/panel/panel-diagnostics.js"() {
+      init_state();
+      init_resumes2();
+      init_storage();
+      init_state();
+    }
+  });
+
   // src/ui/panel/events.js
   function switchTab(tabId) {
     panelState.activeTab = tabId;
@@ -6827,85 +6912,6 @@
       statusFilter.addEventListener("change", () => filterVacancies());
     }
   }
-  function setStatusLine(text) {
-    const el = refs.shadowRoot?.getElementById("res-status-line");
-    if (el) el.textContent = text;
-  }
-  function clearResumeData() {
-    console.log("[HH-AR][Diag] Clearing resume data...");
-    panelState.resume = null;
-    panelState._resumeCleared = true;
-    panelState.resumeList = [];
-    clearActiveResume().then(() => {
-      console.log("[HH-AR][Diag] myResume removed from storage");
-      setStatusLine("\u0420\u0435\u0437\u044E\u043C\u0435 \u043E\u0447\u0438\u0449\u0435\u043D\u043E \u0438\u0437 \u043F\u0430\u043C\u044F\u0442\u0438 \u0438 storage");
-      renderResumePanel();
-    });
-  }
-  function dumpResumeToConsole() {
-    console.log("[HH-AR][Diag] === DUMP START ===");
-    console.log("[HH-AR][Diag] panelState.resume:", JSON.stringify(panelState.resume, null, 2));
-    console.log("[HH-AR][Diag] panelState.resumeList:", panelState.resumeList?.length);
-    console.log("[HH-AR][Diag] panelState.myResumes:", panelState.myResumes?.length);
-    console.log("[HH-AR][Diag] panelState.vacancies:", panelState.vacancies?.length);
-    console.log("[HH-AR][Diag] URL:", window.location.href);
-    console.log("[HH-AR][Diag] Auth:", panelState.isLoggedIn);
-    console.log("[HH-AR][Diag] === DUMP END ===");
-    setStatusLine("\u0414\u0430\u043C\u043F \u0432\u044B\u0432\u0435\u0434\u0435\u043D \u0432 \u043A\u043E\u043D\u0441\u043E\u043B\u044C (F12)");
-  }
-  async function testParseResume() {
-    console.log("[HH-AR][Diag] === TEST PARSE START ===");
-    setStatusLine("\u0422\u0435\u0441\u0442 \u043F\u0430\u0440\u0441\u0438\u043D\u0433\u0430...");
-    const path = window.location.pathname;
-    console.log("[HH-AR][Diag] Current path:", path);
-    console.log("[HH-AR][Diag] Is resume page:", /\/resume\/[a-f0-9]+/.test(path));
-    console.log("[HH-AR][Diag] Is edit page:", /\/resume\/edit\//.test(path));
-    console.log("[HH-AR][Diag] Is resumes list:", path.includes("/applicant/resumes"));
-    if (/\/resume\/[a-f0-9]+/.test(path)) {
-      try {
-        let resume;
-        if (/\/resume\/edit\//.test(path)) {
-          const editMatch = path.match(/\/resume\/([a-f0-9]+)/);
-          if (editMatch) {
-            const viewUrl = "https://hh.ru/applicant/resumes/view?resume=" + editMatch[1];
-            console.log("[HH-AR][Diag] Edit page, fetching view:", viewUrl);
-            const { fetchAndParseResume: fetchAndParseResume2 } = await Promise.resolve().then(() => (init_resume_fetch(), resume_fetch_exports));
-            resume = await fetchAndParseResume2(viewUrl);
-          } else {
-            setStatusLine("\u041E\u0448\u0438\u0431\u043A\u0430: \u043D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0438\u0437\u0432\u043B\u0435\u0447\u044C ID \u0438\u0437 URL");
-            return;
-          }
-        } else {
-          const { expandHiddenSections: expandHiddenSections2 } = await Promise.resolve().then(() => (init_resume_detail(), resume_detail_exports));
-          const { parseResume: parseResume2 } = await Promise.resolve().then(() => (init_parse_resume(), parse_resume_exports));
-          await expandHiddenSections2();
-          resume = parseResume2();
-        }
-        console.log("[HH-AR][Diag] Parse result:", JSON.stringify(resume, null, 2));
-        console.log("[HH-AR][Diag] Experience count:", resume.experience?.length);
-        console.log("[HH-AR][Diag] Skills count:", resume.skills?.length);
-        console.log("[HH-AR][Diag] Debug found:", resume._debug?.found);
-        console.log("[HH-AR][Diag] Debug missing:", resume._debug?.missing);
-        const hasUsefulData = resume.id && (resume.title || resume.skills.length > 0 || resume.experience.length > 0);
-        if (hasUsefulData) {
-          panelState.resume = resume;
-          panelState._resumeCleared = false;
-          await setActiveResume(resume);
-          renderResumePanel();
-          setStatusLine("\u0421\u043F\u0430\u0440\u0441\u0435\u043D\u043E: " + resume.experience?.length + " \u043C\u0435\u0441\u0442, " + resume.skills?.length + " \u043D\u0430\u0432\u044B\u043A\u043E\u0432");
-        } else {
-          setStatusLine("\u041E\u0448\u0438\u0431\u043A\u0430: \u043D\u0435\u0442 \u043F\u043E\u043B\u0435\u0437\u043D\u044B\u0445 \u0434\u0430\u043D\u043D\u044B\u0445 (id=" + resume.id + ")");
-        }
-      } catch (err) {
-        console.error("[HH-AR][Diag] Parse error:", err);
-        setStatusLine("\u041E\u0448\u0438\u0431\u043A\u0430 \u043F\u0430\u0440\u0441\u0438\u043D\u0433\u0430: " + err.message);
-      }
-    } else {
-      setStatusLine("\u041E\u0442\u043A\u0440\u043E\u0439\u0442\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0443 /resume/{hash} \u0434\u043B\u044F \u0442\u0435\u0441\u0442\u0430");
-      console.log("[HH-AR][Diag] Not on resume page, cannot test parse");
-    }
-    console.log("[HH-AR][Diag] === TEST PARSE END ===");
-  }
   var init_events = __esm({
     "src/ui/panel/events.js"() {
       init_state();
@@ -6914,9 +6920,9 @@
       init_negotiations2();
       init_resume_detail2();
       init_helpers2();
-      init_storage();
       init_panel();
       init_auth();
+      init_panel_diagnostics();
     }
   });
 
@@ -7082,126 +7088,270 @@
     }
   });
 
-  // src/content/main.js
-  var main_exports = {};
-  __export(main_exports, {
-    initPageLogic: () => initPageLogic
-  });
+  // src/content/main-page-handlers.js
   async function initPageLogic() {
     if (pageInitialized) return;
     pageInitialized = true;
-    mainLog.info("User logged in -- initializing page logic");
+    pageLog.info("User logged in -- initializing page logic");
     const path = window.location.pathname;
-    mainLog.info("Page: " + path);
+    pageLog.info("Page: " + path);
     if (path.startsWith("/search/vacancy")) {
-      const vacancies = parseVacanciesFromPage();
-      updateVacancies(vacancies);
-      const stats = getStats();
-      updateStats(stats);
-      let timer = null;
-      new MutationObserver(() => {
-        clearTimeout(timer);
-        timer = setTimeout(() => {
-          const fresh = parseVacanciesFromPage();
-          updateVacancies(fresh);
-        }, 1500);
-      }).observe(document.body, { childList: true, subtree: true });
-      mainLog.info("SPA observer active");
+      await handleVacancySearchPage();
     } else if (/^\/resume\/[a-f0-9]+/.test(path)) {
-      if (/\/resume\/edit\//.test(path)) {
-        const editMatch = path.match(/\/resume\/([a-f0-9]+)/);
-        if (editMatch) {
-          const resumeId = editMatch[1];
-          const viewUrl = "https://hh.ru/applicant/resumes/view?resume=" + resumeId;
-          mainLog.info("Edit page detected, fetching view: " + viewUrl);
-          try {
-            const resume = await fetchAndParseResume(viewUrl);
-            if (resume.id && (resume.title || resume.skills.length > 0 || resume.experience.length > 0)) {
-              panelState.resume = resume;
-              panelState._resumeCleared = false;
-              await setActiveResume(resume);
-              saveMyResume(resume).then(() => {
-                getMyResumes().then((list) => {
-                  panelState.myResumes = list;
-                  renderMyResumesPanel();
-                });
-              });
-              mainLog.info("Auto-fetched resume (from edit page): " + resume.title);
-            }
-          } catch (err) {
-            mainLog.warn("Failed to fetch resume from edit page: " + err.message);
+      await handleResumeDetailPage(path);
+    } else if (path.startsWith("/applicant/resumes")) {
+      await handleResumeListPage();
+    } else if (/^\/vacancy\/\d+/.test(path)) {
+      await handleVacancyDetailPage(path);
+    }
+  }
+  function resetPageInit() {
+    pageInitialized = false;
+  }
+  async function handleVacancySearchPage() {
+    const vacancies = parseVacanciesFromPage();
+    updateVacancies(vacancies);
+    const stats = getStats();
+    updateStats(stats);
+    let timer = null;
+    new MutationObserver(() => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        const fresh = parseVacanciesFromPage();
+        updateVacancies(fresh);
+      }, 1500);
+    }).observe(document.body, { childList: true, subtree: true });
+    pageLog.info("SPA observer active");
+  }
+  async function handleResumeDetailPage(path) {
+    if (/\/resume\/edit\//.test(path)) {
+      const editMatch = path.match(/\/resume\/([a-f0-9]+)/);
+      if (editMatch) {
+        const resumeId = editMatch[1];
+        const viewUrl = "https://hh.ru/applicant/resumes/view?resume=" + resumeId;
+        pageLog.info("Edit page detected, fetching view: " + viewUrl);
+        try {
+          const resume = await fetchAndParseResume(viewUrl);
+          if (resume.id && (resume.title || resume.skills.length > 0 || resume.experience.length > 0)) {
+            await saveResumeToState(resume);
+            pageLog.info("Auto-fetched resume (from edit page): " + resume.title);
           }
-        }
-      } else {
-        await expandHiddenSections();
-        const resume = parseResume();
-        if (resume.id && (resume.title || resume.skills.length > 0 || resume.experience.length > 0)) {
-          panelState.resume = resume;
-          panelState._resumeCleared = false;
-          await setActiveResume(resume);
-          saveMyResume(resume).then(() => {
-            getMyResumes().then((list) => {
-              panelState.myResumes = list;
-              renderMyResumesPanel();
-            });
-          });
-          mainLog.info("Auto-parsed resume: " + resume.title);
+        } catch (err) {
+          pageLog.warn("Failed to fetch resume from edit page: " + err.message);
         }
       }
-    } else if (path.startsWith("/applicant/resumes")) {
-      const resumeList = parseResumeList();
-      panelState.resumeList = resumeList;
+    } else {
+      await expandHiddenSections();
+      const resume = parseResume();
+      if (resume.id && (resume.title || resume.skills.length > 0 || resume.experience.length > 0)) {
+        await saveResumeToState(resume);
+        pageLog.info("Auto-parsed resume: " + resume.title);
+      }
+    }
+  }
+  async function handleResumeListPage() {
+    const resumeList = parseResumeList();
+    panelState.resumeList = resumeList;
+    const list = await getMyResumes();
+    panelState.myResumes = list;
+    renderMyResumesPanel();
+    pageLog.info("Resume list page: " + resumeList.length + " resumes");
+  }
+  async function handleVacancyDetailPage(path) {
+    pageLog.info("Vacancy detail page detected");
+    try {
+      const queue = await getApplyQueue();
+      if (queue.length > 0) {
+        const vacancyId = path.replace("/vacancy/", "").split("?")[0].split("#")[0];
+        const pending = queue.find((q) => q.vacancyId === vacancyId);
+        if (pending) {
+          const updatedQueue = queue.filter((q) => q.vacancyId !== vacancyId);
+          await setApplyQueue(updatedQueue);
+          pageLog.info("Processing apply for vacancy " + vacancyId);
+          setTimeout(async () => {
+            await continueApply(pending);
+          }, 2e3);
+        } else {
+          pageLog.info("Queue has items but none for current vacancy (" + vacancyId + ")");
+        }
+      } else {
+        pageLog.info("No apply queue");
+      }
+    } catch (e) {
+      pageLog.error("Error processing apply queue: " + e.message);
+    }
+  }
+  async function saveResumeToState(resume) {
+    panelState.resume = resume;
+    panelState._resumeCleared = false;
+    await setActiveResume(resume);
+    saveMyResume(resume).then(() => {
       getMyResumes().then((list) => {
         panelState.myResumes = list;
         renderMyResumesPanel();
       });
-      mainLog.info("Resume list page: " + resumeList.length + " resumes");
-    } else if (/^\/vacancy\/\d+/.test(path)) {
-      mainLog.info("Vacancy detail page detected");
-      try {
-        const queue = await getApplyQueue();
-        if (queue.length > 0) {
-          const vacancyId = path.replace("/vacancy/", "").split("?")[0].split("#")[0];
-          const pending = queue.find((q) => q.vacancyId === vacancyId);
-          if (pending) {
-            const updatedQueue = queue.filter((q) => q.vacancyId !== vacancyId);
-            await setApplyQueue(updatedQueue);
-            mainLog.info("Processing apply for vacancy " + vacancyId);
-            setTimeout(async () => {
-              await continueApply(pending);
-            }, 2e3);
-          } else {
-            mainLog.info("Queue has items but none for current vacancy (" + vacancyId + ")");
-          }
-        } else {
-          mainLog.info("No apply queue");
-        }
-      } catch (e) {
-        mainLog.error("Error processing apply queue: " + e.message);
+    });
+  }
+  var pageLog, pageInitialized;
+  var init_main_page_handlers = __esm({
+    "src/content/main-page-handlers.js"() {
+      init_anti_hallucination();
+      init_storage();
+      init_vacancy_list();
+      init_resume_detail2();
+      init_resume_fetch();
+      init_engine();
+      init_panel2();
+      init_resumes2();
+      pageLog = createLogger("Main");
+      pageInitialized = false;
+    }
+  });
+
+  // src/content/main-resume-loader.js
+  async function handleLoadResume() {
+    if (!panelState.isLoggedIn) return;
+    const path = window.location.pathname;
+    setStatus("\u0417\u0430\u0433\u0440\u0443\u0437\u043A\u0430 \u0434\u0435\u0439\u0441\u0442\u0432\u0443\u044E\u0449\u0435\u0433\u043E \u0440\u0435\u0437\u044E\u043C\u0435...");
+    showResumeLoading("\u0417\u0430\u0433\u0440\u0443\u0437\u043A\u0430 \u0434\u0435\u0439\u0441\u0442\u0432\u0443\u044E\u0449\u0435\u0433\u043E \u0440\u0435\u0437\u044E\u043C\u0435...");
+    try {
+      if (/\/resume\/[a-f0-9]+/.test(path)) {
+        await loadFromResumePage(path);
+      } else if (path.includes("/applicant/resumes")) {
+        await loadFromResumeListPage();
+      } else {
+        await loadFromSyncedData();
       }
+    } catch (err) {
+      loadLog.error("Load resume error: " + err.message);
+      setStatus("\u041E\u0448\u0438\u0431\u043A\u0430: " + err.message);
+    } finally {
+      window.dispatchEvent(new CustomEvent("hh-ar-load-resume-done"));
     }
   }
+  async function loadFromResumePage(path) {
+    let resume;
+    if (/\/resume\/edit\//.test(path)) {
+      const editMatch = path.match(/\/resume\/([a-f0-9]+)/);
+      if (!editMatch) {
+        setStatus("\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0438\u0437\u0432\u043B\u0435\u0447\u044C ID \u0440\u0435\u0437\u044E\u043C\u0435 \u0438\u0437 URL");
+        return;
+      }
+      const resumeId = editMatch[1];
+      const viewUrl = "https://hh.ru/applicant/resumes/view?resume=" + resumeId;
+      loadLog.info("Edit page detected, fetching view: " + viewUrl);
+      try {
+        resume = await fetchAndParseResume(viewUrl);
+        loadLog.info("Fetched resume from edit page: " + resume.title);
+      } catch (err) {
+        loadLog.error("Failed to fetch resume from edit page: " + err.message);
+        setStatus("\u041E\u0448\u0438\u0431\u043A\u0430 \u0437\u0430\u0433\u0440\u0443\u0437\u043A\u0438: " + err.message);
+        return;
+      }
+    } else {
+      await expandHiddenSections();
+      resume = parseResume();
+    }
+    const hasUsefulData = resume.id && (resume.title || resume.skills.length > 0 || resume.experience.length > 0);
+    if (hasUsefulData) {
+      panelState.resume = resume;
+      panelState._resumeCleared = false;
+      await setActiveResume(resume);
+      await saveMyResume(resume);
+      panelState.myResumes = await getMyResumes();
+      renderResumePanel();
+      renderMyResumesPanel();
+      setStatus("\u0414\u0435\u0439\u0441\u0442\u0432\u0443\u044E\u0449\u0435\u0435 \u0440\u0435\u0437\u044E\u043C\u0435 \u0437\u0430\u0433\u0440\u0443\u0436\u0435\u043D\u043E: " + (resume.title || "\u0411\u0435\u0437 \u043D\u0430\u0437\u0432\u0430\u043D\u0438\u044F"));
+      loadLog.info("Resume loaded and saved: " + resume.title);
+    } else {
+      setStatus("\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0440\u0430\u0441\u043F\u043E\u0437\u043D\u0430\u0442\u044C \u0440\u0435\u0437\u044E\u043C\u0435 \u043D\u0430 \u044D\u0442\u043E\u0439 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0435 (\u043D\u0435\u0442 \u0434\u0430\u043D\u043D\u044B\u0445)");
+      loadLog.warn("Parse result has no useful data \u2014 not saving. Found: " + JSON.stringify(resume._debug?.found) + " Missing: " + JSON.stringify(resume._debug?.missing));
+    }
+  }
+  async function loadFromResumeListPage() {
+    const list = parseResumeList();
+    if (list.length > 0) {
+      panelState.resumeList = list;
+      renderResumeListPanel();
+      loadLog.info("Resume list loaded: " + list.length + " resumes");
+    }
+    const synced = panelState.myResumes || [];
+    if (synced.length > 0 && synced[0].id) {
+      panelState.resume = synced[0];
+      panelState._resumeCleared = false;
+      setActiveResume(synced[0]);
+      renderResumePanel();
+      setStatus("\u041D\u0430\u0439\u0434\u0435\u043D\u043E \u0440\u0435\u0437\u044E\u043C\u0435: " + list.length + ". \u041F\u043E\u043A\u0430\u0437\u0430\u043D\u043E: " + (synced[0].title || "\u0411\u0435\u0437 \u043D\u0430\u0437\u0432\u0430\u043D\u0438\u044F"));
+    } else {
+      setStatus("\u041D\u0430\u0439\u0434\u0435\u043D\u043E \u0440\u0435\u0437\u044E\u043C\u0435: " + list.length + ". \u041D\u0430\u0436\u043C\u0438\u0442\u0435 \xAB\u0421\u0438\u043D\u0445\u0440\u043E\u043D\u0438\u0437\u0438\u0440\u043E\u0432\u0430\u0442\u044C\xBB \u0434\u043B\u044F \u0437\u0430\u0433\u0440\u0443\u0437\u043A\u0438");
+    }
+  }
+  async function loadFromSyncedData() {
+    const synced = panelState.myResumes || [];
+    if (synced.length > 0 && synced[0].id) {
+      panelState.resume = synced[0];
+      panelState._resumeCleared = false;
+      setActiveResume(synced[0]);
+      renderResumePanel();
+      renderMyResumesPanel();
+      setStatus("\u0417\u0430\u0433\u0440\u0443\u0436\u0435\u043D\u043E \u0438\u0437 \u0441\u0438\u043D\u0445\u0440\u043E\u043D\u0438\u0437\u0430\u0446\u0438\u0438: " + (synced[0].title || "\u0411\u0435\u0437 \u043D\u0430\u0437\u0432\u0430\u043D\u0438\u044F"));
+      loadLog.info("Loaded resume from synced data: " + synced[0].title);
+    } else {
+      setStatus("\u041D\u0435\u0442 \u0441\u043E\u0445\u0440\u0430\u043D\u0451\u043D\u043D\u044B\u0445 \u0440\u0435\u0437\u044E\u043C\u0435. \u0418\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0439\u0442\u0435 \xAB\u0421\u0438\u043D\u0445\u0440\u043E\u043D\u0438\u0437\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u0432\u0441\u0435\xBB");
+      loadLog.info("No synced resumes available on non-resume page");
+    }
+  }
+  function showResumeLoading(message) {
+    const container = refs.shadowRoot?.getElementById("res-parsed-data");
+    if (!container) return;
+    container.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px 16px;gap:12px;"><div class="har-spinner"></div><div style="font-size:12px;color:#71717a;font-weight:500;">' + esc2(message || "\u0417\u0430\u0433\u0440\u0443\u0437\u043A\u0430...") + "</div></div>";
+    const body = refs.shadowRoot?.getElementById("res-parsing-body");
+    if (body && !body.classList.contains("open")) {
+      body.classList.add("open");
+      const chevron = body.previousElementSibling?.querySelector(".timeline-chevron");
+      if (chevron) chevron.classList.add("open");
+    }
+  }
+  function esc2(s) {
+    if (!s) return "";
+    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+  var loadLog;
+  var init_main_resume_loader = __esm({
+    "src/content/main-resume-loader.js"() {
+      init_anti_hallucination();
+      init_storage();
+      init_resume_detail2();
+      init_resume_fetch();
+      init_panel2();
+      init_resumes2();
+      init_state();
+      loadLog = createLogger("Main");
+    }
+  });
+
+  // src/content/main-sync.js
   async function handleSyncResumes() {
     if (!panelState.isLoggedIn) return;
     if (syncInProgress) {
-      mainLog.warn("Sync already in progress");
+      syncLog.warn("Sync already in progress");
       return;
     }
     syncInProgress = true;
     setStatus("\u0421\u0438\u043D\u0445\u0440\u043E\u043D\u0438\u0437\u0430\u0446\u0438\u044F \u0440\u0435\u0437\u044E\u043C\u0435...");
-    mainLog.info("Sync: starting fetch-based resume sync");
+    syncLog.info("Sync: starting fetch-based resume sync");
     try {
       await clearMyResumes();
       panelState.myResumes = [];
       renderMyResumesPanel();
       const results = await syncAllResumes({
         onProgress: (done, total, msg) => {
-          mainLog.info("Sync: [" + done + "/" + total + "] " + msg);
+          syncLog.info("Sync: [" + done + "/" + total + "] " + msg);
           setStatus("\u0421\u0438\u043D\u0445\u0440.: " + done + "/" + total + " \u2014 " + msg);
           renderSyncProgress(done, total, msg);
         },
         onError: (item, err) => {
-          mainLog.error("Sync: error for " + (item ? item.title : "unknown") + ": " + err.message);
+          syncLog.error("Sync: error for " + (item ? item.title : "unknown") + ": " + err.message);
         }
       });
       for (const resume of results) {
@@ -7221,15 +7371,41 @@
         renderResumePanel();
       }
       setStatus("\u0421\u0438\u043D\u0445\u0440\u043E\u043D\u0438\u0437\u0438\u0440\u043E\u0432\u0430\u043D\u043E " + results.length + " \u0440\u0435\u0437\u044E\u043C\u0435");
-      mainLog.info("Sync: complete. " + results.length + " resumes saved");
+      syncLog.info("Sync: complete. " + results.length + " resumes saved");
     } catch (err) {
-      mainLog.error("Sync: fatal error: " + err.message);
+      syncLog.error("Sync: fatal error: " + err.message);
       setStatus("\u041E\u0448\u0438\u0431\u043A\u0430 \u0441\u0438\u043D\u0445\u0440\u043E\u043D\u0438\u0437\u0430\u0446\u0438\u0438: " + err.message);
     } finally {
       syncInProgress = false;
       window.dispatchEvent(new CustomEvent("hh-ar-sync-done"));
     }
   }
+  function renderSyncProgress(done, total, msg) {
+    const listEl = refs.shadowRoot?.getElementById("res-sync-list");
+    if (!listEl) return;
+    const pct = total > 0 ? Math.round(done / total * 100) : 0;
+    listEl.innerHTML = '<div style="padding:8px;text-align:center;"><div style="font-size:12px;font-weight:600;margin-bottom:6px;">' + esc3(msg) + '</div><div style="background:#e4e4e7;border-radius:4px;height:6px;overflow:hidden;"><div style="background:#059669;height:100%;width:' + pct + '%;border-radius:4px;transition:width 0.3s;"></div></div><div style="font-size:10px;color:#71717a;margin-top:4px;">' + done + " / " + total + "</div></div>";
+  }
+  function esc3(s) {
+    if (!s) return "";
+    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+  var syncLog, syncInProgress;
+  var init_main_sync = __esm({
+    "src/content/main-sync.js"() {
+      init_anti_hallucination();
+      init_storage();
+      init_resume_fetch();
+      init_panel2();
+      init_resumes2();
+      init_state();
+      syncLog = createLogger("Main");
+      syncInProgress = false;
+    }
+  });
+
+  // src/content/main.js
+  var main_exports = {};
   async function init() {
     mainLog.info("Loaded: " + window.location.href);
     await checkDailyReset();
@@ -7242,16 +7418,37 @@
       mainLog.warn("Boot: failed to load stats/settings: " + e.message);
     }
     createPanel();
+    await loadSavedResumes();
+    window.addEventListener("hh-ar-apply", async (e) => {
+      if (!panelState.isLoggedIn) return;
+      const { applyToVacancy: applyToVacancy2 } = await Promise.resolve().then(() => (init_engine(), engine_exports));
+      await applyToVacancy2(e.detail.vacancyId);
+    });
+    window.addEventListener("hh-ar-apply-all", async () => {
+      if (!panelState.isLoggedIn) return;
+      const { applyToAll: applyToAll2 } = await Promise.resolve().then(() => (init_engine(), engine_exports));
+      await applyToAll2(panelState.vacancies);
+    });
+    window.addEventListener("hh-ar-refresh", async () => {
+      if (!panelState.isLoggedIn) return;
+      const v = await parseVacanciesFromPage();
+      updateVacancies(v);
+    });
+    window.addEventListener("hh-ar-load-resume", handleLoadResume);
+    window.addEventListener("hh-ar-sync-resumes", handleSyncResumes);
+  }
+  async function loadSavedResumes() {
     try {
-      const savedResume = await getActiveResume();
-      if (savedResume && savedResume.id) {
+      const d = await chrome.storage.local.get("myResume");
+      if (d.myResume && d.myResume.id) {
+        const savedResume = d.myResume;
         if (savedResume.visibility === void 0) {
           savedResume.visibility = savedResume.hidden ? "hidden" : VISIBILITY_UNKNOWN;
-          await setActiveResume(savedResume);
+          await chrome.storage.local.set({ myResume: savedResume });
         }
         if (savedResume.title && TITLE_SUFFIX_NOISE.test(savedResume.title)) {
           savedResume.title = savedResume.title.replace(TITLE_SUFFIX_NOISE, "").trim();
-          await setActiveResume(savedResume);
+          await chrome.storage.local.set({ myResume: savedResume });
         }
         panelState.resume = savedResume;
         mainLog.info("Loaded saved resume: " + savedResume.title);
@@ -7281,145 +7478,21 @@
       }
     } catch (e) {
     }
-    window.addEventListener("hh-ar-apply", async (e) => {
-      if (!panelState.isLoggedIn) return;
-      const { applyToVacancy: applyToVacancy2 } = await Promise.resolve().then(() => (init_engine(), engine_exports));
-      await applyToVacancy2(e.detail.vacancyId);
-    });
-    window.addEventListener("hh-ar-apply-all", async () => {
-      if (!panelState.isLoggedIn) return;
-      const { applyToAll: applyToAll2 } = await Promise.resolve().then(() => (init_engine(), engine_exports));
-      await applyToAll2(panelState.vacancies);
-    });
-    window.addEventListener("hh-ar-refresh", async () => {
-      if (!panelState.isLoggedIn) return;
-      const v = await parseVacanciesFromPage();
-      updateVacancies(v);
-    });
-    window.addEventListener("hh-ar-load-resume", async () => {
-      if (!panelState.isLoggedIn) return;
-      const path = window.location.pathname;
-      setStatus("\u0417\u0430\u0433\u0440\u0443\u0437\u043A\u0430 \u0434\u0435\u0439\u0441\u0442\u0432\u0443\u044E\u0449\u0435\u0433\u043E \u0440\u0435\u0437\u044E\u043C\u0435...");
-      showResumeLoading("\u0417\u0430\u0433\u0440\u0443\u0437\u043A\u0430 \u0434\u0435\u0439\u0441\u0442\u0432\u0443\u044E\u0449\u0435\u0433\u043E \u0440\u0435\u0437\u044E\u043C\u0435...");
-      try {
-        if (/\/resume\/[a-f0-9]+/.test(path)) {
-          let resume;
-          if (/\/resume\/edit\//.test(path)) {
-            const editMatch = path.match(/\/resume\/([a-f0-9]+)/);
-            if (editMatch) {
-              const resumeId = editMatch[1];
-              const viewUrl = "https://hh.ru/applicant/resumes/view?resume=" + resumeId;
-              mainLog.info("Edit page detected, fetching view: " + viewUrl);
-              try {
-                resume = await fetchAndParseResume(viewUrl);
-                mainLog.info("Fetched resume from edit page: " + resume.title);
-              } catch (err) {
-                mainLog.error("Failed to fetch resume from edit page: " + err.message);
-                setStatus("\u041E\u0448\u0438\u0431\u043A\u0430 \u0437\u0430\u0433\u0440\u0443\u0437\u043A\u0438: " + err.message);
-                return;
-              }
-            } else {
-              setStatus("\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0438\u0437\u0432\u043B\u0435\u0447\u044C ID \u0440\u0435\u0437\u044E\u043C\u0435 \u0438\u0437 URL");
-              return;
-            }
-          } else {
-            await expandHiddenSections();
-            resume = parseResume();
-          }
-          const hasUsefulData = resume.id && (resume.title || resume.skills.length > 0 || resume.experience.length > 0);
-          if (hasUsefulData) {
-            panelState.resume = resume;
-            panelState._resumeCleared = false;
-            await setActiveResume(resume);
-            await saveMyResume(resume);
-            panelState.myResumes = await getMyResumes();
-            renderResumePanel();
-            renderMyResumesPanel();
-            setStatus("\u0414\u0435\u0439\u0441\u0442\u0432\u0443\u044E\u0449\u0435\u0435 \u0440\u0435\u0437\u044E\u043C\u0435 \u0437\u0430\u0433\u0440\u0443\u0436\u0435\u043D\u043E: " + (resume.title || "\u0411\u0435\u0437 \u043D\u0430\u0437\u0432\u0430\u043D\u0438\u044F"));
-            mainLog.info("Resume loaded and saved: " + resume.title);
-          } else {
-            setStatus("\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0440\u0430\u0441\u043F\u043E\u0437\u043D\u0430\u0442\u044C \u0440\u0435\u0437\u044E\u043C\u0435 \u043D\u0430 \u044D\u0442\u043E\u0439 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0435 (\u043D\u0435\u0442 \u0434\u0430\u043D\u043D\u044B\u0445)");
-            mainLog.warn("Parse result has no useful data \u2014 not saving. Found: " + JSON.stringify(resume._debug?.found) + " Missing: " + JSON.stringify(resume._debug?.missing));
-          }
-        } else if (path.includes("/applicant/resumes")) {
-          const list = parseResumeList();
-          if (list.length > 0) {
-            panelState.resumeList = list;
-            renderResumeListPanel();
-            mainLog.info("Resume list loaded: " + list.length + " resumes");
-          }
-          const synced = panelState.myResumes || [];
-          if (synced.length > 0 && synced[0].id) {
-            panelState.resume = synced[0];
-            panelState._resumeCleared = false;
-            setActiveResume(synced[0]);
-            renderResumePanel();
-            setStatus("\u041D\u0430\u0439\u0434\u0435\u043D\u043E \u0440\u0435\u0437\u044E\u043C\u0435: " + list.length + ". \u041F\u043E\u043A\u0430\u0437\u0430\u043D\u043E: " + (synced[0].title || "\u0411\u0435\u0437 \u043D\u0430\u0437\u0432\u0430\u043D\u0438\u044F"));
-          } else {
-            setStatus("\u041D\u0430\u0439\u0434\u0435\u043D\u043E \u0440\u0435\u0437\u044E\u043C\u0435: " + list.length + ". \u041D\u0430\u0436\u043C\u0438\u0442\u0435 \xAB\u0421\u0438\u043D\u0445\u0440\u043E\u043D\u0438\u0437\u0438\u0440\u043E\u0432\u0430\u0442\u044C\xBB \u0434\u043B\u044F \u0437\u0430\u0433\u0440\u0443\u0437\u043A\u0438");
-          }
-        } else {
-          const synced = panelState.myResumes || [];
-          if (synced.length > 0 && synced[0].id) {
-            panelState.resume = synced[0];
-            panelState._resumeCleared = false;
-            setActiveResume(synced[0]);
-            renderResumePanel();
-            renderMyResumesPanel();
-            setStatus("\u0417\u0430\u0433\u0440\u0443\u0436\u0435\u043D\u043E \u0438\u0437 \u0441\u0438\u043D\u0445\u0440\u043E\u043D\u0438\u0437\u0430\u0446\u0438\u0438: " + (synced[0].title || "\u0411\u0435\u0437 \u043D\u0430\u0437\u0432\u0430\u043D\u0438\u044F"));
-            mainLog.info("Loaded resume from synced data: " + synced[0].title);
-          } else {
-            setStatus("\u041D\u0435\u0442 \u0441\u043E\u0445\u0440\u0430\u043D\u0451\u043D\u043D\u044B\u0445 \u0440\u0435\u0437\u044E\u043C\u0435. \u0418\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0439\u0442\u0435 \xAB\u0421\u0438\u043D\u0445\u0440\u043E\u043D\u0438\u0437\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u0432\u0441\u0435\xBB");
-            mainLog.info("No synced resumes available on non-resume page");
-          }
-        }
-      } catch (err) {
-        mainLog.error("Load resume error: " + err.message);
-        setStatus("\u041E\u0448\u0438\u0431\u043A\u0430: " + err.message);
-      } finally {
-        window.dispatchEvent(new CustomEvent("hh-ar-load-resume-done"));
-      }
-    });
-    window.addEventListener("hh-ar-sync-resumes", handleSyncResumes);
   }
-  function renderSyncProgress(done, total, msg) {
-    const listEl = refs.shadowRoot?.getElementById("res-sync-list");
-    if (!listEl) return;
-    const pct = total > 0 ? Math.round(done / total * 100) : 0;
-    listEl.innerHTML = '<div style="padding:8px;text-align:center;"><div style="font-size:12px;font-weight:600;margin-bottom:6px;">' + esc2(msg) + '</div><div style="background:#e4e4e7;border-radius:4px;height:6px;overflow:hidden;"><div style="background:#059669;height:100%;width:' + pct + '%;border-radius:4px;transition:width 0.3s;"></div></div><div style="font-size:10px;color:#71717a;margin-top:4px;">' + done + " / " + total + "</div></div>";
-  }
-  function showResumeLoading(message) {
-    const container = refs.shadowRoot?.getElementById("res-parsed-data");
-    if (!container) return;
-    container.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px 16px;gap:12px;"><div class="har-spinner"></div><div style="font-size:12px;color:#71717a;font-weight:500;">' + esc2(message || "\u0417\u0430\u0433\u0440\u0443\u0437\u043A\u0430...") + "</div></div>";
-    const body = refs.shadowRoot?.getElementById("res-parsing-body");
-    if (body && !body.classList.contains("open")) {
-      body.classList.add("open");
-      const chevron = body.previousElementSibling?.querySelector(".timeline-chevron");
-      if (chevron) chevron.classList.add("open");
-    }
-  }
-  function esc2(s) {
-    if (!s) return "";
-    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-  }
-  var mainLog, pageInitialized, syncInProgress;
+  var mainLog;
   var init_main = __esm({
     "src/content/main.js"() {
       init_anti_hallucination();
       init_storage();
       init_vacancy_list();
       init_resume_detail2();
-      init_resume_fetch();
-      init_engine();
       init_panel2();
       init_resumes2();
-      init_state();
-      init_resume_fetch();
       init_resume_constants();
+      init_main_page_handlers();
+      init_main_resume_loader();
+      init_main_sync();
       mainLog = createLogger("Main");
-      pageInitialized = false;
-      syncInProgress = false;
       window.__hhDiagnose = diagnoseResumeDOM;
       window.__hhDebugVisibility = debugVisibility;
       window.__hhVisDiag = null;

@@ -2,32 +2,30 @@
  * ENGINE: APPLY QUEUE
  * ========================
  * Queue management for automated vacancy apply workflow.
- * Persisted in chrome.storage.local so queue survives page navigations.
+ * Delegates storage to lib/storage.js for centralized access.
  */
 
 import { createLogger } from '../lib/anti-hallucination.js';
 import rateLimiter from '../lib/rate-limiter.js';
 import { simulateReading } from '../lib/timing.js';
+import { getApplyQueue, setApplyQueue } from '../lib/storage.js';
 
 const autoLog = createLogger('AutoRespond');
 
 /**
- * Get the current apply queue from chrome.storage.
+ * Get the current apply queue.
  * @returns {Promise<Array<{vacancyId: string, timestamp: number}>>}
  */
 export async function getQueue() {
-  try {
-    const d = await chrome.storage.local.get('applyQueue');
-    return d.applyQueue || [];
-  } catch (e) { return []; }
+  return getApplyQueue();
 }
 
 /**
- * Replace the entire apply queue in chrome.storage.
+ * Replace the entire apply queue.
  * @param {Array} queue
  */
 export async function setQueue(queue) {
-  await chrome.storage.local.set({ applyQueue: queue });
+  await setApplyQueue(queue);
 }
 
 /**
@@ -35,10 +33,10 @@ export async function setQueue(queue) {
  * @returns {Promise<{vacancyId: string, timestamp: number}|null>}
  */
 export async function dequeueNext() {
-  const queue = await getQueue();
+  const queue = await getApplyQueue();
   if (queue.length === 0) return null;
   const next = queue[0];
-  await setQueue(queue.slice(1));
+  await setApplyQueue(queue.slice(1));
   return next;
 }
 
@@ -46,7 +44,7 @@ export async function dequeueNext() {
  * Clear the entire apply queue.
  */
 export async function clearQueue() {
-  await chrome.storage.local.remove('applyQueue');
+  await setApplyQueue([]);
 }
 
 /** Max age for a queue item before it's considered stale (10 minutes). */
@@ -57,7 +55,7 @@ const QUEUE_ITEM_MAX_AGE = 600000;
  * Checks rate limits, adds human-like delay, then navigates to next vacancy.
  */
 export async function processNextInQueue() {
-  const queue = await getQueue();
+  const queue = await getApplyQueue();
   if (queue.length === 0) {
     autoLog.info('Queue empty — mass apply complete');
     return;
