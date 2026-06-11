@@ -1138,3 +1138,20 @@ Stage Summary:
 - pushState/replaceState patches remain so extension detects when hh.ru does its own SPA navigation
 - No more broken state where FAB hides and page doesn't change
 
+
+---
+Task ID: 3
+Agent: main
+Task: Fix experience score — vacancy-list stored experience as string, scorer expected object
+
+Work Log:
+- Diagnosed: vacancy-list.js stored experience as raw string (e.g. '3-6 лет'), but scoreExperience() expected {min, max, raw} object
+- Result: all list-parsed vacancies got neutral 8/15 for experience regardless of actual match
+- Added parseExperienceString() to vacancy-list.js to convert string to structured format
+- Added fallback in scoreExperience() to also handle legacy string format
+- Rebuilt v1.9.17.0
+
+Stage Summary:
+- Experience scoring now works for list-parsed vacancies (was always 8/15 before)
+- Supports: 'Нет опыта', 'Более 6 лет', '1–3 года', '3 года', etc.
+

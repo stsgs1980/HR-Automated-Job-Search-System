@@ -53,7 +53,7 @@ export async function parseVacanciesFromPage(resume) {
     const vacancy = {
       id, title: title.trim(), company: (company || '').trim(),
       salary: salary || 'Не указана', location: (location || '').trim(),
-      experience: (experience || '').trim(), skills,
+      experience: parseExperienceString((experience || '').trim()), skills,
       url: url.startsWith('/') ? 'https://hh.ru' + url : url,
       hasReply, status: 'new', parsedAt: new Date().toISOString(),
       matchScore: null
@@ -88,4 +88,41 @@ export async function parseVacanciesFromPage(resume) {
 
   parserLog.info('Parsed ' + vacancies.length + '/' + cards.length + ' valid vacancies');
   return vacancies;
+}
+
+/**
+ * Parse experience requirement string into structured format.
+ * Input:  "1–3 года", "Более 6 лет", "Нет опыта", "3 года"
+ * Output: { raw: "1–3 года", min: 1, max: 3 }
+ */
+function parseExperienceString(raw) {
+  if (!raw) return { raw: '', min: null, max: null };
+
+  const text = raw.toLowerCase().trim();
+
+  // "Нет опыта" / "Не требуется" / "Без опыта"
+  if (/нет\s*опыт|не\s*требу|без\s*опыт/.test(text)) {
+    return { raw, min: 0, max: 0 };
+  }
+
+  // "Более N лет" / "От N лет" / "Свыше N лет"
+  const moreMatch = text.match(/(?:более|от|свыше)\s+(\d+)/);
+  if (moreMatch) {
+    return { raw, min: parseInt(moreMatch[1], 10), max: null };
+  }
+
+  // "N–M лет" / "N-M лет" / "N — M лет" (range)
+  const rangeMatch = text.match(/(\d+)\s*[–—\-\s]+\s*(\d+)/);
+  if (rangeMatch) {
+    return { raw, min: parseInt(rangeMatch[1], 10), max: parseInt(rangeMatch[2], 10) };
+  }
+
+  // "N лет" / "N год" (exact)
+  const exactMatch = text.match(/(\d+)\s*(?:год|лет)/);
+  if (exactMatch) {
+    return { raw, min: parseInt(exactMatch[1], 10), max: null };
+  }
+
+  // Couldn't parse — return raw string for scorer fallback
+  return { raw, min: null, max: null };
 }

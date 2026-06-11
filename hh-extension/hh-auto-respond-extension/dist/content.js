@@ -1032,7 +1032,10 @@
     return { score: 3, reason: "above-range" };
   }
   function scoreExperience(resume, vacancy) {
-    const vacExp = vacancy.experience || {};
+    let vacExp = vacancy.experience || {};
+    if (typeof vacExp === "string") {
+      vacExp = parseExperienceString(vacExp);
+    }
     if (vacExp.min === 0 && vacExp.max === 0) {
       return { score: 15, reason: "no-experience-required" };
     }
@@ -1127,6 +1130,18 @@
     }
     if (totalMonths === 0) return null;
     return Math.round(totalMonths / 12 * 10) / 10;
+  }
+  function parseExperienceString(raw) {
+    if (!raw) return { raw: "", min: null, max: null };
+    const text = raw.toLowerCase().trim();
+    if (/нет\s*опыт|не\s*требу|без\s*опыт/.test(text)) return { raw, min: 0, max: 0 };
+    const moreMatch = text.match(/(?:более|от|свыше)\s+(\d+)/);
+    if (moreMatch) return { raw, min: parseInt(moreMatch[1], 10), max: null };
+    const rangeMatch = text.match(/(\d+)\s*[–—\-\s]+\s*(\d+)/);
+    if (rangeMatch) return { raw, min: parseInt(rangeMatch[1], 10), max: parseInt(rangeMatch[2], 10) };
+    const exactMatch = text.match(/(\d+)\s*(?:год|лет)/);
+    if (exactMatch) return { raw, min: parseInt(exactMatch[1], 10), max: null };
+    return { raw, min: null, max: null };
   }
   var scoreLog;
   var init_match_scorer = __esm({
@@ -10106,7 +10121,7 @@
         company: (company || "").trim(),
         salary: salary || "\u041D\u0435 \u0443\u043A\u0430\u0437\u0430\u043D\u0430",
         location: (location || "").trim(),
-        experience: (experience || "").trim(),
+        experience: parseExperienceString2((experience || "").trim()),
         skills,
         url: url.startsWith("/") ? "https://hh.ru" + url : url,
         hasReply,
@@ -10140,6 +10155,26 @@
     });
     parserLog.info("Parsed " + vacancies.length + "/" + cards.length + " valid vacancies");
     return vacancies;
+  }
+  function parseExperienceString2(raw) {
+    if (!raw) return { raw: "", min: null, max: null };
+    const text = raw.toLowerCase().trim();
+    if (/нет\s*опыт|не\s*требу|без\s*опыт/.test(text)) {
+      return { raw, min: 0, max: 0 };
+    }
+    const moreMatch = text.match(/(?:более|от|свыше)\s+(\d+)/);
+    if (moreMatch) {
+      return { raw, min: parseInt(moreMatch[1], 10), max: null };
+    }
+    const rangeMatch = text.match(/(\d+)\s*[–—\-\s]+\s*(\d+)/);
+    if (rangeMatch) {
+      return { raw, min: parseInt(rangeMatch[1], 10), max: parseInt(rangeMatch[2], 10) };
+    }
+    const exactMatch = text.match(/(\d+)\s*(?:год|лет)/);
+    if (exactMatch) {
+      return { raw, min: parseInt(exactMatch[1], 10), max: null };
+    }
+    return { raw, min: null, max: null };
   }
 
   // src/parsers/vacancy-diagnostic.js

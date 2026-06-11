@@ -240,7 +240,12 @@ function scoreSalary(resume, vacancy) {
 // ═══════════════════════════════════════════════
 
 function scoreExperience(resume, vacancy) {
-  const vacExp = vacancy.experience || {};
+  let vacExp = vacancy.experience || {};
+
+  // Handle legacy string format from vacancy-list parser
+  if (typeof vacExp === 'string') {
+    vacExp = parseExperienceString(vacExp);
+  }
 
   // If vacancy requires no experience
   if (vacExp.min === 0 && vacExp.max === 0) {
@@ -338,4 +343,18 @@ function calcResumeYears(experience) {
 
   if (totalMonths === 0) return null;
   return Math.round(totalMonths / 12 * 10) / 10;
+}
+
+/** Parse experience string like "1–3 года" into { raw, min, max }. */
+function parseExperienceString(raw) {
+  if (!raw) return { raw: '', min: null, max: null };
+  const text = raw.toLowerCase().trim();
+  if (/нет\s*опыт|не\s*требу|без\s*опыт/.test(text)) return { raw, min: 0, max: 0 };
+  const moreMatch = text.match(/(?:более|от|свыше)\s+(\d+)/);
+  if (moreMatch) return { raw, min: parseInt(moreMatch[1], 10), max: null };
+  const rangeMatch = text.match(/(\d+)\s*[–—\-\s]+\s*(\d+)/);
+  if (rangeMatch) return { raw, min: parseInt(rangeMatch[1], 10), max: parseInt(rangeMatch[2], 10) };
+  const exactMatch = text.match(/(\d+)\s*(?:год|лет)/);
+  if (exactMatch) return { raw, min: parseInt(exactMatch[1], 10), max: null };
+  return { raw, min: null, max: null };
 }
