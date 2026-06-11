@@ -19,6 +19,7 @@ import {
 } from './section-builders.js';
 import { setActiveResume } from '../../../lib/storage.js';
 import { updateAccordionHeader } from './resume-accordion-header.js';
+import { analyzeResumeQuality } from '../../../lib/resume-quality-analyzer.js';
 
 // ═══════════════════════════════════════════════
 // MAIN RESUME PANEL RENDER
@@ -101,7 +102,7 @@ export function renderResumePanel() {
 }
 
 // ═══════════════════════════════════════════════
-// RESUME SCORE — objective completeness assessment
+// RESUME SCORE — качественная оценка глазами HR/ATS
 // ═══════════════════════════════════════════════
 
 function updateResumeScore(r) {
@@ -111,26 +112,10 @@ function updateResumeScore(r) {
   if (!r || !r.id) { section.style.display = 'none'; return; }
   section.style.display = '';
 
-  // Checklist of important resume fields with weights
-  const checks = [
-    { label: 'Позиция',        ok: !!(r.title && r.title.length > 2),        weight: 10 },
-    { label: 'Имя',            ok: !!(r.name && r.name.length > 1),          weight: 8 },
-    { label: 'Зарплата',       ok: !!(r.salary),                             weight: 8 },
-    { label: 'Город',          ok: !!(r.address),                            weight: 6 },
-    { label: 'Контакты',       ok: !!(r.phone || r.email),                   weight: 10 },
-    { label: 'Навыки (3+)',    ok: (r.skills || []).length >= 3,             weight: 15 },
-    { label: 'Опыт (1+)',      ok: (r.experience || []).length >= 1,         weight: 15 },
-    { label: 'Образование',    ok: (r.education || []).length >= 1,          weight: 10 },
-    { label: 'Языки',          ok: (r.languages || []).length >= 1,          weight: 6 },
-    { label: 'О себе',         ok: !!(r.additionalInfo && r.additionalInfo.length > 20), weight: 6 },
-    { label: 'Занятость/формат', ok: !!(r.employmentType || r.workFormat),   weight: 6 },
-  ];
+  const result = analyzeResumeQuality(r);
+  const pct = result.totalScore;
 
-  const totalWeight = checks.reduce((s, c) => s + c.weight, 0);
-  const earnedWeight = checks.filter(c => c.ok).reduce((s, c) => s + c.weight, 0);
-  const pct = Math.round((earnedWeight / totalWeight) * 100);
-
-  // Ring chart
+  // ── Ring chart ──
   const ring = refs.shadowRoot?.getElementById('res-score-ring');
   if (ring) {
     const deg = Math.round(pct * 3.6);
@@ -143,24 +128,82 @@ function updateResumeScore(r) {
     }
   }
 
-  // Subtitle
+  // ── Verdict subtitle ──
   const subtitle = refs.shadowRoot?.getElementById('res-score-subtitle');
   if (subtitle) {
-    if (pct >= 80) subtitle.textContent = 'Отличная полнота — работодатели увидят ключевые данные';
-    else if (pct >= 60) subtitle.textContent = 'Хорошая полнота — есть что дополнить';
-    else if (pct >= 40) subtitle.textContent = 'Средняя полнота — стоит добавить недостающие разделы';
-    else subtitle.textContent = 'Низкая полнота — заполните базовые разделы';
+    if (pct >= 80) subtitle.textContent = 'Сильное резюме — ATS пропустит, HR заметит';
+    else if (pct >= 60) subtitle.textContent = 'Хорошее резюме — есть что усилить';
+    else if (pct >= 40) subtitle.textContent = 'Среднее — ATS может отсеять, HR не увидит ценности';
+    else subtitle.textContent = 'Слабое — высокая вероятность отсева на этапе ATS';
   }
 
-  // Checklist
-  const checklist = refs.shadowRoot?.getElementById('res-score-checklist');
-  if (checklist) {
-    checklist.innerHTML = checks.map(c => {
-      const icon = c.ok
-        ? '<span style="color:#059669;">&#10003;</span>'
-        : '<span style="color:#DC2626;">&#10007;</span>';
-      return '<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;">' + icon +
-        ' <span' + (c.ok ? '' : ' style="color:#71717a;"') + '>' + c.label + '</span></div>';
-    }).join('');
+  // ── ATS + Experience mini-scores ──
+  const atsScoreEl = refs.shadowRoot?.getElementById('res-ats-score');
+  const atsBar = refs.shadowRoot?.getElementById('res-ats-bar');
+  if (atsScoreEl) {
+    const atsColor = result.atsScore >= 70 ? '#059669' : result.atsScore >= 40 ? '#D97706' : '#DC2626';
+    atsScoreEl.textContent = result.atsScore + '%';
+    atsScoreEl.style.color = atsColor;
+  }
+  if (atsBar) atsBar.style.width = result.atsScore + '%';
+
+  const expScoreEl = refs.shadowRoot?.getElementById('res-exp-score');
+  const expBar = refs.shadowRoot?.getElementById('res-exp-bar');
+  if (expScoreEl) {
+    const expColor = result.experienceScore >= 70 ? '#2563EB' : result.experienceScore >= 40 ? '#D97706' : '#DC2626';
+    expScoreEl.textContent = result.experienceScore + '%';
+    expScoreEl.style.color = expColor;
+  }
+  if (expBar) expBar.style.width = result.experienceScore + '%';
+
+  // ── Red flags ──
+  const redFlagsContainer = refs.shadowRoot?.getElementById('res-red-flags');
+  const redFlagsList = refs.shadowRoot?.getElementById('res-red-flags-list');
+  if (redFlagsContainer && redFlagsList) {
+    if (result.redFlags.length > 0) {
+      redFlagsContainer.style.display = '';
+      redFlagsList.innerHTML = result.redFlags.map(f =>
+        '<div style="display:flex;align-items:flex-start;gap:6px;margin-bottom:4px;padding:5px 8px;background:#FEF2F2;border-radius:6px;">' +
+        '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#DC2626" stroke-width="2.5" style="flex-shrink:0;margin-top:1px;"><path d="M12 9v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>' +
+        '<span style="color:#991B1B;line-height:1.4;">' + esc(f) + '</span></div>'
+      ).join('');
+    } else {
+      redFlagsContainer.style.display = 'none';
+    }
+  }
+
+  // ── Strengths ──
+  const strengthsContainer = refs.shadowRoot?.getElementById('res-strengths');
+  const strengthsList = refs.shadowRoot?.getElementById('res-strengths-list');
+  if (strengthsContainer && strengthsList) {
+    if (result.strengths.length > 0) {
+      strengthsContainer.style.display = '';
+      strengthsList.innerHTML = result.strengths.map(s =>
+        '<div style="display:flex;align-items:flex-start;gap:6px;margin-bottom:4px;padding:5px 8px;background:#F0FDF4;border-radius:6px;">' +
+        '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2.5" style="flex-shrink:0;margin-top:1px;"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>' +
+        '<span style="color:#166534;line-height:1.4;">' + esc(s) + '</span></div>'
+      ).join('');
+    } else {
+      strengthsContainer.style.display = 'none';
+    }
+  }
+
+  // ── Recommendations ──
+  const recsContainer = refs.shadowRoot?.getElementById('res-recommendations');
+  const recsList = refs.shadowRoot?.getElementById('res-recommendations-list');
+  if (recsContainer && recsList) {
+    if (result.recommendations.length > 0) {
+      recsContainer.style.display = '';
+      recsList.innerHTML = result.recommendations.map(rec => {
+        const priorityColor = rec.priority === 'critical' ? '#991B1B' : rec.priority === 'high' ? '#92400E' : '#71717a';
+        const priorityBg = rec.priority === 'critical' ? '#FEF2F2' : rec.priority === 'high' ? '#FFFBEB' : '#FAFAFA';
+        const priorityBorder = rec.priority === 'critical' ? '1px solid rgba(220,38,38,0.15)' : rec.priority === 'high' ? '1px solid rgba(217,119,6,0.15)' : '1px solid #e4e4e7';
+        return '<div style="display:flex;align-items:flex-start;gap:6px;margin-bottom:4px;padding:5px 8px;background:' + priorityBg + ';border:' + priorityBorder + ';border-radius:6px;">' +
+          '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#D97706" stroke-width="2.5" style="flex-shrink:0;margin-top:1px;"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>' +
+          '<span style="color:' + priorityColor + ';line-height:1.4;">' + esc(rec.text) + '</span></div>';
+      }).join('');
+    } else {
+      recsContainer.style.display = 'none';
+    }
   }
 }

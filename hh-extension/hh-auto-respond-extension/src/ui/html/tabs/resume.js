@@ -61,16 +61,61 @@ export function getResumeSection() {
       <div id="res-skills-list" style="display:flex;flex-wrap:wrap;gap:4px;"></div>
     </div>
     <div id="res-score-section" class="card fade-in" style="margin-bottom:12px;display:none;">
+      <!-- Header: ring + title + verdict -->
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
-        <div id="res-score-ring" style="width:44px;height:44px;border-radius:50%;background:conic-gradient(#059669 0deg 0deg,#e4e4e7 0deg 360deg);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-          <div style="width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,0.95);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:#059669;" id="res-score-pct">0%</div>
+        <div id="res-score-ring" style="width:48px;height:48px;border-radius:50%;background:conic-gradient(#059669 0deg 0deg,#e4e4e7 0deg 360deg);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+          <div style="width:38px;height:38px;border-radius:50%;background:rgba(255,255,255,0.95);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:#059669;" id="res-score-pct">0%</div>
         </div>
         <div style="flex:1;min-width:0;">
           <div style="font-size:13px;font-weight:600;">Оценка резюме</div>
-          <div id="res-score-subtitle" style="font-size:11px;color:#71717a;margin-top:1px;">Объективная полнота заполнения</div>
+          <div id="res-score-subtitle" style="font-size:11px;color:#71717a;margin-top:1px;">Анализ глазами HR и ATS</div>
         </div>
       </div>
-      <div id="res-score-checklist" style="font-size:11px;"></div>
+      <!-- Two mini-scores: ATS + Experience -->
+      <div id="res-score-bars" style="display:flex;gap:8px;margin-bottom:12px;">
+        <div style="flex:1;background:#FAFAFA;border-radius:8px;padding:8px 10px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+            <span style="font-size:10px;color:#71717a;">ATS-совместимость</span>
+            <span id="res-ats-score" style="font-size:12px;font-weight:700;color:#059669;">0%</span>
+          </div>
+          <div style="height:4px;border-radius:2px;background:#e4e4e7;">
+            <div id="res-ats-bar" style="height:100%;border-radius:2px;background:#059669;width:0%;transition:width .4s ease;"></div>
+          </div>
+        </div>
+        <div style="flex:1;background:#FAFAFA;border-radius:8px;padding:8px 10px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+            <span style="font-size:10px;color:#71717a;">Качество опыта</span>
+            <span id="res-exp-score" style="font-size:12px;font-weight:700;color:#2563EB;">0%</span>
+          </div>
+          <div style="height:4px;border-radius:2px;background:#e4e4e7;">
+            <div id="res-exp-bar" style="height:100%;border-radius:2px;background:#2563EB;width:0%;transition:width .4s ease;"></div>
+          </div>
+        </div>
+      </div>
+      <!-- Red flags -->
+      <div id="res-red-flags" style="display:none;margin-bottom:10px;">
+        <div style="display:flex;align-items:center;gap:4px;margin-bottom:6px;">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#DC2626" stroke-width="2"><path d="M12 9v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          <span style="font-size:11px;font-weight:600;color:#DC2626;">Красные флаги</span>
+        </div>
+        <div id="res-red-flags-list" style="font-size:11px;"></div>
+      </div>
+      <!-- Strengths -->
+      <div id="res-strengths" style="display:none;margin-bottom:10px;">
+        <div style="display:flex;align-items:center;gap:4px;margin-bottom:6px;">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          <span style="font-size:11px;font-weight:600;color:#059669;">Сильные стороны</span>
+        </div>
+        <div id="res-strengths-list" style="font-size:11px;"></div>
+      </div>
+      <!-- Recommendations -->
+      <div id="res-recommendations" style="display:none;">
+        <div style="display:flex;align-items:center;gap:4px;margin-bottom:6px;">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#D97706" stroke-width="2"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
+          <span style="font-size:11px;font-weight:600;color:#D97706;">Что улучшить</span>
+        </div>
+        <div id="res-recommendations-list" style="font-size:11px;"></div>
+      </div>
     </div>
     <!-- Diagnostic tools (collapsed by default) -->
     <div class="card fade-in" style="margin-bottom:12px;">

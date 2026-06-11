@@ -2819,16 +2819,61 @@
       <div id="res-skills-list" style="display:flex;flex-wrap:wrap;gap:4px;"></div>
     </div>
     <div id="res-score-section" class="card fade-in" style="margin-bottom:12px;display:none;">
+      <!-- Header: ring + title + verdict -->
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
-        <div id="res-score-ring" style="width:44px;height:44px;border-radius:50%;background:conic-gradient(#059669 0deg 0deg,#e4e4e7 0deg 360deg);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-          <div style="width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,0.95);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:#059669;" id="res-score-pct">0%</div>
+        <div id="res-score-ring" style="width:48px;height:48px;border-radius:50%;background:conic-gradient(#059669 0deg 0deg,#e4e4e7 0deg 360deg);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+          <div style="width:38px;height:38px;border-radius:50%;background:rgba(255,255,255,0.95);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:#059669;" id="res-score-pct">0%</div>
         </div>
         <div style="flex:1;min-width:0;">
           <div style="font-size:13px;font-weight:600;">\u041E\u0446\u0435\u043D\u043A\u0430 \u0440\u0435\u0437\u044E\u043C\u0435</div>
-          <div id="res-score-subtitle" style="font-size:11px;color:#71717a;margin-top:1px;">\u041E\u0431\u044A\u0435\u043A\u0442\u0438\u0432\u043D\u0430\u044F \u043F\u043E\u043B\u043D\u043E\u0442\u0430 \u0437\u0430\u043F\u043E\u043B\u043D\u0435\u043D\u0438\u044F</div>
+          <div id="res-score-subtitle" style="font-size:11px;color:#71717a;margin-top:1px;">\u0410\u043D\u0430\u043B\u0438\u0437 \u0433\u043B\u0430\u0437\u0430\u043C\u0438 HR \u0438 ATS</div>
         </div>
       </div>
-      <div id="res-score-checklist" style="font-size:11px;"></div>
+      <!-- Two mini-scores: ATS + Experience -->
+      <div id="res-score-bars" style="display:flex;gap:8px;margin-bottom:12px;">
+        <div style="flex:1;background:#FAFAFA;border-radius:8px;padding:8px 10px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+            <span style="font-size:10px;color:#71717a;">ATS-\u0441\u043E\u0432\u043C\u0435\u0441\u0442\u0438\u043C\u043E\u0441\u0442\u044C</span>
+            <span id="res-ats-score" style="font-size:12px;font-weight:700;color:#059669;">0%</span>
+          </div>
+          <div style="height:4px;border-radius:2px;background:#e4e4e7;">
+            <div id="res-ats-bar" style="height:100%;border-radius:2px;background:#059669;width:0%;transition:width .4s ease;"></div>
+          </div>
+        </div>
+        <div style="flex:1;background:#FAFAFA;border-radius:8px;padding:8px 10px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+            <span style="font-size:10px;color:#71717a;">\u041A\u0430\u0447\u0435\u0441\u0442\u0432\u043E \u043E\u043F\u044B\u0442\u0430</span>
+            <span id="res-exp-score" style="font-size:12px;font-weight:700;color:#2563EB;">0%</span>
+          </div>
+          <div style="height:4px;border-radius:2px;background:#e4e4e7;">
+            <div id="res-exp-bar" style="height:100%;border-radius:2px;background:#2563EB;width:0%;transition:width .4s ease;"></div>
+          </div>
+        </div>
+      </div>
+      <!-- Red flags -->
+      <div id="res-red-flags" style="display:none;margin-bottom:10px;">
+        <div style="display:flex;align-items:center;gap:4px;margin-bottom:6px;">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#DC2626" stroke-width="2"><path d="M12 9v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          <span style="font-size:11px;font-weight:600;color:#DC2626;">\u041A\u0440\u0430\u0441\u043D\u044B\u0435 \u0444\u043B\u0430\u0433\u0438</span>
+        </div>
+        <div id="res-red-flags-list" style="font-size:11px;"></div>
+      </div>
+      <!-- Strengths -->
+      <div id="res-strengths" style="display:none;margin-bottom:10px;">
+        <div style="display:flex;align-items:center;gap:4px;margin-bottom:6px;">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          <span style="font-size:11px;font-weight:600;color:#059669;">\u0421\u0438\u043B\u044C\u043D\u044B\u0435 \u0441\u0442\u043E\u0440\u043E\u043D\u044B</span>
+        </div>
+        <div id="res-strengths-list" style="font-size:11px;"></div>
+      </div>
+      <!-- Recommendations -->
+      <div id="res-recommendations" style="display:none;">
+        <div style="display:flex;align-items:center;gap:4px;margin-bottom:6px;">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#D97706" stroke-width="2"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
+          <span style="font-size:11px;font-weight:600;color:#D97706;">\u0427\u0442\u043E \u0443\u043B\u0443\u0447\u0448\u0438\u0442\u044C</span>
+        </div>
+        <div id="res-recommendations-list" style="font-size:11px;"></div>
+      </div>
     </div>
     <!-- Diagnostic tools (collapsed by default) -->
     <div class="card fade-in" style="margin-bottom:12px;">
@@ -4553,6 +4598,551 @@
     }
   });
 
+  // src/lib/quality-ats.js
+  function analyzeATS(r) {
+    const checks = [];
+    let earned = 0;
+    let total = 0;
+    const add = (label, weight, passed, tip) => {
+      checks.push({ label, weight, passed, tip });
+      total += weight;
+      if (passed) earned += weight;
+    };
+    add(
+      "\u041A\u043E\u043D\u0442\u0430\u043A\u0442\u044B (\u0442\u0435\u043B\u0435\u0444\u043E\u043D \u0438\u043B\u0438 email)",
+      12,
+      !!(r.phone || r.email),
+      "\u0423\u043A\u0430\u0436\u0438\u0442\u0435 \u0445\u043E\u0442\u044F \u0431\u044B \u0442\u0435\u043B\u0435\u0444\u043E\u043D \u0438\u043B\u0438 email \u2014 ATS \u043D\u0435 \u0441\u043C\u043E\u0436\u0435\u0442 \u0441\u0432\u044F\u0437\u0430\u0442\u044C\u0441\u044F"
+    );
+    const skillCount = (r.skills || []).length;
+    add(
+      "\u041D\u0430\u0432\u044B\u043A\u0438 \u0443\u043A\u0430\u0437\u0430\u043D\u044B",
+      15,
+      skillCount > 0,
+      "\u0411\u0435\u0437 \u043D\u0430\u0432\u044B\u043A\u043E\u0432 ATS \u043D\u0435 \u043D\u0430\u0439\u0434\u0451\u0442 \u0432\u0430\u0448\u0435 \u0440\u0435\u0437\u044E\u043C\u0435 \u043F\u043E \u043A\u043B\u044E\u0447\u0435\u0432\u044B\u043C \u0441\u043B\u043E\u0432\u0430\u043C"
+    );
+    add(
+      "\u041D\u0430\u0432\u044B\u043A\u0438 \u2265 5 (\u043F\u043E\u0438\u0441\u043A\u043E\u0432\u044B\u0439 \u043F\u043E\u0440\u043E\u0433)",
+      8,
+      skillCount >= 5,
+      "\u041C\u0435\u043D\u044C\u0448\u0435 5 \u043D\u0430\u0432\u044B\u043A\u043E\u0432 \u2014 ATS-\u043F\u043E\u0438\u0441\u043A \u043D\u0435 \u043F\u043E\u043A\u0430\u0436\u0435\u0442 \u0432\u0430\u0441 \u043F\u043E \u0431\u043E\u043B\u044C\u0448\u0438\u043D\u0441\u0442\u0432\u0443 \u0437\u0430\u043F\u0440\u043E\u0441\u043E\u0432"
+    );
+    add(
+      "\u041D\u0430\u0432\u044B\u043A\u0438 \u2265 10 (\u0445\u043E\u0440\u043E\u0448\u0435\u0435 \u043F\u043E\u043A\u0440\u044B\u0442\u0438\u0435)",
+      5,
+      skillCount >= 10,
+      "10+ \u043D\u0430\u0432\u044B\u043A\u043E\u0432 \u0437\u043D\u0430\u0447\u0438\u0442\u0435\u043B\u044C\u043D\u043E \u0440\u0430\u0441\u0448\u0438\u0440\u044F\u044E\u0442 \u043F\u043E\u0438\u0441\u043A\u043E\u0432\u0443\u044E \u0432\u0438\u0434\u0438\u043C\u043E\u0441\u0442\u044C"
+    );
+    add(
+      "\u0417\u0430\u0433\u043E\u043B\u043E\u0432\u043E\u043A \u043F\u043E\u0437\u0438\u0446\u0438\u0438",
+      10,
+      !!(r.title && r.title.length > 2),
+      "\u0411\u0435\u0437 \u0434\u043E\u043B\u0436\u043D\u043E\u0441\u0442\u0438 ATS \u043D\u0435 \u0441\u043C\u043E\u0436\u0435\u0442 \u043E\u0442\u043D\u0435\u0441\u0442\u0438 \u0432\u0430\u0441 \u043A \u043D\u0443\u0436\u043D\u043E\u0439 \u043A\u0430\u0442\u0435\u0433\u043E\u0440\u0438\u0438"
+    );
+    add(
+      "\u0417\u0430\u0440\u043F\u043B\u0430\u0442\u043D\u044B\u0435 \u043E\u0436\u0438\u0434\u0430\u043D\u0438\u044F",
+      5,
+      !!r.salary,
+      "\u041C\u043D\u043E\u0433\u0438\u0435 \u0440\u0430\u0431\u043E\u0442\u043E\u0434\u0430\u0442\u0435\u043B\u0438 \u0444\u0438\u043B\u044C\u0442\u0440\u0443\u044E\u0442 \u043F\u043E \u0437\u0430\u0440\u043F\u043B\u0430\u0442\u0435 \u2014 \u0431\u0435\u0437 \u043D\u0435\u0451 \u0432\u044B \u0432\u044B\u043F\u0430\u0434\u0430\u0435\u0442\u0435 \u0438\u0437 \u0444\u0438\u043B\u044C\u0442\u0440\u0430"
+    );
+    add(
+      "\u041B\u043E\u043A\u0430\u0446\u0438\u044F/\u0433\u043E\u0440\u043E\u0434",
+      5,
+      !!(r.address && r.address.length > 2),
+      "\u0423\u043A\u0430\u0436\u0438\u0442\u0435 \u0433\u043E\u0440\u043E\u0434 \u2014 \u0438\u043D\u0430\u0447\u0435 \u0444\u0438\u043B\u044C\u0442\u0440 \u043F\u043E \u043B\u043E\u043A\u0430\u0446\u0438\u0438 \u0432\u0430\u0441 \u043E\u0442\u0441\u0435\u0447\u0451\u0442"
+    );
+    const expCount = (r.experience || []).length;
+    add(
+      "\u041E\u043F\u044B\u0442 \u0440\u0430\u0431\u043E\u0442\u044B \u0443\u043A\u0430\u0437\u0430\u043D",
+      12,
+      expCount > 0,
+      "\u0411\u0435\u0437 \u043E\u043F\u044B\u0442\u0430 ATS \u043D\u0435 \u043C\u043E\u0436\u0435\u0442 \u043E\u0442\u0444\u0438\u043B\u044C\u0442\u0440\u043E\u0432\u0430\u0442\u044C \u043F\u043E \u0442\u0440\u0435\u0431\u0443\u0435\u043C\u043E\u043C\u0443 \u0441\u0442\u0430\u0436\u0443"
+    );
+    const expWithDesc = (r.experience || []).filter((e) => e.description && e.description.length > 30);
+    add(
+      "\u041E\u043F\u0438\u0441\u0430\u043D\u0438\u044F \u043A \u043E\u043F\u044B\u0442\u0443",
+      10,
+      expCount > 0 && expWithDesc.length > 0,
+      "\u0411\u0435\u0437 \u043E\u043F\u0438\u0441\u0430\u043D\u0438\u0439 ATS \u043D\u0435 \u043D\u0430\u0439\u0434\u0451\u0442 \u043A\u043B\u044E\u0447\u0435\u0432\u044B\u0435 \u0441\u043B\u043E\u0432\u0430 \u0432 \u0432\u0430\u0448\u0435\u043C \u043E\u043F\u044B\u0442\u0435"
+    );
+    add(
+      "\u0412\u0441\u0435 \u043F\u043E\u0437\u0438\u0446\u0438\u0438 \u0441 \u043E\u043F\u0438\u0441\u0430\u043D\u0438\u0435\u043C",
+      5,
+      expCount > 0 && expWithDesc.length === expCount,
+      "\u041A\u0430\u0436\u0434\u0430\u044F \u043F\u043E\u0437\u0438\u0446\u0438\u044F \u0434\u043E\u043B\u0436\u043D\u0430 \u0438\u043C\u0435\u0442\u044C \u043E\u043F\u0438\u0441\u0430\u043D\u0438\u0435 \u2014 \u0438\u043D\u0430\u0447\u0435 ATS \u043F\u0440\u043E\u043F\u0443\u0441\u043A\u0430\u0435\u0442 \u043A\u043B\u044E\u0447\u0435\u0432\u044B\u0435 \u0441\u043B\u043E\u0432\u0430"
+    );
+    add(
+      "\u041E\u0431\u0440\u0430\u0437\u043E\u0432\u0430\u043D\u0438\u0435",
+      5,
+      (r.education || []).length > 0,
+      "\u041C\u043D\u043E\u0433\u0438\u0435 ATS-\u0444\u0438\u043B\u044C\u0442\u0440\u044B \u0442\u0440\u0435\u0431\u0443\u044E\u0442 \u0443\u043A\u0430\u0437\u0430\u043D\u043D\u043E\u0433\u043E \u043E\u0431\u0440\u0430\u0437\u043E\u0432\u0430\u043D\u0438\u044F"
+    );
+    add(
+      "\u0422\u0438\u043F \u0437\u0430\u043D\u044F\u0442\u043E\u0441\u0442\u0438",
+      5,
+      !!r.employmentType,
+      "\u0423\u043A\u0430\u0436\u0438\u0442\u0435 \u0442\u0438\u043F \u0437\u0430\u043D\u044F\u0442\u043E\u0441\u0442\u0438 \u2014 \u0440\u0430\u0431\u043E\u0442\u043E\u0434\u0430\u0442\u0435\u043B\u044C \u0444\u0438\u043B\u044C\u0442\u0440\u0443\u0435\u0442 \u043F\u043E \u043D\u0435\u043C\u0443"
+    );
+    add(
+      "\u0424\u043E\u0440\u043C\u0430\u0442 \u0440\u0430\u0431\u043E\u0442\u044B",
+      3,
+      !!r.workFormat,
+      "\u0423\u0434\u0430\u043B\u0451\u043D\u043D\u0430\u044F/\u043E\u0444\u0438\u0441/\u0433\u0438\u0431\u0440\u0438\u0434 \u2014 \u043F\u043E\u043F\u0443\u043B\u044F\u0440\u043D\u044B\u0439 \u0444\u0438\u043B\u044C\u0442\u0440 \u043D\u0430 hh.ru"
+    );
+    const score = total > 0 ? Math.round(earned / total * 100) : 0;
+    return { score, checks, earned, total };
+  }
+  var init_quality_ats = __esm({
+    "src/lib/quality-ats.js"() {
+    }
+  });
+
+  // src/lib/quality-patterns.js
+  var ACHIEVEMENT_VERBS, VAGUE_PHRASES, METRIC_PATTERNS;
+  var init_quality_patterns = __esm({
+    "src/lib/quality-patterns.js"() {
+      ACHIEVEMENT_VERBS = [
+        "\u0443\u0432\u0435\u043B\u0438\u0447\u0438\u043B",
+        "\u0443\u043C\u0435\u043D\u044C\u0448\u0438\u043B",
+        "\u0441\u043E\u043A\u0440\u0430\u0442\u0438\u043B",
+        "\u043F\u043E\u0432\u044B\u0441\u0438\u043B",
+        "\u0441\u043D\u0438\u0437\u0438\u043B",
+        "\u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0437\u0438\u0440\u043E\u0432\u0430\u043B",
+        "\u0432\u043D\u0435\u0434\u0440\u0438\u043B",
+        "\u0437\u0430\u043F\u0443\u0441\u0442\u0438\u043B",
+        "\u0441\u043E\u0437\u0434\u0430\u043B",
+        "\u0440\u0430\u0437\u0440\u0430\u0431\u043E\u0442\u0430\u043B",
+        "\u043E\u043F\u0442\u0438\u043C\u0438\u0437\u0438\u0440\u043E\u0432\u0430\u043B",
+        "\u0443\u0441\u043A\u043E\u0440\u0438\u043B",
+        "\u0443\u043B\u0443\u0447\u0448\u0438\u043B",
+        "\u043D\u0430\u0441\u0442\u0440\u043E\u0438\u043B",
+        "\u043C\u0438\u0433\u0440\u0438\u0440\u043E\u0432\u0430\u043B",
+        "\u0440\u0435\u0430\u043B\u0438\u0437\u043E\u0432\u0430\u043B",
+        "\u0441\u043F\u0440\u043E\u0435\u043A\u0442\u0438\u0440\u043E\u0432\u0430\u043B",
+        "\u043C\u0430\u0441\u0448\u0442\u0430\u0431\u0438\u0440\u043E\u0432\u0430\u043B",
+        "\u043F\u0435\u0440\u0435\u043F\u0438\u0441\u0430\u043B",
+        "\u0432\u044B\u043F\u0443\u0441\u0442\u0438\u043B",
+        "\u0438\u043D\u0442\u0435\u0433\u0440\u0438\u0440\u043E\u0432\u0430\u043B",
+        "\u0432\u044B\u0441\u0442\u0440\u043E\u0438\u043B",
+        "\u043F\u043E\u0441\u0442\u0440\u043E\u0438\u043B",
+        "\u043E\u0431\u0435\u0441\u043F\u0435\u0447\u0438\u043B",
+        "\u0434\u043E\u0441\u0442\u0438\u0433",
+        "\u043F\u0435\u0440\u0435\u0432\u0451\u043B",
+        "\u043F\u0435\u0440\u0435\u0432\u0435\u043B",
+        "\u043E\u0431\u0443\u0447\u0438\u043B",
+        "\u043D\u0430\u043B\u0430\u0434\u0438\u043B",
+        "\u043E\u0440\u0433\u0430\u043D\u0438\u0437\u043E\u0432\u0430\u043B",
+        "\u0443\u0432\u0435\u043B\u0438\u0447\u0438\u043B\u0430",
+        "\u0443\u043C\u0435\u043D\u044C\u0448\u0438\u043B\u0430",
+        "\u0441\u043E\u043A\u0440\u0430\u0442\u0438\u043B\u0430",
+        "\u043F\u043E\u0432\u044B\u0441\u0438\u043B\u0430",
+        "\u0441\u043D\u0438\u0437\u0438\u043B\u0430",
+        "\u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0437\u0438\u0440\u043E\u0432\u0430\u043B\u0430",
+        "\u0432\u043D\u0435\u0434\u0440\u0438\u043B\u0430",
+        "\u0437\u0430\u043F\u0443\u0441\u0442\u0438\u043B\u0430",
+        "\u0441\u043E\u0437\u0434\u0430\u043B\u0430",
+        "\u0440\u0430\u0437\u0440\u0430\u0431\u043E\u0442\u0430\u043B\u0430",
+        "\u043E\u043F\u0442\u0438\u043C\u0438\u0437\u0438\u0440\u043E\u0432\u0430\u043B\u0430",
+        "\u0443\u0441\u043A\u043E\u0440\u0438\u043B\u0430",
+        "\u0443\u043B\u0443\u0447\u0448\u0438\u043B\u0430",
+        "\u043D\u0430\u0441\u0442\u0440\u043E\u0438\u043B\u0430",
+        "\u043C\u0438\u0433\u0440\u0438\u0440\u043E\u0432\u0430\u043B\u0430",
+        "\u0440\u0435\u0430\u043B\u0438\u0437\u043E\u0432\u0430\u043B\u0430",
+        "\u0441\u043F\u0440\u043E\u0435\u043A\u0442\u0438\u0440\u043E\u0432\u0430\u043B\u0430",
+        "\u043C\u0430\u0441\u0448\u0442\u0430\u0431\u0438\u0440\u043E\u0432\u0430\u043B\u0430",
+        "\u043F\u0435\u0440\u0435\u043F\u0438\u0441\u0430\u043B\u0430",
+        "\u0432\u044B\u043F\u0443\u0441\u0442\u0438\u043B\u0430"
+      ];
+      VAGUE_PHRASES = [
+        "\u0443\u0447\u0430\u0441\u0442\u0438\u0435 \u0432",
+        "\u043F\u0440\u0438\u043D\u0438\u043C\u0430\u043B \u0443\u0447\u0430\u0441\u0442\u0438\u0435",
+        "\u043F\u0440\u0438\u043D\u0438\u043C\u0430\u043B\u0430 \u0443\u0447\u0430\u0441\u0442\u0438\u0435",
+        "\u043F\u043E\u043C\u043E\u0449\u044C \u0432",
+        "\u043E\u043A\u0430\u0437\u044B\u0432\u0430\u043B \u043F\u043E\u043C\u043E\u0449\u044C",
+        "\u043E\u043A\u0430\u0437\u044B\u0432\u0430\u043B\u0430 \u043F\u043E\u043C\u043E\u0449\u044C",
+        "\u0440\u0430\u0431\u043E\u0442\u0430 \u0441",
+        "\u0437\u0430\u043D\u044F\u0442\u0438\u0435",
+        "\u043F\u0440\u043E\u0446\u0435\u0441\u0441",
+        "\u043E\u0431\u0435\u0441\u043F\u0435\u0447\u0435\u043D\u0438\u0435",
+        "\u043F\u043E\u0434\u0434\u0435\u0440\u0436\u043A\u0430",
+        "\u0441\u043E\u043F\u0440\u043E\u0432\u043E\u0436\u0434\u0435\u043D\u0438\u0435",
+        "\u0432\u044B\u043F\u043E\u043B\u043D\u0435\u043D\u0438\u0435",
+        "\u0438\u0441\u043F\u043E\u043B\u043D\u0435\u043D\u0438\u0435"
+      ];
+      METRIC_PATTERNS = [
+        /(?:на|до|с|от)\s*\d+[\s]*%/,
+        // на 15%, до 30%
+        /\d+[\s]*(?:раз|крат)/,
+        // в 3 раза
+        /(?:более|свыше|больше)\s*\d+/,
+        // более 100
+        /\d+[\s]*(?:человек|сотрудник|пользовател|клиент|заказчик|проект|сервер|микросервис|репозитор|задач|тикет|тикит)/i,
+        /\d+[\s]*(?:тыс|млн|миллион|тысяч)/i,
+        // тыс. рублей
+        /\d[\d\s]*(?:руб|\$|€)/,
+        // деньги
+        /(?:экономия|экономил|рост|прирост|снижение|сокращение|ускорение)\s.*\d/i
+      ];
+    }
+  });
+
+  // src/lib/quality-experience.js
+  function analyzeExperience(r) {
+    const exps = r.experience || [];
+    const skills = r.skills || [];
+    const title = r.title || "";
+    if (exps.length === 0) {
+      return { score: 0, checks: [], earned: 0, total: 0, metrics: {} };
+    }
+    const checks = [];
+    let earned = 0;
+    let total = 0;
+    const add = (label, weight, passed, tip) => {
+      checks.push({ label, weight, passed, tip });
+      total += weight;
+      if (passed) earned += weight;
+    };
+    const allDescriptions = exps.map((e) => e.description || "").filter((d) => d.length > 0);
+    const descText = allDescriptions.join(" ");
+    const hasMetrics = METRIC_PATTERNS.some((p) => p.test(descText));
+    const metricCount = METRIC_PATTERNS.filter((p) => p.test(descText)).length;
+    add(
+      "\u041C\u0435\u0442\u0440\u0438\u043A\u0438 \u0432 \u043E\u043F\u0438\u0441\u0430\u043D\u0438\u044F\u0445",
+      18,
+      hasMetrics,
+      'HR \u0438\u0449\u0435\u0442 \u0446\u0438\u0444\u0440\u044B: "\u043D\u0430 30%", "\u0432 2 \u0440\u0430\u0437\u0430", "100+ \u0441\u0435\u0440\u0432\u0435\u0440\u043E\u0432" \u2014 \u0431\u0435\u0437 \u043D\u0438\u0445 \u043E\u043F\u0438\u0441\u0430\u043D\u0438\u0435 = \u043F\u0435\u0440\u0435\u0447\u0435\u043D\u044C \u043E\u0431\u044F\u0437\u0430\u043D\u043D\u043E\u0441\u0442\u0435\u0439'
+    );
+    add(
+      "3+ \u043C\u0435\u0442\u0440\u0438\u043A\u0438",
+      7,
+      metricCount >= 3,
+      "3 \u0438 \u0431\u043E\u043B\u0435\u0435 \u043C\u0435\u0442\u0440\u0438\u043A \u2014 \u0441\u0438\u0433\u043D\u0430\u043B \u0447\u0442\u043E \u0432\u044B \u0444\u043E\u043A\u0443\u0441\u0438\u0440\u0443\u0435\u0442\u0435\u0441\u044C \u043D\u0430 \u0440\u0435\u0437\u0443\u043B\u044C\u0442\u0430\u0442\u0430\u0445, \u0430 \u043D\u0435 \u043F\u0440\u043E\u0446\u0435\u0441\u0441\u0435"
+    );
+    const descLower = descText.toLowerCase();
+    const achievementVerbCount = ACHIEVEMENT_VERBS.filter((v) => descLower.includes(v)).length;
+    add(
+      "\u0413\u043B\u0430\u0433\u043E\u043B\u044B \u0434\u043E\u0441\u0442\u0438\u0436\u0435\u043D\u0438\u0439",
+      12,
+      achievementVerbCount > 0,
+      '\u041D\u0430\u0447\u0438\u043D\u0430\u0439\u0442\u0435 \u0441 "\u0443\u0432\u0435\u043B\u0438\u0447\u0438\u043B", "\u0432\u043D\u0435\u0434\u0440\u0438\u043B", "\u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0437\u0438\u0440\u043E\u0432\u0430\u043B" \u2014 \u044D\u0442\u043E \u044F\u0437\u044B\u043A \u0440\u0435\u0437\u0443\u043B\u044C\u0442\u0430\u0442\u043E\u0432, \u043D\u0435 \u043E\u0431\u044F\u0437\u0430\u043D\u043D\u043E\u0441\u0442\u0435\u0439'
+    );
+    const vagueCount = VAGUE_PHRASES.filter((v) => descLower.includes(v)).length;
+    add(
+      "\u0411\u0435\u0437 \u0440\u0430\u0437\u043C\u044B\u0442\u044B\u0445 \u0444\u043E\u0440\u043C\u0443\u043B\u0438\u0440\u043E\u0432\u043E\u043A",
+      8,
+      vagueCount === 0,
+      '\u0417\u0430\u043C\u0435\u043D\u0438\u0442\u0435 "\u0443\u0447\u0430\u0441\u0442\u0438\u0435 \u0432", "\u043F\u043E\u043C\u043E\u0449\u044C \u0432" \u043D\u0430 \u043A\u043E\u043D\u043A\u0440\u0435\u0442\u043D\u044B\u0435 \u0434\u0435\u0439\u0441\u0442\u0432\u0438\u044F \u0438 \u0440\u0435\u0437\u0443\u043B\u044C\u0442\u0430\u0442\u044B'
+    );
+    const expsWithDesc = exps.filter((e) => e.description && e.description.length > 50);
+    add(
+      "\u041E\u043F\u0438\u0441\u0430\u043D\u0438\u044F \u043A \u043F\u043E\u0437\u0438\u0446\u0438\u044F\u043C",
+      10,
+      expsWithDesc.length > 0,
+      "HR \u043D\u0435 \u0432\u0438\u0434\u0438\u0442 \u0446\u0435\u043D\u043D\u043E\u0441\u0442\u0438 \u0432 \u043F\u043E\u0437\u0438\u0446\u0438\u0438 \u0431\u0435\u0437 \u043E\u043F\u0438\u0441\u0430\u043D\u0438\u044F \u2014 \u0447\u0442\u043E \u0432\u044B \u0442\u0430\u043C \u0434\u0435\u043B\u0430\u043B\u0438?"
+    );
+    add(
+      "\u0412\u0441\u0435 \u043F\u043E\u0437\u0438\u0446\u0438\u0438 \u0441 \u043E\u043F\u0438\u0441\u0430\u043D\u0438\u0435\u043C \u226550 \u0441\u0438\u043C\u0432\u043E\u043B\u043E\u0432",
+      5,
+      exps.length > 0 && expsWithDesc.length === exps.length,
+      "\u041A\u0430\u0436\u0434\u0430\u044F \u043F\u043E\u0437\u0438\u0446\u0438\u044F \u0437\u0430\u0441\u043B\u0443\u0436\u0438\u0432\u0430\u0435\u0442 \u043E\u043F\u0438\u0441\u0430\u043D\u0438\u044F \u0445\u043E\u0442\u044F \u0431\u044B \u0432 2-3 \u043F\u0440\u0435\u0434\u043B\u043E\u0436\u0435\u043D\u0438\u044F"
+    );
+    const skillLower = skills.map((s) => s.toLowerCase().trim());
+    const skillsInDesc = skillLower.filter((s) => s.length > 2 && descLower.includes(s));
+    const skillCoverage = skillLower.length > 0 ? Math.round(skillsInDesc.length / skillLower.length * 100) : 0;
+    add(
+      "\u041D\u0430\u0432\u044B\u043A\u0438 \u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043D\u044B \u0432 \u043E\u043F\u044B\u0442\u0435",
+      10,
+      skillsInDesc.length >= 3,
+      "HR \u0441\u0432\u0435\u0440\u044F\u0435\u0442: \u043D\u0430\u0432\u044B\u043A\u0438 \u0434\u043E\u043B\u0436\u043D\u044B \u0443\u043F\u043E\u043C\u0438\u043D\u0430\u0442\u044C\u0441\u044F \u0432 \u043E\u043F\u0438\u0441\u0430\u043D\u0438\u044F\u0445 \u043E\u043F\u044B\u0442\u0430"
+    );
+    const positions = exps.map((e) => e.position || "").filter((p) => p.length > 0);
+    const hasProgression = detectProgression(positions);
+    add(
+      "\u041A\u0430\u0440\u044C\u0435\u0440\u043D\u044B\u0439 \u0440\u043E\u0441\u0442",
+      8,
+      hasProgression,
+      "\u0420\u043E\u0441\u0442 \u043E\u0442 Junior \u2192 Middle \u2192 Senior \u2014 \u0441\u0438\u043B\u044C\u043D\u044B\u0439 \u0441\u0438\u0433\u043D\u0430\u043B \u0434\u043B\u044F HR"
+    );
+    const titleRelevant = title.length > 0 && positions.some(
+      (p) => p.toLowerCase().includes(title.toLowerCase().split(/\s+/)[0]) || title.toLowerCase().split(/\s+/).some((w) => w.length > 3 && p.toLowerCase().includes(w))
+    );
+    add(
+      "\u041F\u043E\u0437\u0438\u0446\u0438\u044F \u0440\u0435\u043B\u0435\u0432\u0430\u043D\u0442\u043D\u0430 \u043E\u043F\u044B\u0442\u0443",
+      7,
+      titleRelevant || positions.length === 0,
+      "\u0417\u0430\u0433\u043E\u043B\u043E\u0432\u043E\u043A \u0440\u0435\u0437\u044E\u043C\u0435 \u0434\u043E\u043B\u0436\u0435\u043D \u0441\u043E\u043E\u0442\u0432\u0435\u0442\u0441\u0442\u0432\u043E\u0432\u0430\u0442\u044C \u043F\u043E\u0441\u043B\u0435\u0434\u043D\u0435\u0439 \u043F\u043E\u0437\u0438\u0446\u0438\u0438 \u2014 \u0438\u043D\u0430\u0447\u0435 HR \u0437\u0430\u043F\u0443\u0442\u0430\u0435\u0442\u0441\u044F"
+    );
+    const aboutLen = (r.additionalInfo || "").length;
+    add(
+      '\u0411\u043B\u043E\u043A "\u041E \u0441\u0435\u0431\u0435"',
+      5,
+      aboutLen > 50,
+      "\u041A\u0440\u0430\u0442\u043A\u043E\u0435 \u0441\u0430\u043C\u043C\u0430\u0440\u0438 \u0438\u0437 2-3 \u043F\u0440\u0435\u0434\u043B\u043E\u0436\u0435\u043D\u0438\u0439 \u2014 \u043F\u0435\u0440\u0432\u043E\u0435, \u0447\u0442\u043E \u0447\u0438\u0442\u0430\u0435\u0442 HR"
+    );
+    const score = total > 0 ? Math.round(earned / total * 100) : 0;
+    return {
+      score,
+      checks,
+      earned,
+      total,
+      metrics: { metricCount, achievementVerbCount, vagueCount, skillCoverage }
+    };
+  }
+  function detectProgression(positions) {
+    if (positions.length < 2) return false;
+    const lvl = (p) => {
+      const pl = p.toLowerCase();
+      if (/\b(intern|стажёр|стажер|junior|младш|trainee)\b/.test(pl)) return 1;
+      if (/\b(middle|средн|middle\s*\+?\s*senior)\b/.test(pl)) return 2;
+      if (/\b(senior|ведущ|старш|lead|principal|staff)\b/.test(pl)) return 3;
+      if (/\b(head|руководител|руководств|director|директор|начальник|cто|cto|vp)\b/.test(pl)) return 4;
+      return 2;
+    };
+    for (let i = 0; i < positions.length - 1; i++) {
+      const currentLvl = lvl(positions[i]);
+      for (let j = i + 1; j < positions.length; j++) {
+        if (lvl(positions[j]) > currentLvl) return true;
+      }
+    }
+    return false;
+  }
+  var init_quality_experience = __esm({
+    "src/lib/quality-experience.js"() {
+      init_quality_patterns();
+    }
+  });
+
+  // src/lib/quality-date-helpers.js
+  function findEmploymentGaps(exps) {
+    const gaps = [];
+    const parsedDates = exps.map((e) => parsePeriodDates(e.period || e.duration || ""));
+    for (let i = 0; i < parsedDates.length - 1; i++) {
+      const curr = parsedDates[i];
+      const next = parsedDates[i + 1];
+      if (curr.end && next.start) {
+        const gapMonths = monthDiff(curr.end, next.start);
+        if (gapMonths > 3) {
+          const label = gapMonths >= 12 ? Math.round(gapMonths / 12) + " \u0433." : gapMonths + " \u043C\u0435\u0441.";
+          gaps.push({ label, months: gapMonths });
+        }
+      }
+    }
+    return gaps;
+  }
+  function parsePeriodDates(period) {
+    const result = { start: null, end: null };
+    const m = period.match(
+      /([а-яА-ЯёЁ]+\s+\d{4})\s*[—–-]\s*([а-яА-ЯёЁ]+\s+\d{4}|Настоящее\s+время|настоящее\s+время|по\s+настоящее)/i
+    );
+    if (m) {
+      result.start = parseRuDate(m[1]);
+      if (!/настоящее/i.test(m[2])) {
+        result.end = parseRuDate(m[2]);
+      }
+      return result;
+    }
+    const m2 = period.match(/(\d{4})\s*[—–-]\s*(\d{4})/);
+    if (m2) {
+      result.start = new Date(parseInt(m2[1]), 0);
+      result.end = new Date(parseInt(m2[2]), 11);
+    }
+    return result;
+  }
+  function parseDurationToMonths(duration) {
+    if (!duration) return 0;
+    let months = 0;
+    const ym = duration.match(/(\d+)\s*(?:лет|год|года)/i);
+    if (ym) months += parseInt(ym[1]) * 12;
+    const mm = duration.match(/(\d+)\s*(?:мес)/i);
+    if (mm) months += parseInt(mm[1]);
+    return months;
+  }
+  function parseRuDate(str) {
+    const s = str.trim().toLowerCase();
+    for (const [prefix, month] of Object.entries(RU_MONTHS)) {
+      if (s.startsWith(prefix)) {
+        const year = parseInt(s.match(/\d{4}/)?.[0] || "0");
+        if (year > 1990 && year <= 2030) return new Date(year, month);
+      }
+    }
+    return null;
+  }
+  function monthDiff(d1, d2) {
+    return (d2.getFullYear() - d1.getFullYear()) * 12 + (d2.getMonth() - d1.getMonth());
+  }
+  var RU_MONTHS;
+  var init_quality_date_helpers = __esm({
+    "src/lib/quality-date-helpers.js"() {
+      RU_MONTHS = {
+        "\u044F\u043D\u0432\u0430\u0440": 0,
+        "\u0444\u0435\u0432\u0440\u0430\u043B": 1,
+        "\u043C\u0430\u0440\u0442": 2,
+        "\u0430\u043F\u0440\u0435\u043B": 3,
+        "\u043C\u0430": 4,
+        "\u0438\u044E\u043D": 5,
+        "\u0438\u044E\u043B": 6,
+        "\u0430\u0432\u0433\u0443\u0441\u0442": 7,
+        "\u0441\u0435\u043D\u0442\u044F\u0431\u0440": 8,
+        "\u043E\u043A\u0442\u044F\u0431\u0440": 9,
+        "\u043D\u043E\u044F\u0431\u0440": 10,
+        "\u0434\u0435\u043A\u0430\u0431\u0440": 11
+      };
+    }
+  });
+
+  // src/lib/quality-flags.js
+  function detectRedFlags(r) {
+    const flags = [];
+    const exps = r.experience || [];
+    if (exps.length >= 2) {
+      const gaps = findEmploymentGaps(exps);
+      if (gaps.length > 0) {
+        flags.push("\u041F\u0440\u043E\u0431\u0435\u043B \u0432 \u0441\u0442\u0430\u0436\u0435: " + gaps.map((g) => g.label).join(", ") + " \u2014 HR \u0441\u043F\u0440\u043E\u0441\u0438\u0442 \u043E\u0431 \u044D\u0442\u043E\u043C");
+      }
+    }
+    const shortJobs = exps.filter((e) => {
+      const months = parseDurationToMonths(e.duration || e.period || "");
+      return months > 0 && months < 6;
+    });
+    if (shortJobs.length >= 2) {
+      flags.push(shortJobs.length + " \u043C\u0435\u0441\u0442\u0430 < 6 \u043C\u0435\u0441\u044F\u0446\u0435\u0432 \u2014 \u0432\u044B\u0433\u043B\u044F\u0434\u0438\u0442 \u043A\u0430\u043A \u043D\u0435\u0441\u0442\u0430\u0431\u0438\u043B\u044C\u043D\u043E\u0441\u0442\u044C");
+    }
+    const noDesc = exps.filter((e) => !e.description || e.description.length < 20);
+    if (noDesc.length > 0 && exps.length > 0) {
+      flags.push(noDesc.length + " \u0438\u0437 " + exps.length + " \u043F\u043E\u0437\u0438\u0446\u0438\u0439 \u0431\u0435\u0437 \u043E\u043F\u0438\u0441\u0430\u043D\u0438\u044F \u2014 HR \u043D\u0435 \u043F\u043E\u0439\u043C\u0451\u0442 \u0432\u0430\u0448 \u0432\u043A\u043B\u0430\u0434");
+    }
+    if (!r.phone && !r.email) {
+      flags.push("\u041D\u0435\u0442 \u043D\u0438 \u0442\u0435\u043B\u0435\u0444\u043E\u043D\u0430, \u043D\u0438 email \u2014 \u0440\u0430\u0431\u043E\u0442\u043E\u0434\u0430\u0442\u0435\u043B\u044C \u043D\u0435 \u0441\u043C\u043E\u0436\u0435\u0442 \u0441\u0432\u044F\u0437\u0430\u0442\u044C\u0441\u044F");
+    }
+    const allDesc = exps.map((e) => e.description || "").join(" ").toLowerCase();
+    const vagueCount = VAGUE_PHRASES.filter((v) => allDesc.includes(v)).length;
+    if (vagueCount >= 2) {
+      flags.push('\u0420\u0430\u0437\u043C\u044B\u0442\u044B\u0435 \u0444\u043E\u0440\u043C\u0443\u043B\u0438\u0440\u043E\u0432\u043A\u0438: "\u0443\u0447\u0430\u0441\u0442\u0438\u0435 \u0432", "\u043F\u043E\u043C\u043E\u0449\u044C \u0432" \u2014 \u0437\u0432\u0443\u0447\u0438\u0442 \u043A\u0430\u043A \u043D\u0430\u0431\u043B\u044E\u0434\u0430\u0442\u0435\u043B\u044C, \u0430 \u043D\u0435 \u0434\u0435\u044F\u0442\u0435\u043B\u044C');
+    }
+    if ((r.skills || []).length === 0) {
+      flags.push("\u041D\u0435\u0442 \u043D\u0438 \u043E\u0434\u043D\u043E\u0433\u043E \u043D\u0430\u0432\u044B\u043A\u0430 \u2014 ATS \u043D\u0435 \u043D\u0430\u0439\u0434\u0451\u0442 \u0432\u0430\u0448\u0435 \u0440\u0435\u0437\u044E\u043C\u0435");
+    }
+    if (!r.additionalInfo || r.additionalInfo.length < 20) {
+      flags.push('\u041D\u0435\u0442 \u0431\u043B\u043E\u043A\u0430 "\u041E \u0441\u0435\u0431\u0435" \u2014 HR \u043D\u0435 \u0441\u043C\u043E\u0436\u0435\u0442 \u0431\u044B\u0441\u0442\u0440\u043E \u043F\u043E\u043D\u044F\u0442\u044C \u0432\u0430\u0448 \u043F\u0440\u043E\u0444\u0438\u043B\u044C');
+    }
+    return flags;
+  }
+  function detectStrengths(r) {
+    const strengths = [];
+    const exps = r.experience || [];
+    const skills = r.skills || [];
+    const allDesc = exps.map((e) => e.description || "").join(" ");
+    const descLower = allDesc.toLowerCase();
+    const metricCount = METRIC_PATTERNS.filter((p) => p.test(allDesc)).length;
+    if (metricCount >= 3) {
+      strengths.push("\u0421\u0438\u043B\u044C\u043D\u044B\u0435 \u043C\u0435\u0442\u0440\u0438\u043A\u0438 \u0432 \u043E\u043F\u044B\u0442\u0435 \u2014 " + metricCount + " \u043A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u0435\u043D\u043D\u044B\u0445 \u0440\u0435\u0437\u0443\u043B\u044C\u0442\u0430\u0442\u0430");
+    } else if (metricCount >= 1) {
+      strengths.push("\u0415\u0441\u0442\u044C \u043A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u0435\u043D\u043D\u044B\u0435 \u0440\u0435\u0437\u0443\u043B\u044C\u0442\u0430\u0442\u044B \u2014 \u043E\u0442\u043B\u0438\u0447\u043D\u043E, \u0434\u043E\u0431\u0430\u0432\u044C\u0442\u0435 \u0435\u0449\u0451");
+    }
+    const verbCount = ACHIEVEMENT_VERBS.filter((v) => descLower.includes(v)).length;
+    if (verbCount >= 3) {
+      strengths.push("\u042F\u0437\u044B\u043A \u0434\u043E\u0441\u0442\u0438\u0436\u0435\u043D\u0438\u0439 \u2014 " + verbCount + ' \u0433\u043B\u0430\u0433\u043E\u043B\u043E\u0432 \u0440\u0435\u0437\u0443\u043B\u044C\u0442\u0430\u0442\u0430 ("\u0432\u043D\u0435\u0434\u0440\u0438\u043B", "\u0443\u0432\u0435\u043B\u0438\u0447\u0438\u043B")');
+    } else if (verbCount >= 1) {
+      strengths.push("\u0415\u0441\u0442\u044C \u0433\u043B\u0430\u0433\u043E\u043B\u044B \u0434\u043E\u0441\u0442\u0438\u0436\u0435\u043D\u0438\u0439 \u2014 \u0443\u0441\u0438\u043B\u044C\u0442\u0435 \u043E\u0441\u0442\u0430\u043B\u044C\u043D\u044B\u0435 \u043E\u043F\u0438\u0441\u0430\u043D\u0438\u044F");
+    }
+    if (skills.length >= 10) {
+      strengths.push("\u0428\u0438\u0440\u043E\u043A\u0438\u0439 \u043D\u0430\u0431\u043E\u0440 \u043D\u0430\u0432\u044B\u043A\u043E\u0432 (" + skills.length + ") \u2014 \u0445\u043E\u0440\u043E\u0448\u0435\u0435 \u043F\u043E\u043A\u0440\u044B\u0442\u0438\u0435 ATS-\u043F\u043E\u0438\u0441\u043A\u0430");
+    } else if (skills.length >= 5) {
+      strengths.push("\u041D\u0435\u043F\u043B\u043E\u0445\u043E\u0439 \u043D\u0430\u0431\u043E\u0440 \u043D\u0430\u0432\u044B\u043A\u043E\u0432 (" + skills.length + ") \u2014 \u043C\u043E\u0436\u043D\u043E \u0434\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u0435\u0449\u0451");
+    }
+    const skillLower = skills.map((s) => s.toLowerCase().trim());
+    const skillsInDesc = skillLower.filter((s) => s.length > 2 && descLower.includes(s));
+    if (skillsInDesc.length >= 5) {
+      strengths.push(skillsInDesc.length + " \u043D\u0430\u0432\u044B\u043A\u043E\u0432 \u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043D\u044B \u0432 \u043E\u043F\u0438\u0441\u0430\u043D\u0438\u044F\u0445 \u043E\u043F\u044B\u0442\u0430 \u2014 credibility");
+    }
+    const positions = exps.map((e) => e.position || "").filter((p) => p.length > 0);
+    if (detectProgression(positions)) {
+      strengths.push("\u041A\u0430\u0440\u044C\u0435\u0440\u043D\u044B\u0439 \u0440\u043E\u0441\u0442 \u0432 \u0434\u043E\u043B\u0436\u043D\u043E\u0441\u0442\u044F\u0445 \u2014 HR \u0432\u0438\u0434\u0438\u0442 \u0440\u0430\u0437\u0432\u0438\u0442\u0438\u0435");
+    }
+    if (r.phone && r.email) {
+      strengths.push("\u041F\u043E\u043B\u043D\u044B\u0435 \u043A\u043E\u043D\u0442\u0430\u043A\u0442\u044B (\u0442\u0435\u043B\u0435\u0444\u043E\u043D + email) \u2014 \u0440\u0430\u0431\u043E\u0442\u043E\u0434\u0430\u0442\u0435\u043B\u044C \u043B\u0435\u0433\u043A\u043E \u0441\u0432\u044F\u0436\u0435\u0442\u0441\u044F");
+    }
+    if (r.additionalInfo && r.additionalInfo.length > 100) {
+      strengths.push('\u041F\u043E\u0434\u0440\u043E\u0431\u043D\u044B\u0439 \u0431\u043B\u043E\u043A "\u041E \u0441\u0435\u0431\u0435" \u2014 HR \u0431\u044B\u0441\u0442\u0440\u043E \u043F\u043E\u0439\u043C\u0451\u0442 \u0432\u0430\u0448 \u043F\u0440\u043E\u0444\u0438\u043B\u044C');
+    }
+    const longDescs = exps.filter((e) => e.description && e.description.length > 200);
+    if (longDescs.length >= 2) {
+      strengths.push("\u0414\u0435\u0442\u0430\u043B\u044C\u043D\u044B\u0435 \u043E\u043F\u0438\u0441\u0430\u043D\u0438\u044F \u043E\u043F\u044B\u0442\u0430 \u2014 HR \u0432\u0438\u0434\u0438\u0442 \u043A\u043E\u043D\u043A\u0440\u0435\u0442\u0438\u043A\u0443, \u0430 \u043D\u0435 \u043E\u0431\u0449\u0438\u0435 \u0444\u0440\u0430\u0437\u044B");
+    }
+    return strengths;
+  }
+  function buildRecommendations(ats, exp, flags, r) {
+    const recs = [];
+    const atsFailed = ats.checks.filter((c) => !c.passed).sort((a, b) => b.weight - a.weight);
+    for (const c of atsFailed.slice(0, 2)) {
+      recs.push({ priority: "critical", text: c.tip });
+    }
+    const expFailed = exp.checks.filter((c) => !c.passed).sort((a, b) => b.weight - a.weight);
+    for (const c of expFailed.slice(0, 2)) {
+      recs.push({ priority: "high", text: c.tip });
+    }
+    for (const f of flags.slice(0, 2)) {
+      recs.push({ priority: "high", text: f });
+    }
+    if ((r.skills || []).length > 0 && (r.experience || []).length > 0) {
+      const skillLower = (r.skills || []).map((s) => s.toLowerCase().trim());
+      const descText = (r.experience || []).map((e) => e.description || "").join(" ").toLowerCase();
+      const uncovered = skillLower.filter((s) => s.length > 2 && !descText.includes(s));
+      if (uncovered.length > 3) {
+        recs.push({
+          priority: "medium",
+          text: uncovered.length + " \u043D\u0430\u0432\u044B\u043A\u043E\u0432 \u043D\u0435 \u0443\u043F\u043E\u043C\u0438\u043D\u0430\u044E\u0442\u0441\u044F \u0432 \u043E\u043F\u0438\u0441\u0430\u043D\u0438\u044F\u0445 \u043E\u043F\u044B\u0442\u0430 \u2014 \u0434\u043E\u0431\u0430\u0432\u044C\u0442\u0435 \u0438\u0445 \u0432 \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442"
+        });
+      }
+    }
+    return recs;
+  }
+  var init_quality_flags = __esm({
+    "src/lib/quality-flags.js"() {
+      init_quality_patterns();
+      init_quality_experience();
+      init_quality_date_helpers();
+    }
+  });
+
+  // src/lib/resume-quality-analyzer.js
+  function analyzeResumeQuality(r) {
+    if (!r || !r.id) return {
+      totalScore: 0,
+      atsScore: 0,
+      experienceScore: 0,
+      redFlags: [],
+      strengths: [],
+      recommendations: [],
+      details: { ats: { score: 0, checks: [] }, experience: { score: 0, checks: [], metrics: {} } }
+    };
+    const ats = analyzeATS(r);
+    const exp = analyzeExperience(r);
+    const flags = detectRedFlags(r);
+    const strengths = detectStrengths(r);
+    const recommendations = buildRecommendations(ats, exp, flags, r);
+    const flagPenalty = Math.min(30, flags.length * 7);
+    const totalScore = Math.max(0, Math.round(
+      ats.score * 0.4 + exp.score * 0.4 + 100 * 0.2 - flagPenalty
+    ));
+    return {
+      totalScore,
+      atsScore: ats.score,
+      experienceScore: exp.score,
+      redFlags: flags,
+      strengths,
+      recommendations,
+      details: { ats, experience: exp }
+    };
+  }
+  var init_resume_quality_analyzer = __esm({
+    "src/lib/resume-quality-analyzer.js"() {
+      init_quality_ats();
+      init_quality_experience();
+      init_quality_flags();
+    }
+  });
+
   // src/ui/tabs/resumes/render-resume-panel.js
   function renderResumePanel() {
     const container = refs.shadowRoot?.getElementById("res-parsed-data");
@@ -4608,22 +5198,8 @@
       return;
     }
     section.style.display = "";
-    const checks = [
-      { label: "\u041F\u043E\u0437\u0438\u0446\u0438\u044F", ok: !!(r.title && r.title.length > 2), weight: 10 },
-      { label: "\u0418\u043C\u044F", ok: !!(r.name && r.name.length > 1), weight: 8 },
-      { label: "\u0417\u0430\u0440\u043F\u043B\u0430\u0442\u0430", ok: !!r.salary, weight: 8 },
-      { label: "\u0413\u043E\u0440\u043E\u0434", ok: !!r.address, weight: 6 },
-      { label: "\u041A\u043E\u043D\u0442\u0430\u043A\u0442\u044B", ok: !!(r.phone || r.email), weight: 10 },
-      { label: "\u041D\u0430\u0432\u044B\u043A\u0438 (3+)", ok: (r.skills || []).length >= 3, weight: 15 },
-      { label: "\u041E\u043F\u044B\u0442 (1+)", ok: (r.experience || []).length >= 1, weight: 15 },
-      { label: "\u041E\u0431\u0440\u0430\u0437\u043E\u0432\u0430\u043D\u0438\u0435", ok: (r.education || []).length >= 1, weight: 10 },
-      { label: "\u042F\u0437\u044B\u043A\u0438", ok: (r.languages || []).length >= 1, weight: 6 },
-      { label: "\u041E \u0441\u0435\u0431\u0435", ok: !!(r.additionalInfo && r.additionalInfo.length > 20), weight: 6 },
-      { label: "\u0417\u0430\u043D\u044F\u0442\u043E\u0441\u0442\u044C/\u0444\u043E\u0440\u043C\u0430\u0442", ok: !!(r.employmentType || r.workFormat), weight: 6 }
-    ];
-    const totalWeight = checks.reduce((s, c) => s + c.weight, 0);
-    const earnedWeight = checks.filter((c) => c.ok).reduce((s, c) => s + c.weight, 0);
-    const pct = Math.round(earnedWeight / totalWeight * 100);
+    const result = analyzeResumeQuality(r);
+    const pct = result.totalScore;
     const ring = refs.shadowRoot?.getElementById("res-score-ring");
     if (ring) {
       const deg = Math.round(pct * 3.6);
@@ -4637,17 +5213,65 @@
     }
     const subtitle = refs.shadowRoot?.getElementById("res-score-subtitle");
     if (subtitle) {
-      if (pct >= 80) subtitle.textContent = "\u041E\u0442\u043B\u0438\u0447\u043D\u0430\u044F \u043F\u043E\u043B\u043D\u043E\u0442\u0430 \u2014 \u0440\u0430\u0431\u043E\u0442\u043E\u0434\u0430\u0442\u0435\u043B\u0438 \u0443\u0432\u0438\u0434\u044F\u0442 \u043A\u043B\u044E\u0447\u0435\u0432\u044B\u0435 \u0434\u0430\u043D\u043D\u044B\u0435";
-      else if (pct >= 60) subtitle.textContent = "\u0425\u043E\u0440\u043E\u0448\u0430\u044F \u043F\u043E\u043B\u043D\u043E\u0442\u0430 \u2014 \u0435\u0441\u0442\u044C \u0447\u0442\u043E \u0434\u043E\u043F\u043E\u043B\u043D\u0438\u0442\u044C";
-      else if (pct >= 40) subtitle.textContent = "\u0421\u0440\u0435\u0434\u043D\u044F\u044F \u043F\u043E\u043B\u043D\u043E\u0442\u0430 \u2014 \u0441\u0442\u043E\u0438\u0442 \u0434\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u043D\u0435\u0434\u043E\u0441\u0442\u0430\u044E\u0449\u0438\u0435 \u0440\u0430\u0437\u0434\u0435\u043B\u044B";
-      else subtitle.textContent = "\u041D\u0438\u0437\u043A\u0430\u044F \u043F\u043E\u043B\u043D\u043E\u0442\u0430 \u2014 \u0437\u0430\u043F\u043E\u043B\u043D\u0438\u0442\u0435 \u0431\u0430\u0437\u043E\u0432\u044B\u0435 \u0440\u0430\u0437\u0434\u0435\u043B\u044B";
+      if (pct >= 80) subtitle.textContent = "\u0421\u0438\u043B\u044C\u043D\u043E\u0435 \u0440\u0435\u0437\u044E\u043C\u0435 \u2014 ATS \u043F\u0440\u043E\u043F\u0443\u0441\u0442\u0438\u0442, HR \u0437\u0430\u043C\u0435\u0442\u0438\u0442";
+      else if (pct >= 60) subtitle.textContent = "\u0425\u043E\u0440\u043E\u0448\u0435\u0435 \u0440\u0435\u0437\u044E\u043C\u0435 \u2014 \u0435\u0441\u0442\u044C \u0447\u0442\u043E \u0443\u0441\u0438\u043B\u0438\u0442\u044C";
+      else if (pct >= 40) subtitle.textContent = "\u0421\u0440\u0435\u0434\u043D\u0435\u0435 \u2014 ATS \u043C\u043E\u0436\u0435\u0442 \u043E\u0442\u0441\u0435\u044F\u0442\u044C, HR \u043D\u0435 \u0443\u0432\u0438\u0434\u0438\u0442 \u0446\u0435\u043D\u043D\u043E\u0441\u0442\u0438";
+      else subtitle.textContent = "\u0421\u043B\u0430\u0431\u043E\u0435 \u2014 \u0432\u044B\u0441\u043E\u043A\u0430\u044F \u0432\u0435\u0440\u043E\u044F\u0442\u043D\u043E\u0441\u0442\u044C \u043E\u0442\u0441\u0435\u0432\u0430 \u043D\u0430 \u044D\u0442\u0430\u043F\u0435 ATS";
     }
-    const checklist = refs.shadowRoot?.getElementById("res-score-checklist");
-    if (checklist) {
-      checklist.innerHTML = checks.map((c) => {
-        const icon = c.ok ? '<span style="color:#059669;">&#10003;</span>' : '<span style="color:#DC2626;">&#10007;</span>';
-        return '<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;">' + icon + " <span" + (c.ok ? "" : ' style="color:#71717a;"') + ">" + c.label + "</span></div>";
-      }).join("");
+    const atsScoreEl = refs.shadowRoot?.getElementById("res-ats-score");
+    const atsBar = refs.shadowRoot?.getElementById("res-ats-bar");
+    if (atsScoreEl) {
+      const atsColor = result.atsScore >= 70 ? "#059669" : result.atsScore >= 40 ? "#D97706" : "#DC2626";
+      atsScoreEl.textContent = result.atsScore + "%";
+      atsScoreEl.style.color = atsColor;
+    }
+    if (atsBar) atsBar.style.width = result.atsScore + "%";
+    const expScoreEl = refs.shadowRoot?.getElementById("res-exp-score");
+    const expBar = refs.shadowRoot?.getElementById("res-exp-bar");
+    if (expScoreEl) {
+      const expColor = result.experienceScore >= 70 ? "#2563EB" : result.experienceScore >= 40 ? "#D97706" : "#DC2626";
+      expScoreEl.textContent = result.experienceScore + "%";
+      expScoreEl.style.color = expColor;
+    }
+    if (expBar) expBar.style.width = result.experienceScore + "%";
+    const redFlagsContainer = refs.shadowRoot?.getElementById("res-red-flags");
+    const redFlagsList = refs.shadowRoot?.getElementById("res-red-flags-list");
+    if (redFlagsContainer && redFlagsList) {
+      if (result.redFlags.length > 0) {
+        redFlagsContainer.style.display = "";
+        redFlagsList.innerHTML = result.redFlags.map(
+          (f) => '<div style="display:flex;align-items:flex-start;gap:6px;margin-bottom:4px;padding:5px 8px;background:#FEF2F2;border-radius:6px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#DC2626" stroke-width="2.5" style="flex-shrink:0;margin-top:1px;"><path d="M12 9v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg><span style="color:#991B1B;line-height:1.4;">' + esc(f) + "</span></div>"
+        ).join("");
+      } else {
+        redFlagsContainer.style.display = "none";
+      }
+    }
+    const strengthsContainer = refs.shadowRoot?.getElementById("res-strengths");
+    const strengthsList = refs.shadowRoot?.getElementById("res-strengths-list");
+    if (strengthsContainer && strengthsList) {
+      if (result.strengths.length > 0) {
+        strengthsContainer.style.display = "";
+        strengthsList.innerHTML = result.strengths.map(
+          (s) => '<div style="display:flex;align-items:flex-start;gap:6px;margin-bottom:4px;padding:5px 8px;background:#F0FDF4;border-radius:6px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2.5" style="flex-shrink:0;margin-top:1px;"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg><span style="color:#166534;line-height:1.4;">' + esc(s) + "</span></div>"
+        ).join("");
+      } else {
+        strengthsContainer.style.display = "none";
+      }
+    }
+    const recsContainer = refs.shadowRoot?.getElementById("res-recommendations");
+    const recsList = refs.shadowRoot?.getElementById("res-recommendations-list");
+    if (recsContainer && recsList) {
+      if (result.recommendations.length > 0) {
+        recsContainer.style.display = "";
+        recsList.innerHTML = result.recommendations.map((rec) => {
+          const priorityColor = rec.priority === "critical" ? "#991B1B" : rec.priority === "high" ? "#92400E" : "#71717a";
+          const priorityBg = rec.priority === "critical" ? "#FEF2F2" : rec.priority === "high" ? "#FFFBEB" : "#FAFAFA";
+          const priorityBorder = rec.priority === "critical" ? "1px solid rgba(220,38,38,0.15)" : rec.priority === "high" ? "1px solid rgba(217,119,6,0.15)" : "1px solid #e4e4e7";
+          return '<div style="display:flex;align-items:flex-start;gap:6px;margin-bottom:4px;padding:5px 8px;background:' + priorityBg + ";border:" + priorityBorder + ';border-radius:6px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#D97706" stroke-width="2.5" style="flex-shrink:0;margin-top:1px;"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg><span style="color:' + priorityColor + ';line-height:1.4;">' + esc(rec.text) + "</span></div>";
+        }).join("");
+      } else {
+        recsContainer.style.display = "none";
+      }
     }
   }
   var init_render_resume_panel = __esm({
@@ -4660,6 +5284,7 @@
       init_section_builders();
       init_storage();
       init_resume_accordion_header();
+      init_resume_quality_analyzer();
     }
   });
 
