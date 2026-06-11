@@ -360,6 +360,11 @@ async function parseExperienceFromDoc(doc, dbg, resume, html, resumeUrl) {
         resume._visDiag.pageTrace = (resume._visDiag.pageTrace || []).concat(iframeVisTrace);
       }
     }
+    // Mark that iframe was executed (used by final fallback logic)
+    if (resume._visDiag) {
+      resume._visDiag.iframeRan = true;
+      resume._visDiag.iframeVis = iframeVis;
+    }
   }
 }
 

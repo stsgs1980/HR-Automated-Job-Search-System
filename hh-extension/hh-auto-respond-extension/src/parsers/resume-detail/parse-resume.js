@@ -87,23 +87,41 @@ export function parseResume() {
     resume.visibility = VISIBILITY_HIDDEN;
     resume.hidden = true;
   } else {
-    // Check for "Сделать видимым" button
-    const allBtns = document.querySelectorAll('button, a');
+    // Check for "Сделать видимым" button (or any button with "видим" text)
+    const allBtns = document.querySelectorAll('button, a, [role="button"]');
     let foundMakeVisible = false;
+    let foundHideResume = false;
     for (const btn of allBtns) {
       const text = normalizeWs((btn.textContent || '')).toLowerCase();
-      if (text.includes('сделать видимым')) {
+      const qa = (btn.getAttribute('data-qa') || '').toLowerCase();
+      if (text.includes('сделать видимым') || qa.includes('make-visible') || qa.includes('show-resume')) {
         foundMakeVisible = true;
+        break;
+      }
+      if (text.includes('скрыть резюме') || qa.includes('hide-resume') || qa.includes('resume-action-hide')) {
+        foundHideResume = true;
         break;
       }
     }
     if (foundMakeVisible) {
       resume.visibility = VISIBILITY_HIDDEN;
       resume.hidden = true;
-    } else {
-      // If we're on the resume page and there's no hidden indicator, it's visible
+    } else if (foundHideResume) {
+      // If there's a "Скрыть резюме" button, the resume IS visible
       resume.visibility = VISIBILITY_VISIBLE;
       resume.hidden = false;
+    } else {
+      // Check for partial match: "не видят" (covers "Многие не видят", "Работодатели не видят")
+      const bodyText = normalizeWs(document.body ? document.body.textContent : '').toLowerCase();
+      if (bodyText.includes('не видят')) {
+        resume.visibility = VISIBILITY_HIDDEN;
+        resume.hidden = true;
+      } else {
+        // If we're on the resume page and there's no hidden indicator at all,
+        // the resume is most likely visible (we're on the LIVE hydrated page)
+        resume.visibility = VISIBILITY_VISIBLE;
+        resume.hidden = false;
+      }
     }
   }
 

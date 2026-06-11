@@ -370,7 +370,11 @@ export function extractVisibilityStatus(doc, resumes, html) {
       const zone = cleanForSearch.substring(searchStart, searchEnd);
 
       const isHidden = hasHiddenIndicator(zone);
-      r.visibility = isHidden ? VISIBILITY_HIDDEN : VISIBILITY_VISIBLE;
+      // CRITICAL: Do NOT default to VISIBLE here!
+      // The SSR HTML often lacks hidden indicators because hh.ru renders them
+      // client-side via React hydration. Absence of indicator ≠ visible.
+      // Keep UNKNOWN so iframe/detail page detection can resolve it.
+      r.visibility = isHidden ? VISIBILITY_HIDDEN : VISIBILITY_UNKNOWN;
       r.hidden = isHidden;
 
       helperLog.info('  ' + r.id.substring(0, 8) + '=' + r.visibility +

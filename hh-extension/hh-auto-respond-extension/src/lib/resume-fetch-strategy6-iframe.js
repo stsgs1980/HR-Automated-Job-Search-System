@@ -45,8 +45,8 @@ export async function fetchExpandedExperienceViaIframe(resumeUrl, currentCount) 
       iframe.addEventListener('error', () => { clearTimeout(timeout); reject(new Error('iframe load error')); });
     });
 
-    // Wait for React/Magritte hydration to complete
-    await new Promise(r => setTimeout(r, 2500));
+    // Wait for React/Magritte hydration to complete (increased from 2.5s — some pages need more)
+    await new Promise(r => setTimeout(r, 4000));
 
     const iframeDoc = iframe.contentDocument;
     if (!iframeDoc) {
@@ -102,13 +102,30 @@ export async function fetchExpandedExperienceViaIframe(resumeUrl, currentCount) 
  * This is more reliable than SSR-based detection because hh.ru renders
  * visibility indicators ("Многие не видят", "Сделать видимым") client-side.
  *
+ * Enhanced with multiple detection strategies and diagnostic logging.
+ *
  * @param {Document} iframeDoc - The iframe's contentDocument (after hydration)
  * @returns {{ visibility: string, trace: string[] }}
  */
 function detectVisibilityFromIframeDoc(iframeDoc) {
   const trace = [];
+  const diagInfo = { buttons: [], visElements: [], hideElements: [] };
 
-  // Strategy A: Check for hidden-specific data-qa attributes
+  // ── Diagnostic: collect ALL buttons/links with visibility-related text ──
+  const allButtons = iframeDoc.querySelectorAll('button, a, [role="button"]');
+  for (const btn of allButtons) {
+    const text = normalizeWs((btn.textContent || '')).toLowerCase();
+    const qa = (btn.getAttribute('data-qa') || '').toLowerCase();
+    const href = (btn.getAttribute('href') || '').toLowerCase();
+    if (text.includes('видим') || text.includes('скрыть') || text.includes('скрыт') ||
+        qa.includes('visible') || qa.includes('hide') || qa.includes('hidden') ||
+        qa.includes('show') || href.includes('visible') || href.includes('hide')) {
+      diagInfo.buttons.push({ text: text.substring(0, 50), qa, href: href.substring(0, 60), tag: btn.tagName });
+    }
+  }
+  fetchLog.info('[VIS-IFRAME] Diagnostic buttons: ' + JSON.stringify(diagInfo.buttons));
+
+  // ── Strategy A: Check for hidden-specific data-qa attributes ──
   for (const sel of VISIBILITY_HIDDEN_DATA_QA) {
     const found = iframeDoc.querySelector(sel);
     if (found) {
@@ -118,22 +135,22 @@ function detectVisibilityFromIframeDoc(iframeDoc) {
   }
   trace.push('iframe-S1:no-data-qa-hidden');
 
-  // Strategy B: Check for "Сделать видимым" button
-  const allButtons = iframeDoc.querySelectorAll('button, a');
+  // ── Strategy B: Check for "Сделать видимым" / "Скрыть резюме" buttons ──
   for (const btn of allButtons) {
     const text = normalizeWs((btn.textContent || '')).toLowerCase();
-    if (text.includes('сделать видимым')) {
+    const qa = (btn.getAttribute('data-qa') || '').toLowerCase();
+    if (text.includes('сделать видимым') || qa.includes('make-visible') || qa.includes('show-resume')) {
       trace.push('iframe-S2:btn="сделать видимым" → HIDDEN');
       return { visibility: VISIBILITY_HIDDEN, trace };
     }
-    if (text.includes('скрыть резюме')) {
+    if (text.includes('скрыть резюме') || qa.includes('hide-resume') || qa.includes('resume-action-hide')) {
       trace.push('iframe-S2:btn="скрыть резюме" → VISIBLE');
       return { visibility: VISIBILITY_VISIBLE, trace };
     }
   }
   trace.push('iframe-S2:no-key-buttons');
 
-  // Strategy C: Check body text for hidden indicators
+  // ── Strategy C: Check body text for hidden indicators ──
   const bodyText = iframeDoc.body ? normalizeWs(iframeDoc.body.textContent || '') : '';
   if (hasHiddenIndicator(bodyText)) {
     trace.push('iframe-S3:body-has-indicator → HIDDEN');
@@ -141,7 +158,7 @@ function detectVisibilityFromIframeDoc(iframeDoc) {
   }
   trace.push('iframe-S3:body-no-indicators');
 
-  // Strategy D: Check for "Скрыть" action link (means resume IS visible)
+  // ── Strategy D: Check for "Скрыть" action link (means resume IS visible) ──
   const hideLink = iframeDoc.querySelector('[data-qa="resume-action-hide"], [data-qa*="resume-hide"], a[data-qa*="hide-resume"]');
   if (hideLink) {
     trace.push('iframe-S4:hide-link-found → VISIBLE');
@@ -149,7 +166,88 @@ function detectVisibilityFromIframeDoc(iframeDoc) {
   }
   trace.push('iframe-S4:no-hide-link');
 
+  // ── Strategy E: Check for "не видят" anywhere (partial match — more lenient) ──
+  // hh.ru may use variations: "Многие не видят ваше резюме", "Работодатели не видят"
+  const bodyLower = bodyText.toLowerCase();
+  if (bodyLower.includes('не видят') || bodyLower.includes('не\u00A0видят')) {
+    trace.push('iframe-S5:body-has-"не видят" → HIDDEN');
+    return { visibility: VISIBILITY_HIDDEN, trace };
+  }
+
+  // ── Strategy F: Check for visibility status in page's JavaScript state ──
+  // Some hh.ru pages expose resume state in __NEXT_DATA__ or similar globals
+  try {
+    const scripts = iframeDoc.querySelectorAll('script:not([src])');
+    for (const script of scripts) {
+      const t = script.textContent || '';
+      if (t.length < 50) continue;
+      // Look for JSON patterns that might contain hidden/visibility status
+      if (/"hidden"\s*:\s*true/.test(t) || /"isHidden"\s*:\s*true/.test(t) ||
+          /"visibility"\s*:\s*"hidden"/.test(t) || /"status"\s*:\s*"hidden"/.test(t)) {
+        trace.push('iframe-S6:script-has-hidden-pattern → HIDDEN');
+        return { visibility: VISIBILITY_HIDDEN, trace };
+      }
+      // Also check for visible patterns (if we find "hidden":false or "visibility":"visible")
+      if (/"hidden"\s*:\s*false/.test(t) || /"visibility"\s*:\s*"visible"/.test(t)) {
+        trace.push('iframe-S6:script-has-visible-pattern → VISIBLE');
+        return { visibility: VISIBILITY_VISIBLE, trace };
+      }
+    }
+  } catch (e) {
+    trace.push('iframe-S6:script-check-error(' + e.message.substring(0, 30) + ')');
+  }
+  trace.push('iframe-S6:no-script-patterns');
+
+  // ── Strategy G: Check for specific hh.ru notification/banner elements ──
+  // hh.ru shows a notification banner for hidden resumes
+  const notifSelectors = [
+    '[data-qa="resume-visibility-notification"]',
+    '[data-qa*="visibility-notification"]',
+    '[data-qa*="resume-notification"]',
+    '[class*="resume-hidden"]',
+    '[class*="resume-visibility"]',
+    '.resume-status-hidden',
+  ];
+  for (const sel of notifSelectors) {
+    const el = iframeDoc.querySelector(sel);
+    if (el) {
+      const elText = normalizeWs(el.textContent || '').toLowerCase();
+      if (elText.includes('не видят') || elText.includes('скрыт') || elText.includes('сделать видим')) {
+        trace.push('iframe-S7:notification=' + sel + ' text="' + elText.substring(0, 40) + '" → HIDDEN');
+        return { visibility: VISIBILITY_HIDDEN, trace };
+      }
+    }
+  }
+  trace.push('iframe-S7:no-notification-hidden');
+
+  // ── Strategy H: Check for action links with "show"/"visible" in URL ──
+  const actionLinks = iframeDoc.querySelectorAll('a[href*="visible"], a[href*="show"], a[href*="publish"]');
+  for (const link of actionLinks) {
+    const href = (link.getAttribute('href') || '').toLowerCase();
+    const linkText = normalizeWs((link.textContent || '')).toLowerCase();
+    if (href.includes('publish') || href.includes('make_visible') || href.includes('show')) {
+      trace.push('iframe-S8:action-link href="' + href.substring(0, 60) + '" text="' + linkText.substring(0, 40) + '" → HIDDEN');
+      return { visibility: VISIBILITY_HIDDEN, trace };
+    }
+  }
+  trace.push('iframe-S8:no-action-links');
+
+  // ── Diagnostic: dump ALL elements with "скрыт" or "видим" text for debugging ──
+  const visRelated = iframeDoc.querySelectorAll('[data-qa*="resume"], [data-qa*="visibility"]');
+  for (const el of visRelated) {
+    const elQa = el.getAttribute('data-qa') || '';
+    const elText = normalizeWs((el.textContent || '')).substring(0, 60);
+    if (elText.includes('скрыт') || elText.includes('видим') || elText.includes('не видят')) {
+      diagInfo.visElements.push({ qa: elQa, text: elText });
+    }
+  }
+  if (diagInfo.visElements.length > 0) {
+    fetchLog.info('[VIS-IFRAME] Related elements: ' + JSON.stringify(diagInfo.visElements));
+  }
+
   trace.push('→ UNKNOWN');
+  fetchLog.info('[VIS-IFRAME] All strategies exhausted. Buttons found: ' + diagInfo.buttons.length +
+    ', Related elements: ' + diagInfo.visElements.length);
   return { visibility: VISIBILITY_UNKNOWN, trace };
 }
 

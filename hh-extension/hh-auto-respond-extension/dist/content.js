@@ -1273,7 +1273,7 @@
   function detectVisibilityFromCardText(cardText) {
     if (!cardText) return VISIBILITY_UNKNOWN;
     const isHidden = hasHiddenIndicator(cardText);
-    return isHidden ? VISIBILITY_HIDDEN : VISIBILITY_VISIBLE;
+    return isHidden ? VISIBILITY_HIDDEN : VISIBILITY_UNKNOWN;
   }
   function detectVisibilityFromCard(cardEl) {
     if (!cardEl) return { visibility: VISIBILITY_UNKNOWN, hidden: false, method: "no-card" };
@@ -1286,7 +1286,7 @@
     if (hasHiddenIndicator(cardEl.textContent || "")) {
       return { visibility: VISIBILITY_HIDDEN, hidden: true, method: "text-indicator" };
     }
-    return { visibility: VISIBILITY_VISIBLE, hidden: false, method: "card-no-indicators" };
+    return { visibility: VISIBILITY_UNKNOWN, hidden: false, method: "card-no-indicators" };
   }
   function stripScripts(html) {
     if (!html) return "";
@@ -1428,21 +1428,36 @@
       resume.visibility = VISIBILITY_HIDDEN;
       resume.hidden = true;
     } else {
-      const allBtns = document.querySelectorAll("button, a");
+      const allBtns = document.querySelectorAll('button, a, [role="button"]');
       let foundMakeVisible = false;
+      let foundHideResume = false;
       for (const btn of allBtns) {
         const text = normalizeWs(btn.textContent || "").toLowerCase();
-        if (text.includes("\u0441\u0434\u0435\u043B\u0430\u0442\u044C \u0432\u0438\u0434\u0438\u043C\u044B\u043C")) {
+        const qa = (btn.getAttribute("data-qa") || "").toLowerCase();
+        if (text.includes("\u0441\u0434\u0435\u043B\u0430\u0442\u044C \u0432\u0438\u0434\u0438\u043C\u044B\u043C") || qa.includes("make-visible") || qa.includes("show-resume")) {
           foundMakeVisible = true;
+          break;
+        }
+        if (text.includes("\u0441\u043A\u0440\u044B\u0442\u044C \u0440\u0435\u0437\u044E\u043C\u0435") || qa.includes("hide-resume") || qa.includes("resume-action-hide")) {
+          foundHideResume = true;
           break;
         }
       }
       if (foundMakeVisible) {
         resume.visibility = VISIBILITY_HIDDEN;
         resume.hidden = true;
-      } else {
+      } else if (foundHideResume) {
         resume.visibility = VISIBILITY_VISIBLE;
         resume.hidden = false;
+      } else {
+        const bodyText = normalizeWs(document.body ? document.body.textContent : "").toLowerCase();
+        if (bodyText.includes("\u043D\u0435 \u0432\u0438\u0434\u044F\u0442")) {
+          resume.visibility = VISIBILITY_HIDDEN;
+          resume.hidden = true;
+        } else {
+          resume.visibility = VISIBILITY_VISIBLE;
+          resume.hidden = false;
+        }
       }
     }
     const elapsed = (performance.now() - t0).toFixed(1);
@@ -2043,7 +2058,7 @@
         const searchEnd = Math.min(myPos + SEARCH_RADIUS, boundary);
         const zone = cleanForSearch.substring(searchStart, searchEnd);
         const isHidden = hasHiddenIndicator(zone);
-        r.visibility = isHidden ? VISIBILITY_HIDDEN : VISIBILITY_VISIBLE;
+        r.visibility = isHidden ? VISIBILITY_HIDDEN : VISIBILITY_UNKNOWN;
         r.hidden = isHidden;
         helperLog.info("  " + r.id.substring(0, 8) + "=" + r.visibility + " (zone " + searchStart + "-" + searchEnd + ", next=" + (nextResume ? nextResume.id.substring(0, 8) : "none") + ", indicators=" + (isHidden ? "FOUND" : "none") + ")");
       });
@@ -2846,7 +2861,7 @@
           reject(new Error("iframe load error"));
         });
       });
-      await new Promise((r) => setTimeout(r, 2500));
+      await new Promise((r) => setTimeout(r, 4e3));
       const iframeDoc = iframe.contentDocument;
       if (!iframeDoc) {
         throw new Error("Cannot access iframe document (cross-origin or blocked)");
@@ -2887,6 +2902,17 @@
   }
   function detectVisibilityFromIframeDoc(iframeDoc) {
     const trace = [];
+    const diagInfo = { buttons: [], visElements: [], hideElements: [] };
+    const allButtons = iframeDoc.querySelectorAll('button, a, [role="button"]');
+    for (const btn of allButtons) {
+      const text = normalizeWs(btn.textContent || "").toLowerCase();
+      const qa = (btn.getAttribute("data-qa") || "").toLowerCase();
+      const href = (btn.getAttribute("href") || "").toLowerCase();
+      if (text.includes("\u0432\u0438\u0434\u0438\u043C") || text.includes("\u0441\u043A\u0440\u044B\u0442\u044C") || text.includes("\u0441\u043A\u0440\u044B\u0442") || qa.includes("visible") || qa.includes("hide") || qa.includes("hidden") || qa.includes("show") || href.includes("visible") || href.includes("hide")) {
+        diagInfo.buttons.push({ text: text.substring(0, 50), qa, href: href.substring(0, 60), tag: btn.tagName });
+      }
+    }
+    fetchLog7.info("[VIS-IFRAME] Diagnostic buttons: " + JSON.stringify(diagInfo.buttons));
     for (const sel of VISIBILITY_HIDDEN_DATA_QA) {
       const found = iframeDoc.querySelector(sel);
       if (found) {
@@ -2895,14 +2921,14 @@
       }
     }
     trace.push("iframe-S1:no-data-qa-hidden");
-    const allButtons = iframeDoc.querySelectorAll("button, a");
     for (const btn of allButtons) {
       const text = normalizeWs(btn.textContent || "").toLowerCase();
-      if (text.includes("\u0441\u0434\u0435\u043B\u0430\u0442\u044C \u0432\u0438\u0434\u0438\u043C\u044B\u043C")) {
+      const qa = (btn.getAttribute("data-qa") || "").toLowerCase();
+      if (text.includes("\u0441\u0434\u0435\u043B\u0430\u0442\u044C \u0432\u0438\u0434\u0438\u043C\u044B\u043C") || qa.includes("make-visible") || qa.includes("show-resume")) {
         trace.push('iframe-S2:btn="\u0441\u0434\u0435\u043B\u0430\u0442\u044C \u0432\u0438\u0434\u0438\u043C\u044B\u043C" \u2192 HIDDEN');
         return { visibility: VISIBILITY_HIDDEN, trace };
       }
-      if (text.includes("\u0441\u043A\u0440\u044B\u0442\u044C \u0440\u0435\u0437\u044E\u043C\u0435")) {
+      if (text.includes("\u0441\u043A\u0440\u044B\u0442\u044C \u0440\u0435\u0437\u044E\u043C\u0435") || qa.includes("hide-resume") || qa.includes("resume-action-hide")) {
         trace.push('iframe-S2:btn="\u0441\u043A\u0440\u044B\u0442\u044C \u0440\u0435\u0437\u044E\u043C\u0435" \u2192 VISIBLE');
         return { visibility: VISIBILITY_VISIBLE, trace };
       }
@@ -2920,7 +2946,71 @@
       return { visibility: VISIBILITY_VISIBLE, trace };
     }
     trace.push("iframe-S4:no-hide-link");
+    const bodyLower = bodyText.toLowerCase();
+    if (bodyLower.includes("\u043D\u0435 \u0432\u0438\u0434\u044F\u0442") || bodyLower.includes("\u043D\u0435\xA0\u0432\u0438\u0434\u044F\u0442")) {
+      trace.push('iframe-S5:body-has-"\u043D\u0435 \u0432\u0438\u0434\u044F\u0442" \u2192 HIDDEN');
+      return { visibility: VISIBILITY_HIDDEN, trace };
+    }
+    try {
+      const scripts = iframeDoc.querySelectorAll("script:not([src])");
+      for (const script of scripts) {
+        const t = script.textContent || "";
+        if (t.length < 50) continue;
+        if (/"hidden"\s*:\s*true/.test(t) || /"isHidden"\s*:\s*true/.test(t) || /"visibility"\s*:\s*"hidden"/.test(t) || /"status"\s*:\s*"hidden"/.test(t)) {
+          trace.push("iframe-S6:script-has-hidden-pattern \u2192 HIDDEN");
+          return { visibility: VISIBILITY_HIDDEN, trace };
+        }
+        if (/"hidden"\s*:\s*false/.test(t) || /"visibility"\s*:\s*"visible"/.test(t)) {
+          trace.push("iframe-S6:script-has-visible-pattern \u2192 VISIBLE");
+          return { visibility: VISIBILITY_VISIBLE, trace };
+        }
+      }
+    } catch (e) {
+      trace.push("iframe-S6:script-check-error(" + e.message.substring(0, 30) + ")");
+    }
+    trace.push("iframe-S6:no-script-patterns");
+    const notifSelectors = [
+      '[data-qa="resume-visibility-notification"]',
+      '[data-qa*="visibility-notification"]',
+      '[data-qa*="resume-notification"]',
+      '[class*="resume-hidden"]',
+      '[class*="resume-visibility"]',
+      ".resume-status-hidden"
+    ];
+    for (const sel of notifSelectors) {
+      const el = iframeDoc.querySelector(sel);
+      if (el) {
+        const elText = normalizeWs(el.textContent || "").toLowerCase();
+        if (elText.includes("\u043D\u0435 \u0432\u0438\u0434\u044F\u0442") || elText.includes("\u0441\u043A\u0440\u044B\u0442") || elText.includes("\u0441\u0434\u0435\u043B\u0430\u0442\u044C \u0432\u0438\u0434\u0438\u043C")) {
+          trace.push("iframe-S7:notification=" + sel + ' text="' + elText.substring(0, 40) + '" \u2192 HIDDEN');
+          return { visibility: VISIBILITY_HIDDEN, trace };
+        }
+      }
+    }
+    trace.push("iframe-S7:no-notification-hidden");
+    const actionLinks = iframeDoc.querySelectorAll('a[href*="visible"], a[href*="show"], a[href*="publish"]');
+    for (const link of actionLinks) {
+      const href = (link.getAttribute("href") || "").toLowerCase();
+      const linkText = normalizeWs(link.textContent || "").toLowerCase();
+      if (href.includes("publish") || href.includes("make_visible") || href.includes("show")) {
+        trace.push('iframe-S8:action-link href="' + href.substring(0, 60) + '" text="' + linkText.substring(0, 40) + '" \u2192 HIDDEN');
+        return { visibility: VISIBILITY_HIDDEN, trace };
+      }
+    }
+    trace.push("iframe-S8:no-action-links");
+    const visRelated = iframeDoc.querySelectorAll('[data-qa*="resume"], [data-qa*="visibility"]');
+    for (const el of visRelated) {
+      const elQa = el.getAttribute("data-qa") || "";
+      const elText = normalizeWs(el.textContent || "").substring(0, 60);
+      if (elText.includes("\u0441\u043A\u0440\u044B\u0442") || elText.includes("\u0432\u0438\u0434\u0438\u043C") || elText.includes("\u043D\u0435 \u0432\u0438\u0434\u044F\u0442")) {
+        diagInfo.visElements.push({ qa: elQa, text: elText });
+      }
+    }
+    if (diagInfo.visElements.length > 0) {
+      fetchLog7.info("[VIS-IFRAME] Related elements: " + JSON.stringify(diagInfo.visElements));
+    }
     trace.push("\u2192 UNKNOWN");
+    fetchLog7.info("[VIS-IFRAME] All strategies exhausted. Buttons found: " + diagInfo.buttons.length + ", Related elements: " + diagInfo.visElements.length);
     return { visibility: VISIBILITY_UNKNOWN, trace };
   }
   function parseExperienceFromIframeDoc(iframeDoc) {
@@ -3573,6 +3663,10 @@
           resume._visDiag.pageTrace = (resume._visDiag.pageTrace || []).concat(iframeVisTrace);
         }
       }
+      if (resume._visDiag) {
+        resume._visDiag.iframeRan = true;
+        resume._visDiag.iframeVis = iframeVis;
+      }
     }
   }
   function detectVisibilityFromResumePage(doc, html) {
@@ -3789,18 +3883,33 @@
       }
       const stillUnknown = results.filter((r) => r.visibility === VISIBILITY_UNKNOWN);
       if (stillUnknown.length > 0) {
-        fetchLog12.info("[VIS-DIAG] Final fallback: " + stillUnknown.length + " resumes still UNKNOWN after all detection \u2192 defaulting to VISIBLE");
-        visDiag.summary.unknownFallbackToVisible = stillUnknown.length;
-        stillUnknown.forEach((r) => {
-          fetchLog12.info("[VIS-DIAG]   " + (r.id ? r.id.substring(0, 8) : "?") + ' "' + (r.title || "").substring(0, 30) + '" UNKNOWN\u2192VISIBLE');
-          r.visibility = VISIBILITY_VISIBLE;
-          r.hidden = false;
-          const diagEntry = visDiag.resumes.find((d) => d.id === r.id);
-          if (diagEntry) {
-            diagEntry.finalVisibility = VISIBILITY_VISIBLE;
-            diagEntry.decisionReason += " [FALLBACK: UNKNOWN\u2192VISIBLE]";
-          }
-        });
+        const iframeRan = stillUnknown.filter((r) => r._visDiag?.iframeRan);
+        const iframeNotRan = stillUnknown.filter((r) => !r._visDiag?.iframeRan);
+        if (iframeNotRan.length > 0) {
+          fetchLog12.info("[VIS-DIAG] Final fallback: " + iframeNotRan.length + " resumes UNKNOWN (iframe not run) \u2192 defaulting to VISIBLE");
+          visDiag.summary.unknownFallbackToVisible = iframeNotRan.length;
+          iframeNotRan.forEach((r) => {
+            fetchLog12.info("[VIS-DIAG]   " + (r.id ? r.id.substring(0, 8) : "?") + ' "' + (r.title || "").substring(0, 30) + '" UNKNOWN\u2192VISIBLE (iframe not run)');
+            r.visibility = VISIBILITY_VISIBLE;
+            r.hidden = false;
+            const diagEntry = visDiag.resumes.find((d) => d.id === r.id);
+            if (diagEntry) {
+              diagEntry.finalVisibility = VISIBILITY_VISIBLE;
+              diagEntry.decisionReason += " [FALLBACK: UNKNOWN\u2192VISIBLE, iframe not run]";
+            }
+          });
+        }
+        if (iframeRan.length > 0) {
+          fetchLog12.info("[VIS-DIAG] Keeping UNKNOWN for " + iframeRan.length + " resumes (iframe ran but returned UNKNOWN)");
+          iframeRan.forEach((r) => {
+            fetchLog12.info("[VIS-DIAG]   " + (r.id ? r.id.substring(0, 8) : "?") + ' "' + (r.title || "").substring(0, 30) + '" \u2192 UNKNOWN (iframe ran, no indicators found)');
+            const diagEntry = visDiag.resumes.find((d) => d.id === r.id);
+            if (diagEntry) {
+              diagEntry.finalVisibility = VISIBILITY_UNKNOWN;
+              diagEntry.decisionReason += " [KEPT UNKNOWN: iframe ran, no indicators]";
+            }
+          });
+        }
       }
       results.forEach((r) => {
         const diagEntry = visDiag.resumes.find((d) => d.id === r.id);
@@ -5912,6 +6021,8 @@
         visBadge = '<span class="badge badge-amber" style="font-size:9px;margin-left:4px;">\u0421\u043A\u0440\u044B\u0442\u043E</span>';
       } else if (vis === "visible") {
         visBadge = '<span class="badge badge-green" style="font-size:9px;margin-left:4px;">\u0412\u0438\u0434\u0438\u043C\u043E</span>';
+      } else {
+        visBadge = '<span class="badge" style="font-size:9px;margin-left:4px;background:#e4e4e7;color:#71717a;">?</span>';
       }
       const radio = isActive ? '<span style="width:16px;height:16px;border-radius:50%;border:2px solid #059669;display:flex;align-items:center;justify-content:center;flex-shrink:0;"><span style="width:8px;height:8px;border-radius:50%;background:#059669;"></span></span>' : '<span style="width:16px;height:16px;border-radius:50%;border:2px solid #d4d4d8;display:flex;align-items:center;justify-content:center;flex-shrink:0;"></span>';
       const reparseIcon = isActive ? '<button class="btn btn-outline btn-sm" data-action="load-resume" title="' + (vis === "hidden" ? "\u041F\u0435\u0440\u0435\u043F\u0430\u0440\u0441\u0438\u0442\u044C \u0441\u043A\u0440\u044B\u0442\u043E\u0435" : "\u041F\u0435\u0440\u0435\u043F\u0430\u0440\u0441\u0438\u0442\u044C") + '" style="padding:2px 6px;font-size:13px;line-height:1;' + (vis === "hidden" ? "color:#b45309;border-color:#fbbf24;" : "") + '">\u21BB</button>' : "";

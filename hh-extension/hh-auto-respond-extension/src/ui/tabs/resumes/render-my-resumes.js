@@ -74,6 +74,8 @@ export function renderMyResumesPanel() {
       visBadge = '<span class="badge badge-amber" style="font-size:9px;margin-left:4px;">Скрыто</span>';
     } else if (vis === 'visible') {
       visBadge = '<span class="badge badge-green" style="font-size:9px;margin-left:4px;">Видимо</span>';
+    } else {
+      visBadge = '<span class="badge" style="font-size:9px;margin-left:4px;background:#e4e4e7;color:#71717a;">?</span>';
     }
     // Radio-style indicator: filled circle for active, empty for others
     const radio = isActive

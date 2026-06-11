@@ -140,23 +140,42 @@ export async function syncAllResumes({ onProgress, onComplete, onError } = {}) {
 
     // ═══ FINAL FALLBACK: UNKNOWN → VISIBLE ═══
     // Only after BOTH list and detail page detection have been tried.
-    // If a resume is still UNKNOWN (no hidden indicators found anywhere),
-    // it's reasonable to assume it's visible.
+    // If a resume is still UNKNOWN and the iframe was NOT run (or also returned UNKNOWN),
+    // it's reasonable to assume it's visible ONLY if the iframe didn't run at all.
+    // If the iframe ran and returned UNKNOWN, we keep UNKNOWN — the fully-rendered
+    // page had no indicators either way, so we genuinely don't know.
     const stillUnknown = results.filter(r => r.visibility === VISIBILITY_UNKNOWN);
     if (stillUnknown.length > 0) {
-      fetchLog.info('[VIS-DIAG] Final fallback: ' + stillUnknown.length + ' resumes still UNKNOWN after all detection → defaulting to VISIBLE');
-      visDiag.summary.unknownFallbackToVisible = stillUnknown.length;
-      stillUnknown.forEach(r => {
-        fetchLog.info('[VIS-DIAG]   ' + (r.id ? r.id.substring(0, 8) : '?') + ' "' + (r.title || '').substring(0, 30) + '" UNKNOWN→VISIBLE');
-        r.visibility = VISIBILITY_VISIBLE;
-        r.hidden = false;
-        // Update diagnostic entry
-        const diagEntry = visDiag.resumes.find(d => d.id === r.id);
-        if (diagEntry) {
-          diagEntry.finalVisibility = VISIBILITY_VISIBLE;
-          diagEntry.decisionReason += ' [FALLBACK: UNKNOWN→VISIBLE]';
-        }
-      });
+      // Split into: iframe ran (keep UNKNOWN) vs iframe didn't run (default VISIBLE)
+      const iframeRan = stillUnknown.filter(r => r._visDiag?.iframeRan);
+      const iframeNotRan = stillUnknown.filter(r => !r._visDiag?.iframeRan);
+
+      if (iframeNotRan.length > 0) {
+        fetchLog.info('[VIS-DIAG] Final fallback: ' + iframeNotRan.length + ' resumes UNKNOWN (iframe not run) → defaulting to VISIBLE');
+        visDiag.summary.unknownFallbackToVisible = iframeNotRan.length;
+        iframeNotRan.forEach(r => {
+          fetchLog.info('[VIS-DIAG]   ' + (r.id ? r.id.substring(0, 8) : '?') + ' "' + (r.title || '').substring(0, 30) + '" UNKNOWN→VISIBLE (iframe not run)');
+          r.visibility = VISIBILITY_VISIBLE;
+          r.hidden = false;
+          const diagEntry = visDiag.resumes.find(d => d.id === r.id);
+          if (diagEntry) {
+            diagEntry.finalVisibility = VISIBILITY_VISIBLE;
+            diagEntry.decisionReason += ' [FALLBACK: UNKNOWN→VISIBLE, iframe not run]';
+          }
+        });
+      }
+
+      if (iframeRan.length > 0) {
+        fetchLog.info('[VIS-DIAG] Keeping UNKNOWN for ' + iframeRan.length + ' resumes (iframe ran but returned UNKNOWN)');
+        iframeRan.forEach(r => {
+          fetchLog.info('[VIS-DIAG]   ' + (r.id ? r.id.substring(0, 8) : '?') + ' "' + (r.title || '').substring(0, 30) + '" → UNKNOWN (iframe ran, no indicators found)');
+          const diagEntry = visDiag.resumes.find(d => d.id === r.id);
+          if (diagEntry) {
+            diagEntry.finalVisibility = VISIBILITY_UNKNOWN;
+            diagEntry.decisionReason += ' [KEPT UNKNOWN: iframe ran, no indicators]';
+          }
+        });
+      }
     }
 
     // ═══ FINALIZE DIAGNOSTIC: set finalVisibility for all resumes ═══

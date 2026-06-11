@@ -177,7 +177,9 @@ export function detectVisibilityFromLinkText(linkText) {
 export function detectVisibilityFromCardText(cardText) {
   if (!cardText) return VISIBILITY_UNKNOWN;
   const isHidden = hasHiddenIndicator(cardText);
-  return isHidden ? VISIBILITY_HIDDEN : VISIBILITY_VISIBLE;
+  // CRITICAL: Do NOT default to VISIBLE — absence of indicator in SSR text
+  // doesn't mean visible (client-rendered by React). Return UNKNOWN.
+  return isHidden ? VISIBILITY_HIDDEN : VISIBILITY_UNKNOWN;
 }
 
 /**
@@ -203,8 +205,11 @@ export function detectVisibilityFromCard(cardEl) {
     return { visibility: VISIBILITY_HIDDEN, hidden: true, method: 'text-indicator' };
   }
 
-  // If we have a card but no hidden indicators, it's visible
-  return { visibility: VISIBILITY_VISIBLE, hidden: false, method: 'card-no-indicators' };
+  // CRITICAL: Do NOT assume VISIBLE here!
+  // The SSR HTML card may lack hidden indicators because hh.ru renders them
+  // client-side via React. Absence of indicators ≠ visible.
+  // Return UNKNOWN so iframe/detail page detection can resolve it.
+  return { visibility: VISIBILITY_UNKNOWN, hidden: false, method: 'card-no-indicators' };
 }
 
 /**
