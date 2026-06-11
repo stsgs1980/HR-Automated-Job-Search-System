@@ -9,6 +9,11 @@
  *   salary     0–15  — salary range compatibility
  *   experience 0–15  — experience requirement match
  *
+ * v1.9.19.0 changes:
+ *   - normalizeSkillSet: hyphen/dash → space, ё → е ("B2B-Продажи" = "b2b продажи")
+ *   - scoreSkills: neutral fallback 20→10 when vacancySkills empty
+ *   - scoreSkills: uses vacancy.derivedSkills when no explicit keySkills
+ *
  * Usage:
  *   const result = computeMatchScore(resume, vacancy);
  *   result.total       → 0–100
@@ -68,14 +73,20 @@ export function computeMatchScore(resume, vacancy) {
 function scoreSkills(resume, vacancy) {
   const resumeSkills = normalizeSkillSet(resume.skills || []);
   const derivedSkills = normalizeSkillSet(resume.derivedSkills || []);
-  const vacancySkills = normalizeSkillSet(vacancy.keySkills || vacancy.skills || []);
+  // v1.9.19.0: Use vacancy.derivedSkills when no explicit keySkills
+  let vacancySkillsRaw = vacancy.keySkills || vacancy.skills || [];
+  if (vacancySkillsRaw.length === 0 && vacancy.derivedSkills && vacancy.derivedSkills.length > 0) {
+    scoreLog.info('No vacancy keySkills — using derivedSkills (' + vacancy.derivedSkills.length + ')');
+    vacancySkillsRaw = vacancy.derivedSkills;
+  }
+  const vacancySkills = normalizeSkillSet(vacancySkillsRaw);
 
   // Merge explicit + derived skills (derived at lower weight)
   const allResumeSkills = new Set([...resumeSkills, ...derivedSkills]);
 
   if (vacancySkills.size === 0) {
-    // No skills listed in vacancy — give neutral score
-    return { score: 20, matching: [], missing: [], extra: [], derivedMatch: [] };
+    // v1.9.19.0: Reduced neutral fallback from 20→10 (20 was too generous for "no data")
+    return { score: 10, matching: [], missing: [], extra: [], derivedMatch: [] };
   }
 
   const matching = [];      // explicit skill match
@@ -297,12 +308,25 @@ function scoreExperience(resume, vacancy) {
 // HELPERS
 // ═══════════════════════════════════════════════
 
-/** Normalize skill names: lowercase, trim, unify separators. */
+/**
+ * Normalize skill names: lowercase, trim, unify separators.
+ * v1.9.19.0: Added hyphen/dash → space, ё → е normalization.
+ *   "B2B-Продажи" → "b2b продажи"
+ *   "B2B Продажи" → "b2b продажи"  (same result)
+ *   "Всё" → "все"
+ */
 function normalizeSkillSet(skills) {
   const set = new Set();
   for (const s of skills) {
     const name = typeof s === 'string' ? s : (s.name || '');
-    if (name) set.add(name.toLowerCase().trim().replace(/\s+/g, ' '));
+    if (name) {
+      set.add(
+        name.toLowerCase().trim()
+          .replace(/[-–—]/g, ' ')   // hyphens/dashes → space
+          .replace(/ё/g, 'е')       // ё → е
+          .replace(/\s+/g, ' ')     // collapse multiple spaces
+      );
+    }
   }
   return set;
 }
