@@ -131,9 +131,9 @@ export function parseResume() {
       resume.visibility = VISIBILITY_VISIBLE;
       resume.hidden = false;
     } else {
-      // Check for partial match: "не видят" (covers "Многие не видят", "Работодатели не видят")
+      // Check for partial match: "не видят" / "не видно" (covers "Многие не видят", "не видно никому")
       const bodyText = normalizeWs(document.body ? document.body.textContent : '').toLowerCase();
-      if (bodyText.includes('не видят')) {
+      if (bodyText.includes('не видят') || bodyText.includes('не видно')) {
         resume.visibility = VISIBILITY_HIDDEN;
         resume.hidden = true;
       } else {

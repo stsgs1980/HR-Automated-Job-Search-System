@@ -70,7 +70,29 @@ export const VISIBILITY_UNKNOWN = 'unknown';
  * These are the actual Russian phrases hh.ru shows on hidden resumes.
  * ALL use regular spaces — normalizeWs() must be called before matching.
  */
-export const HIDDEN_INDICATORS = ['многие не видят', 'сделать видимым', 'не видно никому'];
+export const HIDDEN_INDICATORS = ['многие не видят', 'сделать видимым', 'не видно никому', 'не видно'];
+
+/**
+ * Text indicators that a resume is visible (publicly accessible to employers).
+ * If ANY of these appear in the card/page text (after whitespace normalization),
+ * the resume is visible.
+ * These are the actual Russian phrases hh.ru shows on visible resumes.
+ * ALL use regular spaces — normalizeWs() must be called before matching.
+ */
+export const VISIBLE_INDICATORS = ['видно всем', 'видно всем работодателям'];
+
+/**
+ * Check if normalized text contains any visible indicator.
+ * Applies whitespace normalization FIRST to handle &nbsp; from hh.ru.
+ *
+ * @param {string} text - Raw text (link textContent, card textContent, etc.)
+ * @returns {boolean} true if visible indicator found
+ */
+export function hasVisibleIndicator(text) {
+  if (!text) return false;
+  const lower = normalizeWs(text).toLowerCase();
+  return VISIBLE_INDICATORS.some(ind => lower.includes(ind));
+}
 
 /**
  * Check if normalized text contains any hidden indicator.
@@ -176,10 +198,11 @@ export function detectVisibilityFromLinkText(linkText) {
  */
 export function detectVisibilityFromCardText(cardText) {
   if (!cardText) return VISIBILITY_UNKNOWN;
-  const isHidden = hasHiddenIndicator(cardText);
+  if (hasHiddenIndicator(cardText)) return VISIBILITY_HIDDEN;
+  if (hasVisibleIndicator(cardText)) return VISIBILITY_VISIBLE;
   // CRITICAL: Do NOT default to VISIBLE — absence of indicator in SSR text
   // doesn't mean visible (client-rendered by React). Return UNKNOWN.
-  return isHidden ? VISIBILITY_HIDDEN : VISIBILITY_UNKNOWN;
+  return VISIBILITY_UNKNOWN;
 }
 
 /**
@@ -203,6 +226,11 @@ export function detectVisibilityFromCard(cardEl) {
   // Strategy B: Check card text content for hidden indicators (with &nbsp; normalization)
   if (hasHiddenIndicator(cardEl.textContent || '')) {
     return { visibility: VISIBILITY_HIDDEN, hidden: true, method: 'text-indicator' };
+  }
+
+  // Strategy C: Check card text content for visible indicators
+  if (hasVisibleIndicator(cardEl.textContent || '')) {
+    return { visibility: VISIBILITY_VISIBLE, hidden: false, method: 'text-visible-indicator' };
   }
 
   // CRITICAL: Do NOT assume VISIBLE here!

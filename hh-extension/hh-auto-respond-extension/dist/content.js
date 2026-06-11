@@ -1244,6 +1244,11 @@
     if (!text) return "";
     return text.replace(/[\s\u00A0\u2000-\u200A\u202F\u205F\u3000]+/g, " ").trim();
   }
+  function hasVisibleIndicator(text) {
+    if (!text) return false;
+    const lower = normalizeWs(text).toLowerCase();
+    return VISIBLE_INDICATORS.some((ind) => lower.includes(ind));
+  }
   function hasHiddenIndicator(text) {
     if (!text) return false;
     const lower = normalizeWs(text).toLowerCase();
@@ -1272,8 +1277,9 @@
   }
   function detectVisibilityFromCardText(cardText) {
     if (!cardText) return VISIBILITY_UNKNOWN;
-    const isHidden = hasHiddenIndicator(cardText);
-    return isHidden ? VISIBILITY_HIDDEN : VISIBILITY_UNKNOWN;
+    if (hasHiddenIndicator(cardText)) return VISIBILITY_HIDDEN;
+    if (hasVisibleIndicator(cardText)) return VISIBILITY_VISIBLE;
+    return VISIBILITY_UNKNOWN;
   }
   function detectVisibilityFromCard(cardEl) {
     if (!cardEl) return { visibility: VISIBILITY_UNKNOWN, hidden: false, method: "no-card" };
@@ -1285,6 +1291,9 @@
     }
     if (hasHiddenIndicator(cardEl.textContent || "")) {
       return { visibility: VISIBILITY_HIDDEN, hidden: true, method: "text-indicator" };
+    }
+    if (hasVisibleIndicator(cardEl.textContent || "")) {
+      return { visibility: VISIBILITY_VISIBLE, hidden: false, method: "text-visible-indicator" };
     }
     return { visibility: VISIBILITY_UNKNOWN, hidden: false, method: "card-no-indicators" };
   }
@@ -1318,7 +1327,7 @@
     }
     return null;
   }
-  var MIN_HASH_LEN, UI_NOISE, TITLE_SUFFIX_NOISE, VISIBILITY_VISIBLE, VISIBILITY_HIDDEN, VISIBILITY_UNKNOWN, HIDDEN_INDICATORS, LINE_BREAK_INJECTORS, RESUME_CARD_SELECTORS, VISIBILITY_HIDDEN_DATA_QA;
+  var MIN_HASH_LEN, UI_NOISE, TITLE_SUFFIX_NOISE, VISIBILITY_VISIBLE, VISIBILITY_HIDDEN, VISIBILITY_UNKNOWN, HIDDEN_INDICATORS, VISIBLE_INDICATORS, LINE_BREAK_INJECTORS, RESUME_CARD_SELECTORS, VISIBILITY_HIDDEN_DATA_QA;
   var init_resume_constants = __esm({
     "src/lib/resume-constants.js"() {
       MIN_HASH_LEN = 30;
@@ -1327,7 +1336,8 @@
       VISIBILITY_VISIBLE = "visible";
       VISIBILITY_HIDDEN = "hidden";
       VISIBILITY_UNKNOWN = "unknown";
-      HIDDEN_INDICATORS = ["\u043C\u043D\u043E\u0433\u0438\u0435 \u043D\u0435 \u0432\u0438\u0434\u044F\u0442", "\u0441\u0434\u0435\u043B\u0430\u0442\u044C \u0432\u0438\u0434\u0438\u043C\u044B\u043C", "\u043D\u0435 \u0432\u0438\u0434\u043D\u043E \u043D\u0438\u043A\u043E\u043C\u0443"];
+      HIDDEN_INDICATORS = ["\u043C\u043D\u043E\u0433\u0438\u0435 \u043D\u0435 \u0432\u0438\u0434\u044F\u0442", "\u0441\u0434\u0435\u043B\u0430\u0442\u044C \u0432\u0438\u0434\u0438\u043C\u044B\u043C", "\u043D\u0435 \u0432\u0438\u0434\u043D\u043E \u043D\u0438\u043A\u043E\u043C\u0443", "\u043D\u0435 \u0432\u0438\u0434\u043D\u043E"];
+      VISIBLE_INDICATORS = ["\u0432\u0438\u0434\u043D\u043E \u0432\u0441\u0435\u043C", "\u0432\u0438\u0434\u043D\u043E \u0432\u0441\u0435\u043C \u0440\u0430\u0431\u043E\u0442\u043E\u0434\u0430\u0442\u0435\u043B\u044F\u043C"];
       LINE_BREAK_INJECTORS = [
         /Многие\s+не\s+видят[^\n]*/gi,
         /Сделать\s+видимым/gi,
@@ -1465,7 +1475,7 @@
           resume.hidden = false;
         } else {
           const bodyText = normalizeWs(document.body ? document.body.textContent : "").toLowerCase();
-          if (bodyText.includes("\u043D\u0435 \u0432\u0438\u0434\u044F\u0442")) {
+          if (bodyText.includes("\u043D\u0435 \u0432\u0438\u0434\u044F\u0442") || bodyText.includes("\u043D\u0435 \u0432\u0438\u0434\u043D\u043E")) {
             resume.visibility = VISIBILITY_HIDDEN;
             resume.hidden = true;
           } else {
@@ -2993,8 +3003,12 @@
     trace.push("iframe-S2:no-key-buttons");
     const bodyText = iframeDoc.body ? normalizeWs(iframeDoc.body.textContent || "") : "";
     if (hasHiddenIndicator(bodyText)) {
-      trace.push("iframe-S3:body-has-indicator \u2192 HIDDEN");
+      trace.push("iframe-S3:body-has-hidden-indicator \u2192 HIDDEN");
       return { visibility: VISIBILITY_HIDDEN, trace };
+    }
+    if (hasVisibleIndicator(bodyText)) {
+      trace.push("iframe-S3:body-has-visible-indicator \u2192 VISIBLE");
+      return { visibility: VISIBILITY_VISIBLE, trace };
     }
     trace.push("iframe-S3:body-no-indicators");
     const hideLink = iframeDoc.querySelector('[data-qa="resume-action-hide"], [data-qa*="resume-hide"], a[data-qa*="hide-resume"]');
@@ -3004,9 +3018,13 @@
     }
     trace.push("iframe-S4:no-hide-link");
     const bodyLower = bodyText.toLowerCase();
-    if (bodyLower.includes("\u043D\u0435 \u0432\u0438\u0434\u044F\u0442") || bodyLower.includes("\u043D\u0435\xA0\u0432\u0438\u0434\u044F\u0442")) {
-      trace.push('iframe-S5:body-has-"\u043D\u0435 \u0432\u0438\u0434\u044F\u0442" \u2192 HIDDEN');
+    if (bodyLower.includes("\u043D\u0435 \u0432\u0438\u0434\u044F\u0442") || bodyLower.includes("\u043D\u0435\xA0\u0432\u0438\u0434\u044F\u0442") || bodyLower.includes("\u043D\u0435 \u0432\u0438\u0434\u043D\u043E")) {
+      trace.push('iframe-S5:body-has-"\u043D\u0435 \u0432\u0438\u0434\u044F\u0442/\u043D\u0435 \u0432\u0438\u0434\u043D\u043E" \u2192 HIDDEN');
       return { visibility: VISIBILITY_HIDDEN, trace };
+    }
+    if (bodyLower.includes("\u0432\u0438\u0434\u043D\u043E \u0432\u0441\u0435\u043C")) {
+      trace.push('iframe-S5:body-has-"\u0432\u0438\u0434\u043D\u043E \u0432\u0441\u0435\u043C" \u2192 VISIBLE');
+      return { visibility: VISIBILITY_VISIBLE, trace };
     }
     try {
       const scripts = iframeDoc.querySelectorAll("script:not([src])");
@@ -3366,23 +3384,35 @@
   // src/lib/resume-fetch-strategy6-expand.js
   async function fetchExpandedExperience(doc, html, resumeId, currentCount, resumeUrl) {
     fetchLog10.info("Strategy 6: starting (currentCount=" + currentCount + ", resumeId=" + (resumeId || "none") + ")");
+    let iframeVis = null;
+    let iframeVisTrace = null;
+    let iframeDiag = null;
     try {
       const iframeResult = await fetchExpandedExperienceViaIframe(resumeUrl, currentCount);
-      const result = {
-        entries: [],
-        iframeVis: iframeResult.iframeVis,
-        iframeVisTrace: iframeResult.iframeVisTrace,
-        iframeDiag: iframeResult.iframeDiag
-      };
+      iframeVis = iframeResult.iframeVis;
+      iframeVisTrace = iframeResult.iframeVisTrace;
+      iframeDiag = iframeResult.iframeDiag;
       if (iframeResult.entries.length > currentCount) {
-        fetchLog10.info("Strategy 6: SUCCESS via iframe \u2014 got " + iframeResult.entries.length + " experiences");
-        result.entries = iframeResult.entries;
-        return result;
+        fetchLog10.info("Strategy 6: SUCCESS via iframe \u2014 got " + iframeResult.entries.length + " experiences, vis=" + iframeVis);
+        return {
+          entries: iframeResult.entries,
+          iframeVis,
+          iframeVisTrace,
+          iframeDiag
+        };
       }
-      fetchLog10.info("Strategy 6: iframe got " + iframeResult.entries.length + " entries (not more than " + currentCount + "), but visibility=" + iframeResult.iframeVis);
+      fetchLog10.info("Strategy 6: iframe got " + iframeResult.entries.length + " entries (not more than " + currentCount + "), but visibility=" + iframeVis);
     } catch (err) {
       fetchLog10.info("Strategy 6: iframe approach failed: " + err.message);
     }
+    const withVis = (result) => {
+      if (iframeVis) {
+        result.iframeVis = iframeVis;
+        result.iframeVisTrace = iframeVisTrace;
+        result.iframeDiag = iframeDiag;
+      }
+      return result;
+    };
     const expansionUrls = findExpansionUrls(doc, html, resumeId);
     fetchLog10.info("Strategy 6: found " + expansionUrls.length + " candidate expansion URLs");
     expansionUrls.forEach((u, i) => {
@@ -3394,7 +3424,7 @@
         const urlEntries = await tryFetchExpandedUrl(url, currentCount);
         if (urlEntries && urlEntries.length > currentCount) {
           fetchLog10.info("Strategy 6: SUCCESS from " + source + " \u2014 got " + urlEntries.length + " experiences");
-          return { entries: urlEntries };
+          return withVis({ entries: urlEntries });
         }
       } catch (err) {
         fetchLog10.info("Strategy 6: [" + source + "] error: " + err.message);
@@ -3402,7 +3432,7 @@
     }
     const apiEntries = await tryApplicantApi(resumeId, currentCount);
     if (apiEntries.length > currentCount) {
-      return { entries: apiEntries };
+      return withVis({ entries: apiEntries });
     }
     if (resumeUrl) {
       const expandVariants = [
@@ -3423,7 +3453,7 @@
             const parsed = parseExperienceFromExpandedDoc(expandedDoc, expandedHtml, currentCount);
             if (parsed.length > currentCount) {
               fetchLog10.info("Strategy 6: SUCCESS from " + source + " \u2014 got " + parsed.length + " experiences");
-              return { entries: parsed };
+              return withVis({ entries: parsed });
             }
           }
         } catch (err) {
@@ -3431,8 +3461,8 @@
         }
       }
     }
-    fetchLog10.info("Strategy 6: all approaches exhausted, returning current count: " + currentCount);
-    return { entries: [] };
+    fetchLog10.info("Strategy 6: all approaches exhausted, returning current count: " + currentCount + ", vis=" + iframeVis);
+    return withVis({ entries: [] });
   }
   var fetchLog10;
   var init_resume_fetch_strategy6_expand = __esm({
@@ -3785,7 +3815,7 @@
     const bodyText = doc.body ? normalizeWs(doc.body.textContent || "") : "";
     if (hasHiddenIndicator(bodyText)) {
       const lower = bodyText.toLowerCase();
-      for (const ind of ["\u043C\u043D\u043E\u0433\u0438\u0435 \u043D\u0435 \u0432\u0438\u0434\u044F\u0442", "\u0441\u0434\u0435\u043B\u0430\u0442\u044C \u0432\u0438\u0434\u0438\u043C\u044B\u043C"]) {
+      for (const ind of ["\u043C\u043D\u043E\u0433\u0438\u0435 \u043D\u0435 \u0432\u0438\u0434\u044F\u0442", "\u0441\u0434\u0435\u043B\u0430\u0442\u044C \u0432\u0438\u0434\u0438\u043C\u044B\u043C", "\u043D\u0435 \u0432\u0438\u0434\u043D\u043E"]) {
         const pos = lower.indexOf(ind);
         if (pos !== -1) {
           diag.push('S3:body has "' + ind + '" @' + pos + " \u2192 HIDDEN");
@@ -3795,12 +3825,17 @@
       fetchLog11.info("[VIS-DIAG] " + diag.join(" | "));
       return { visibility: VISIBILITY_HIDDEN, trace: diag };
     }
+    if (hasVisibleIndicator(bodyText)) {
+      diag.push("S3:body has visible indicator \u2192 VISIBLE");
+      fetchLog11.info("[VIS-DIAG] " + diag.join(" | "));
+      return { visibility: VISIBILITY_VISIBLE, trace: diag };
+    }
     diag.push("S3:body-no-indicators");
     const htmlForSearch = html.replace(/&nbsp;/g, " ").toLowerCase();
     const htmlNorm = normalizeWs(htmlForSearch);
     if (hasHiddenIndicator(htmlNorm)) {
       const lower = htmlNorm.toLowerCase();
-      for (const ind of ["\u043C\u043D\u043E\u0433\u0438\u0435 \u043D\u0435 \u0432\u0438\u0434\u044F\u0442", "\u0441\u0434\u0435\u043B\u0430\u0442\u044C \u0432\u0438\u0434\u0438\u043C\u044B\u043C"]) {
+      for (const ind of ["\u043C\u043D\u043E\u0433\u0438\u0435 \u043D\u0435 \u0432\u0438\u0434\u044F\u0442", "\u0441\u0434\u0435\u043B\u0430\u0442\u044C \u0432\u0438\u0434\u0438\u043C\u044B\u043C", "\u043D\u0435 \u0432\u0438\u0434\u043D\u043E"]) {
         const pos = lower.indexOf(ind);
         if (pos !== -1) {
           diag.push('S4:html has "' + ind + '" @' + pos + " \u2192 HIDDEN");
@@ -3809,6 +3844,11 @@
       }
       fetchLog11.info("[VIS-DIAG] " + diag.join(" | "));
       return { visibility: VISIBILITY_HIDDEN, trace: diag };
+    }
+    if (hasVisibleIndicator(htmlNorm)) {
+      diag.push("S4:html has visible indicator \u2192 VISIBLE");
+      fetchLog11.info("[VIS-DIAG] " + diag.join(" | "));
+      return { visibility: VISIBILITY_VISIBLE, trace: diag };
     }
     diag.push("S4:html-no-indicators");
     const scriptEls = doc.querySelectorAll("script:not([src])");
@@ -5029,7 +5069,7 @@
       </div>
     </div>
     <div class="har-footer">
-      <span style="font-size:11px;color:#71717a;">HH Copilot v${"1.9.9"}</span>
+      <span style="font-size:11px;color:#71717a;">HH Copilot v${"1.9.10"}</span>
       <div style="display:flex;align-items:center;gap:4px;">
         <span style="width:6px;height:6px;background:#10B981;border-radius:50%;"></span>
         <span style="font-size:11px;color:#71717a;">chrome.storage</span>
@@ -5048,7 +5088,7 @@
     ${getSettingsSection()}
     ${getStatsSection()}
     <div class="har-footer">
-      <span style="font-size:11px;color:#71717a;">HH Copilot v${"1.9.9"}</span>
+      <span style="font-size:11px;color:#71717a;">HH Copilot v${"1.9.10"}</span>
       <div style="display:flex;align-items:center;gap:4px;">
         <span style="width:6px;height:6px;background:#10B981;border-radius:50%;"></span>
         <span style="font-size:11px;color:#71717a;">chrome.storage</span>

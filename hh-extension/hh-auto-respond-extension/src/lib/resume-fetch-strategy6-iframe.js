@@ -14,7 +14,7 @@ import { createLogger } from './anti-hallucination.js';
 import { parseCompanyCardFromDoc } from './resume-fetch-parse.js';
 import {
   VISIBILITY_VISIBLE, VISIBILITY_HIDDEN, VISIBILITY_UNKNOWN,
-  hasHiddenIndicator, normalizeWs, VISIBILITY_HIDDEN_DATA_QA
+  hasHiddenIndicator, hasVisibleIndicator, normalizeWs, VISIBILITY_HIDDEN_DATA_QA
 } from './resume-constants.js';
 
 const fetchLog = createLogger('ResumeFetch');
@@ -206,11 +206,15 @@ function detectVisibilityFromIframeDoc(iframeDoc) {
   }
   trace.push('iframe-S2:no-key-buttons');
 
-  // ── Strategy C: Check body text for hidden indicators ──
+  // ── Strategy C: Check body text for hidden/visible indicators ──
   const bodyText = iframeDoc.body ? normalizeWs(iframeDoc.body.textContent || '') : '';
   if (hasHiddenIndicator(bodyText)) {
-    trace.push('iframe-S3:body-has-indicator → HIDDEN');
+    trace.push('iframe-S3:body-has-hidden-indicator → HIDDEN');
     return { visibility: VISIBILITY_HIDDEN, trace };
+  }
+  if (hasVisibleIndicator(bodyText)) {
+    trace.push('iframe-S3:body-has-visible-indicator → VISIBLE');
+    return { visibility: VISIBILITY_VISIBLE, trace };
   }
   trace.push('iframe-S3:body-no-indicators');
 
@@ -222,12 +226,16 @@ function detectVisibilityFromIframeDoc(iframeDoc) {
   }
   trace.push('iframe-S4:no-hide-link');
 
-  // ── Strategy E: Check for "не видят" anywhere (partial match — more lenient) ──
+  // ── Strategy E: Check for "не видят" / "видно всем" anywhere ──
   // hh.ru may use variations: "Многие не видят ваше резюме", "Работодатели не видят"
   const bodyLower = bodyText.toLowerCase();
-  if (bodyLower.includes('не видят') || bodyLower.includes('не\u00A0видят')) {
-    trace.push('iframe-S5:body-has-"не видят" → HIDDEN');
+  if (bodyLower.includes('не видят') || bodyLower.includes('не\u00A0видят') || bodyLower.includes('не видно')) {
+    trace.push('iframe-S5:body-has-"не видят/не видно" → HIDDEN');
     return { visibility: VISIBILITY_HIDDEN, trace };
+  }
+  if (bodyLower.includes('видно всем')) {
+    trace.push('iframe-S5:body-has-"видно всем" → VISIBLE');
+    return { visibility: VISIBILITY_VISIBLE, trace };
   }
 
   // ── Strategy F: Check for visibility status in page's JavaScript state ──

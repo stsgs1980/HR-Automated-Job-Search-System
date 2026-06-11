@@ -7,7 +7,7 @@
 import { createLogger } from './anti-hallucination.js';
 import { fetchHtml, htmlToDoc, safeGetText } from './resume-fetch-helpers.js';
 import { parsePersonalDataFromDoc } from './resume-fetch-parse.js';
-import { TITLE_SUFFIX_NOISE, VISIBILITY_UNKNOWN, VISIBILITY_VISIBLE, VISIBILITY_HIDDEN, hasHiddenIndicator, normalizeWs, VISIBILITY_HIDDEN_DATA_QA } from './resume-constants.js';
+import { TITLE_SUFFIX_NOISE, VISIBILITY_UNKNOWN, VISIBILITY_VISIBLE, VISIBILITY_HIDDEN, hasHiddenIndicator, hasVisibleIndicator, normalizeWs, VISIBILITY_HIDDEN_DATA_QA } from './resume-constants.js';
 import { parseExperienceFromDocStrategies1to3 } from './resume-fetch-experience.js';
 import { parseExperienceFromHtmlText } from './resume-fetch-strategy4-text.js';
 import { parseExperienceFromScripts } from './resume-fetch-strategy5-scripts.js';
@@ -452,12 +452,12 @@ function detectVisibilityFromResumePage(doc, html) {
   }
   diag.push('S2:no-key-buttons' + (btnDetails.length ? '(saw:' + btnDetails.length + ' partial)' : ''));
 
-  // ═══ Strategy 3: Check page body text for hidden indicators ═══
+  // ═══ Strategy 3: Check page body text for hidden/visible indicators ═══
   const bodyText = doc.body ? normalizeWs(doc.body.textContent || '') : '';
   if (hasHiddenIndicator(bodyText)) {
     // Find which indicator and where
     const lower = bodyText.toLowerCase();
-    for (const ind of ['многие не видят', 'сделать видимым']) {
+    for (const ind of ['многие не видят', 'сделать видимым', 'не видно']) {
       const pos = lower.indexOf(ind);
       if (pos !== -1) {
         diag.push('S3:body has "' + ind + '" @' + pos + ' → HIDDEN');
@@ -467,14 +467,19 @@ function detectVisibilityFromResumePage(doc, html) {
     fetchLog.info('[VIS-DIAG] ' + diag.join(' | '));
     return { visibility: VISIBILITY_HIDDEN, trace: diag };
   }
+  if (hasVisibleIndicator(bodyText)) {
+    diag.push('S3:body has visible indicator → VISIBLE');
+    fetchLog.info('[VIS-DIAG] ' + diag.join(' | '));
+    return { visibility: VISIBILITY_VISIBLE, trace: diag };
+  }
   diag.push('S3:body-no-indicators');
 
-  // ═══ Strategy 4: Check raw HTML for hidden indicators (with &nbsp; normalization) ═══
+  // ═══ Strategy 4: Check raw HTML for hidden/visible indicators (with &nbsp; normalization) ═══
   const htmlForSearch = html.replace(/&nbsp;/g, ' ').toLowerCase();
   const htmlNorm = normalizeWs(htmlForSearch);
   if (hasHiddenIndicator(htmlNorm)) {
     const lower = htmlNorm.toLowerCase();
-    for (const ind of ['многие не видят', 'сделать видимым']) {
+    for (const ind of ['многие не видят', 'сделать видимым', 'не видно']) {
       const pos = lower.indexOf(ind);
       if (pos !== -1) {
         diag.push('S4:html has "' + ind + '" @' + pos + ' → HIDDEN');
@@ -483,6 +488,11 @@ function detectVisibilityFromResumePage(doc, html) {
     }
     fetchLog.info('[VIS-DIAG] ' + diag.join(' | '));
     return { visibility: VISIBILITY_HIDDEN, trace: diag };
+  }
+  if (hasVisibleIndicator(htmlNorm)) {
+    diag.push('S4:html has visible indicator → VISIBLE');
+    fetchLog.info('[VIS-DIAG] ' + diag.join(' | '));
+    return { visibility: VISIBILITY_VISIBLE, trace: diag };
   }
   diag.push('S4:html-no-indicators');
 

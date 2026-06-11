@@ -23,36 +23,57 @@ const fetchLog = createLogger('ResumeFetch');
 /**
  * Try to fetch full experience data when SSR only renders 3 entries.
  * Also returns iframe-based visibility result if available.
+ *
+ * CRITICAL: iframeVis MUST be preserved through ALL code paths.
+ * The iframe runs first and captures visibility from the fully-hydrated DOM.
+ * Even if subsequent steps (URL expansion, API, etc.) find more entries,
+ * the iframe visibility data must be included in the final return.
+ *
  * @param {Document} doc - Parsed document from DOMParser
  * @param {string} html - Raw HTML string
  * @param {string} resumeId - Resume hash ID
  * @param {number} currentCount - Number of experience entries already found
  * @param {string} resumeUrl - Original resume URL (for re-fetching)
- * @returns {Promise<{entries: Array, iframeVis?: string, iframeVisTrace?: string[]}>}
+ * @returns {Promise<{entries: Array, iframeVis?: string, iframeVisTrace?: string[], iframeDiag?: object}>}
  */
 export async function fetchExpandedExperience(doc, html, resumeId, currentCount, resumeUrl) {
   fetchLog.info('Strategy 6: starting (currentCount=' + currentCount + ', resumeId=' + (resumeId || 'none') + ')');
 
   // ── Step 0 [PRIMARY]: Load resume in hidden iframe, click "Развернуть", parse DOM ──
+  // Capture iframe visibility data — it MUST survive through ALL code paths below.
+  let iframeVis = null;
+  let iframeVisTrace = null;
+  let iframeDiag = null;
+
   try {
     const iframeResult = await fetchExpandedExperienceViaIframe(resumeUrl, currentCount);
-    // Always propagate iframe visibility, even if experience count didn't increase
-    const result = {
-      entries: [],
-      iframeVis: iframeResult.iframeVis,
-      iframeVisTrace: iframeResult.iframeVisTrace,
-      iframeDiag: iframeResult.iframeDiag
-    };
+    // Always capture iframe visibility, even if experience count didn't increase
+    iframeVis = iframeResult.iframeVis;
+    iframeVisTrace = iframeResult.iframeVisTrace;
+    iframeDiag = iframeResult.iframeDiag;
+
     if (iframeResult.entries.length > currentCount) {
-      fetchLog.info('Strategy 6: SUCCESS via iframe — got ' + iframeResult.entries.length + ' experiences');
-      result.entries = iframeResult.entries;
-      return result;
+      fetchLog.info('Strategy 6: SUCCESS via iframe — got ' + iframeResult.entries.length + ' experiences, vis=' + iframeVis);
+      return {
+        entries: iframeResult.entries,
+        iframeVis, iframeVisTrace, iframeDiag
+      };
     }
     // Even if entries didn't increase, we still have visibility data
-    fetchLog.info('Strategy 6: iframe got ' + iframeResult.entries.length + ' entries (not more than ' + currentCount + '), but visibility=' + iframeResult.iframeVis);
+    fetchLog.info('Strategy 6: iframe got ' + iframeResult.entries.length + ' entries (not more than ' + currentCount + '), but visibility=' + iframeVis);
   } catch (err) {
     fetchLog.info('Strategy 6: iframe approach failed: ' + err.message);
   }
+
+  // Helper: always include iframe visibility in return values
+  const withVis = (result) => {
+    if (iframeVis) {
+      result.iframeVis = iframeVis;
+      result.iframeVisTrace = iframeVisTrace;
+      result.iframeDiag = iframeDiag;
+    }
+    return result;
+  };
 
   // ── Step 1: Find "Развернуть" / "Показать все" button URLs ──
   const expansionUrls = findExpansionUrls(doc, html, resumeId);
@@ -68,7 +89,7 @@ export async function fetchExpandedExperience(doc, html, resumeId, currentCount,
       const urlEntries = await tryFetchExpandedUrl(url, currentCount);
       if (urlEntries && urlEntries.length > currentCount) {
         fetchLog.info('Strategy 6: SUCCESS from ' + source + ' — got ' + urlEntries.length + ' experiences');
-        return { entries: urlEntries };
+        return withVis({ entries: urlEntries });
       }
     } catch (err) {
       fetchLog.info('Strategy 6: [' + source + '] error: ' + err.message);
@@ -78,7 +99,7 @@ export async function fetchExpandedExperience(doc, html, resumeId, currentCount,
   // ── Step 3: Try applicant internal API ──
   const apiEntries = await tryApplicantApi(resumeId, currentCount);
   if (apiEntries.length > currentCount) {
-    return { entries: apiEntries };
+    return withVis({ entries: apiEntries });
   }
 
   // ── Step 4: Try re-fetching with expansion query parameters ──
@@ -105,7 +126,7 @@ export async function fetchExpandedExperience(doc, html, resumeId, currentCount,
           const parsed = parseExperienceFromExpandedDoc(expandedDoc, expandedHtml, currentCount);
           if (parsed.length > currentCount) {
             fetchLog.info('Strategy 6: SUCCESS from ' + source + ' — got ' + parsed.length + ' experiences');
-            return { entries: parsed };
+            return withVis({ entries: parsed });
           }
         }
       } catch (err) {
@@ -114,6 +135,6 @@ export async function fetchExpandedExperience(doc, html, resumeId, currentCount,
     }
   }
 
-  fetchLog.info('Strategy 6: all approaches exhausted, returning current count: ' + currentCount);
-  return { entries: [] };
+  fetchLog.info('Strategy 6: all approaches exhausted, returning current count: ' + currentCount + ', vis=' + iframeVis);
+  return withVis({ entries: [] });
 }

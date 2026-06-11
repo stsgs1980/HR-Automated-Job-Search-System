@@ -880,3 +880,90 @@ Stage Summary:
 - Bug: resume-fetch.js line 24 was missing VISIBILITY_HIDDEN import
 - Fix: added VISIBILITY_HIDDEN to import statement
 - Build successful, pushed to origin/main
+
+
+
+
+---
+Task ID: visibility-fix
+Agent: main
+Task: Fix visibility detection accuracy — hidden resumes incorrectly shown as visible
+
+Work Log:
+- Identified root cause: Strategy 3 proximity search and detectVisibilityFromCard both defaulted to VISIBLE when no hidden indicator found in SSR HTML
+- Since hh.ru renders visibility indicators client-side (React), absence in SSR HTML ≠ visible
+- Fixed Strategy 3: r.visibility = isHidden ? HIDDEN : UNKNOWN (was VISIBLE)
+- Fixed detectVisibilityFromCard: return UNKNOWN instead of VISIBLE when no indicator
+- Fixed detectVisibilityFromCardText: return UNKNOWN instead of VISIBLE
+- Enhanced iframe detection from 4 to 8 strategies:
+  S1: data-qa attributes, S2: buttons, S3: body text, S4: hide link,
+  S5: partial "не видят" match, S6: script JSON patterns, S7: notification banners,
+  S8: action links with show/visible/publish
+- Added diagnostic logging of all visibility-related buttons in iframe
+- Increased iframe hydration wait from 2.5s to 4s
+- Made final fallback conditional: only UNKNOWN→VISIBLE if iframe didn't run;
+  if iframe ran and returned UNKNOWN, keep UNKNOWN
+- Enhanced live DOM parser (parseResume): added "не видят" partial match, hide-resume button detection
+- Added "?" badge in UI for UNKNOWN visibility resumes
+- Built dist, committed
+
+Stage Summary:
+- 7 source files modified
+- Core fix: no longer defaulting to VISIBLE from SSR HTML analysis
+- Iframe detection now most reliable source with 8 strategies
+- Unknown visibility shown as "?" badge instead of wrongly showing as "Видимо"
+---
+Task ID: visibility-card-fix
+Agent: main
+Task: Fix visibility detection using resume-visibility-card data-qa
+
+Work Log:
+- Diagnosed from iframe logs: hh.ru uses data-qa="resume-visibility-card" with text
+  "видимость резюмене видно никому" (hidden) or "видимость резюмевидно всем работодателям" (visible)
+- Previous strategies didn't check this element at all
+- Added "не видно никому" to HIDDEN_INDICATORS constant
+- Added Strategy 0 (PRIMARY) to all three detection paths:
+  - iframe detection (resume-fetch-strategy6-iframe.js)
+  - fetch-based page detection (resume-fetch-resume.js)
+  - live DOM parser (parse-resume.js)
+- Strategy 0 checks data-qa="resume-visibility-card" text content:
+  - contains "не видно никому" → HIDDEN
+  - contains "видно всем" → VISIBLE
+  - unrecognized text → fall through to other strategies
+- Built dist and committed
+
+Stage Summary:
+- Root cause: hh.ru uses "не видно никому" / "видно всем" (not "Многие не видят") on detail pages
+- The resume-visibility-card element is present on ALL resume pages (both hidden and visible)
+- This is now the PRIMARY detection method (Strategy 0), others are fallbacks
+
+---
+Task ID: visibility-fix-1.9.10
+Agent: main
+Task: Fix iframe visibility detection — iframeVis data lost when entries don't increase (v1.9.10)
+
+Work Log:
+- Root cause: resume-fetch-strategy6-expand.js — when iframe succeeds but entries don't increase,
+  the code falls through to Steps 1-4 (URL expansion, API, params) which return { entries }
+  WITHOUT iframeVis — visibility data from the hydrated DOM was LOST
+- Fix 1: Added withVis() helper that injects iframeVis/iframeVisTrace/iframeDiag into ALL
+  return values from Steps 1-4 and the final fallback
+- Fix 2: Added VISIBLE_INDICATORS array and hasVisibleIndicator() to resume-constants.js
+  Patterns: 'видно всем', 'видно всем работодателям'
+- Fix 3: Added 'не видно' to HIDDEN_INDICATORS (broader match for "не видно никому")
+- Fix 4: Updated detectVisibilityFromCardText() and detectVisibilityFromCard() to check
+  hasVisibleIndicator() after hasHiddenIndicator()
+- Fix 5: Updated detectVisibilityFromResumePage() Strategies 3+4 to also check visible indicators
+- Fix 6: Updated iframe detectVisibilityFromIframeDoc() Strategy C (body text) for visible indicators
+  and Strategy E to also check 'не видно' + 'видно всем'
+- Fix 7: Updated live DOM parser (parse-resume.js) to check 'не видно' partial match
+- Version bumped: 1.9.9 → 1.9.10, build successful (352.4kb)
+
+Stage Summary:
+- CRITICAL BUG FIX: iframeVis was lost when iframe entries didn't exceed SSR count
+- This caused all resumes to show "?" (UNKNOWN) except those detected at page level
+- Now iframe visibility data ALWAYS survives through all code paths in fetchExpandedExperience()
+- Added visible indicator detection: "видно всем" / "видно всем работодателям"
+- Added "не видно" to hidden indicators for broader matching
+- 6 files modified: strategy6-expand.js, resume-constants.js, resume-fetch-resume.js,
+  strategy6-iframe.js, parse-resume.js, package.json + manifest.json
