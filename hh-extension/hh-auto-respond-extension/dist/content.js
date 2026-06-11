@@ -895,6 +895,37 @@
     }
   });
 
+  // src/lib/parse-experience.js
+  function parseExperienceString(raw) {
+    if (!raw) return { raw: "", min: null, max: null };
+    const text = raw.toLowerCase().trim();
+    if (/нет\s*опыт|не\s*требу|без\s*опыт/.test(text)) {
+      return { raw, min: 0, max: 0 };
+    }
+    const moreMatch = text.match(/(?:более|от|свыше)\s+(\d+)/);
+    if (moreMatch) {
+      return { raw, min: parseInt(moreMatch[1], 10), max: null };
+    }
+    const rangeMatch = text.match(/(\d+)\s*[–—\-\s]+\s*(\d+)/);
+    if (rangeMatch) {
+      return { raw, min: parseInt(rangeMatch[1], 10), max: parseInt(rangeMatch[2], 10) };
+    }
+    const exactMatch = text.match(/(\d+)\s*(?:год|лет)/);
+    if (exactMatch) {
+      return { raw, min: parseInt(exactMatch[1], 10), max: null };
+    }
+    const monthOnlyMatch = text.match(/(\d+)\s*мес/);
+    if (monthOnlyMatch) {
+      const years = parseInt(monthOnlyMatch[1], 10) / 12;
+      return { raw, min: Math.round(years * 10) / 10, max: Math.round(years * 10) / 10 };
+    }
+    return { raw, min: null, max: null };
+  }
+  var init_parse_experience = __esm({
+    "src/lib/parse-experience.js"() {
+    }
+  });
+
   // src/lib/match-scorer.js
   function computeMatchScore(resume, vacancy) {
     if (!resume || !vacancy) {
@@ -1005,7 +1036,10 @@
   }
   function scoreSalary(resume, vacancy) {
     const resumeSalary = parseResumeSalary(resume.salary || "");
-    const vacSalary = vacancy.salary || {};
+    let vacSalary = vacancy.salary || {};
+    if (typeof vacSalary === "string") {
+      vacSalary = parseVacancySalaryString(vacSalary);
+    }
     if (!resumeSalary && !vacSalary.min && !vacSalary.max) {
       return { score: 8, reason: "no-data" };
     }
@@ -1043,7 +1077,7 @@
     if (resumeYears === null) {
       return { score: 8, reason: "unknown-resume-exp" };
     }
-    if (!vacExp.min && !vacExp.max && !vacExp.raw) {
+    if (vacExp.min === null && vacExp.max === null) {
       return { score: 8, reason: "unknown-vacancy-exp" };
     }
     const vacMin = vacExp.min || 0;
@@ -1131,22 +1165,21 @@
     if (totalMonths === 0) return null;
     return Math.round(totalMonths / 12 * 10) / 10;
   }
-  function parseExperienceString(raw) {
-    if (!raw) return { raw: "", min: null, max: null };
-    const text = raw.toLowerCase().trim();
-    if (/нет\s*опыт|не\s*требу|без\s*опыт/.test(text)) return { raw, min: 0, max: 0 };
-    const moreMatch = text.match(/(?:более|от|свыше)\s+(\d+)/);
-    if (moreMatch) return { raw, min: parseInt(moreMatch[1], 10), max: null };
-    const rangeMatch = text.match(/(\d+)\s*[–—\-\s]+\s*(\d+)/);
-    if (rangeMatch) return { raw, min: parseInt(rangeMatch[1], 10), max: parseInt(rangeMatch[2], 10) };
-    const exactMatch = text.match(/(\d+)\s*(?:год|лет)/);
-    if (exactMatch) return { raw, min: parseInt(exactMatch[1], 10), max: null };
-    return { raw, min: null, max: null };
+  function parseVacancySalaryString(salaryStr) {
+    if (!salaryStr || typeof salaryStr !== "string") return {};
+    const cleaned = salaryStr.replace(/[₽$€руб\.]/gi, "").replace(/\s+/g, " ");
+    const nums = cleaned.match(/\d[\d\s]*\d/g);
+    if (!nums || nums.length === 0) return {};
+    const parsed = nums.map((n) => parseInt(n.replace(/\s/g, ""), 10)).filter((n) => !isNaN(n));
+    if (parsed.length === 0) return {};
+    if (parsed.length === 1) return { min: parsed[0], max: parsed[0] };
+    return { min: parsed[0], max: parsed[1] };
   }
   var scoreLog;
   var init_match_scorer = __esm({
     "src/lib/match-scorer.js"() {
       init_anti_hallucination();
+      init_parse_experience();
       scoreLog = createLogger("Scorer");
     }
   });
@@ -1287,7 +1320,7 @@
     const headings = document.querySelectorAll('h2, h3, [data-qa^="resume-block-title"]');
     for (const h of headings) {
       const text = (h.textContent || "").trim().toLowerCase();
-      if (text === "\u043D\u0430\u0432\u044B\u043A\u0438" || text.startsWith("\u043D\u0430\u0432\u044B\u043A\u0438") || text.includes("\u043D\u0430\u0432\u044B\u043A")) {
+      if (text === "\u043D\u0430\u0432\u044B\u043A\u0438" || text.startsWith("\u043D\u0430\u0432\u044B\u043A\u0438") || text === "\u043A\u043B\u044E\u0447\u0435\u0432\u044B\u0435 \u043D\u0430\u0432\u044B\u043A\u0438" || text.startsWith("\u043A\u043B\u044E\u0447\u0435\u0432\u044B\u0435 \u043D\u0430\u0432\u044B\u043A\u0438")) {
         let container = h.parentElement;
         for (let i = 0; i < 4 && container; i++) {
           const tags = container.querySelectorAll('.bloko-tag__text, [data-qa^="skill-tag"], [data-qa^="resume-skill"]');
@@ -1657,7 +1690,7 @@
         { skill: "\u0443\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u0438\u0435 \u043F\u0440\u043E\u0435\u043A\u0442\u0430\u043C\u0438", patterns: [
           /проектн/i,
           /управлен(?:ие|ием|ию)\s+проект/i,
-          /PM/i,
+          /\bPM\b/i,
           /project\s+manag/i,
           /Agile/i,
           /Scrum/i,
@@ -1834,7 +1867,7 @@
         { skill: "\u0437\u0430\u043F\u0443\u0441\u043A \u043F\u0440\u043E\u0434\u0443\u043A\u0442\u0430", patterns: [
           /запуск\s+(?:продукт|проект|бизнес|направлен)/i,
           /go[\s-]*to[\s-]*market/i,
-          /GTM/i,
+          /\bGTM\b/i,
           /вывод\s+(?:на\s+рынок|продукт)/i
         ] },
         { skill: "\u0440\u0430\u0437\u0440\u0430\u0431\u043E\u0442\u043A\u0430 \u0441\u0442\u0440\u0430\u0442\u0435\u0433\u0438\u0438", patterns: [
@@ -1846,19 +1879,19 @@
           /анализ\s+данн/i,
           /data\s+analysis/i,
           /big\s+data/i,
-          /BI/i
+          /\bBI\b/i,
+          /business\s+intelligence/i
         ] },
         // ═══════════════════════════════════════════
         // ДОП. ПОЛЕЗНЫЕ
         // ═══════════════════════════════════════════
         { skill: "1\u0421", patterns: [
-          /1С/i,
-          /1с/i
+          /1[СCсc]/
         ] },
         { skill: "SAP", patterns: [
           /\bSAP\b/i
         ] },
-        { skill: " Salesforce", patterns: [
+        { skill: "Salesforce", patterns: [
           /salesforce/i
         ] },
         { skill: "\u043C\u043D\u043E\u0433\u043E\u0437\u0430\u0434\u0430\u0447\u043D\u043E\u0441\u0442\u044C", patterns: [
@@ -1870,7 +1903,7 @@
           /стресс/i
         ] },
         { skill: "LLM", patterns: [
-          /\bLLM\b/i,
+          /\bLLMs?\b/i,
           /large\s+language\s+model/i,
           /языков[а-яё]+\s+модел/i,
           /GPT/i,
@@ -4314,7 +4347,7 @@
       </div>
     </div>
     <div class="har-footer">
-      <span style="font-size:11px;color:#71717a;">HH Copilot v${"1.9.17.3"}</span>
+      <span style="font-size:11px;color:#71717a;">HH Copilot v${"1.9.18.0"}</span>
       <div style="display:flex;align-items:center;gap:4px;">
         <span style="width:6px;height:6px;background:#10B981;border-radius:50%;"></span>
         <span style="font-size:11px;color:#71717a;">chrome.storage</span>
@@ -4333,7 +4366,7 @@
     ${getSettingsSection()}
     ${getStatsSection()}
     <div class="har-footer">
-      <span style="font-size:11px;color:#71717a;">HH Copilot v${"1.9.17.3"}</span>
+      <span style="font-size:11px;color:#71717a;">HH Copilot v${"1.9.18.0"}</span>
       <div style="display:flex;align-items:center;gap:4px;">
         <span style="width:6px;height:6px;background:#10B981;border-radius:50%;"></span>
         <span style="font-size:11px;color:#71717a;">chrome.storage</span>
@@ -9212,7 +9245,7 @@
     const headings = doc.querySelectorAll('h2, h3, [data-qa^="resume-block-title"]');
     for (const h of headings) {
       const text = (h.textContent || "").trim().toLowerCase();
-      if (text === "\u043D\u0430\u0432\u044B\u043A\u0438" || text.startsWith("\u043D\u0430\u0432\u044B\u043A\u0438") || text.includes("\u043D\u0430\u0432\u044B\u043A")) {
+      if (text === "\u043D\u0430\u0432\u044B\u043A\u0438" || text.startsWith("\u043D\u0430\u0432\u044B\u043A\u0438") || text === "\u043A\u043B\u044E\u0447\u0435\u0432\u044B\u0435 \u043D\u0430\u0432\u044B\u043A\u0438" || text.startsWith("\u043A\u043B\u044E\u0447\u0435\u0432\u044B\u0435 \u043D\u0430\u0432\u044B\u043A\u0438")) {
         let container = h.parentElement;
         for (let i = 0; i < 4 && container; i++) {
           const tags = container.querySelectorAll('.bloko-tag__text, [data-qa^="skill-tag"], [data-qa^="resume-skill"]');
@@ -10083,6 +10116,7 @@
   init_anti_hallucination();
   init_storage();
   init_match_scorer();
+  init_parse_experience();
   var parserLog = createLogger("Parser");
   async function parseVacanciesFromPage(resume) {
     const cards = findAllElements("vacancyCard");
@@ -10121,7 +10155,7 @@
         company: (company || "").trim(),
         salary: salary || "\u041D\u0435 \u0443\u043A\u0430\u0437\u0430\u043D\u0430",
         location: (location || "").trim(),
-        experience: parseExperienceString2((experience || "").trim()),
+        experience: parseExperienceString((experience || "").trim()),
         skills,
         url: url.startsWith("/") ? "https://hh.ru" + url : url,
         hasReply,
@@ -10155,26 +10189,6 @@
     });
     parserLog.info("Parsed " + vacancies.length + "/" + cards.length + " valid vacancies");
     return vacancies;
-  }
-  function parseExperienceString2(raw) {
-    if (!raw) return { raw: "", min: null, max: null };
-    const text = raw.toLowerCase().trim();
-    if (/нет\s*опыт|не\s*требу|без\s*опыт/.test(text)) {
-      return { raw, min: 0, max: 0 };
-    }
-    const moreMatch = text.match(/(?:более|от|свыше)\s+(\d+)/);
-    if (moreMatch) {
-      return { raw, min: parseInt(moreMatch[1], 10), max: null };
-    }
-    const rangeMatch = text.match(/(\d+)\s*[–—\-\s]+\s*(\d+)/);
-    if (rangeMatch) {
-      return { raw, min: parseInt(rangeMatch[1], 10), max: parseInt(rangeMatch[2], 10) };
-    }
-    const exactMatch = text.match(/(\d+)\s*(?:год|лет)/);
-    if (exactMatch) {
-      return { raw, min: parseInt(exactMatch[1], 10), max: null };
-    }
-    return { raw, min: null, max: null };
   }
 
   // src/parsers/vacancy-diagnostic.js

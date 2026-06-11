@@ -259,7 +259,7 @@ function _findSkillsSectionByHeadingInDoc(doc) {
   const headings = doc.querySelectorAll('h2, h3, [data-qa^="resume-block-title"]');
   for (const h of headings) {
     const text = (h.textContent || '').trim().toLowerCase();
-    if (text === 'навыки' || text.startsWith('навыки') || text.includes('навык')) {
+    if (text === 'навыки' || text.startsWith('навыки') || text === 'ключевые навыки' || text.startsWith('ключевые навыки')) {
       let container = h.parentElement;
       for (let i = 0; i < 4 && container; i++) {
         const tags = container.querySelectorAll('.bloko-tag__text, [data-qa^="skill-tag"], [data-qa^="resume-skill"]');

@@ -9,6 +9,7 @@ import { findAllElements, findElement } from '../lib/selectors.js';
 import { safeGetText, safeGetAttr, extractVacancyId, validateVacancyData, createLogger } from '../lib/anti-hallucination.js';
 import { getBlacklistedCompanies, getAppliedVacancies } from '../lib/storage.js';
 import { computeMatchScore } from '../lib/match-scorer.js';
+import { parseExperienceString } from '../lib/parse-experience.js';
 
 const parserLog = createLogger('Parser');
 
@@ -88,41 +89,4 @@ export async function parseVacanciesFromPage(resume) {
 
   parserLog.info('Parsed ' + vacancies.length + '/' + cards.length + ' valid vacancies');
   return vacancies;
-}
-
-/**
- * Parse experience requirement string into structured format.
- * Input:  "1–3 года", "Более 6 лет", "Нет опыта", "3 года"
- * Output: { raw: "1–3 года", min: 1, max: 3 }
- */
-function parseExperienceString(raw) {
-  if (!raw) return { raw: '', min: null, max: null };
-
-  const text = raw.toLowerCase().trim();
-
-  // "Нет опыта" / "Не требуется" / "Без опыта"
-  if (/нет\s*опыт|не\s*требу|без\s*опыт/.test(text)) {
-    return { raw, min: 0, max: 0 };
-  }
-
-  // "Более N лет" / "От N лет" / "Свыше N лет"
-  const moreMatch = text.match(/(?:более|от|свыше)\s+(\d+)/);
-  if (moreMatch) {
-    return { raw, min: parseInt(moreMatch[1], 10), max: null };
-  }
-
-  // "N–M лет" / "N-M лет" / "N — M лет" (range)
-  const rangeMatch = text.match(/(\d+)\s*[–—\-\s]+\s*(\d+)/);
-  if (rangeMatch) {
-    return { raw, min: parseInt(rangeMatch[1], 10), max: parseInt(rangeMatch[2], 10) };
-  }
-
-  // "N лет" / "N год" (exact)
-  const exactMatch = text.match(/(\d+)\s*(?:год|лет)/);
-  if (exactMatch) {
-    return { raw, min: parseInt(exactMatch[1], 10), max: null };
-  }
-
-  // Couldn't parse — return raw string for scorer fallback
-  return { raw, min: null, max: null };
 }

@@ -17,6 +17,7 @@
  */
 
 import { createLogger } from './anti-hallucination.js';
+import { parseExperienceString } from './parse-experience.js';
 
 const scoreLog = createLogger('Scorer');
 
@@ -192,7 +193,12 @@ function titleBonus(resumeTitle, vacancyTitle) {
 function scoreSalary(resume, vacancy) {
   // Parse resume salary expectation
   const resumeSalary = parseResumeSalary(resume.salary || '');
-  const vacSalary = vacancy.salary || {};
+  let vacSalary = vacancy.salary || {};
+
+  // Handle string salary from vacancy-list parser (e.g., "150 000 – 200 000 ₽")
+  if (typeof vacSalary === 'string') {
+    vacSalary = parseVacancySalaryString(vacSalary);
+  }
 
   // If no salary info on either side — neutral score
   if (!resumeSalary && !vacSalary.min && !vacSalary.max) {
@@ -261,7 +267,7 @@ function scoreExperience(resume, vacancy) {
   }
 
   // If we can't determine vacancy experience requirement
-  if (!vacExp.min && !vacExp.max && !vacExp.raw) {
+  if (vacExp.min === null && vacExp.max === null) {
     return { score: 8, reason: 'unknown-vacancy-exp' };
   }
 
@@ -345,16 +351,17 @@ function calcResumeYears(experience) {
   return Math.round(totalMonths / 12 * 10) / 10;
 }
 
-/** Parse experience string like "1–3 года" into { raw, min, max }. */
-function parseExperienceString(raw) {
-  if (!raw) return { raw: '', min: null, max: null };
-  const text = raw.toLowerCase().trim();
-  if (/нет\s*опыт|не\s*требу|без\s*опыт/.test(text)) return { raw, min: 0, max: 0 };
-  const moreMatch = text.match(/(?:более|от|свыше)\s+(\d+)/);
-  if (moreMatch) return { raw, min: parseInt(moreMatch[1], 10), max: null };
-  const rangeMatch = text.match(/(\d+)\s*[–—\-\s]+\s*(\d+)/);
-  if (rangeMatch) return { raw, min: parseInt(rangeMatch[1], 10), max: parseInt(rangeMatch[2], 10) };
-  const exactMatch = text.match(/(\d+)\s*(?:год|лет)/);
-  if (exactMatch) return { raw, min: parseInt(exactMatch[1], 10), max: null };
-  return { raw, min: null, max: null };
+/** Parse vacancy salary string like "150 000 – 200 000 ₽" into { min, max }. */
+function parseVacancySalaryString(salaryStr) {
+  if (!salaryStr || typeof salaryStr !== 'string') return {};
+  // Remove currency symbols and normalize spaces
+  const cleaned = salaryStr.replace(/[₽$€руб\.]/gi, '').replace(/\s+/g, ' ');
+  // Find all number groups (e.g., "150 000" → "150000")
+  const nums = cleaned.match(/\d[\d\s]*\d/g);
+  if (!nums || nums.length === 0) return {};
+  const parsed = nums.map(n => parseInt(n.replace(/\s/g, ''), 10)).filter(n => !isNaN(n));
+  if (parsed.length === 0) return {};
+  if (parsed.length === 1) return { min: parsed[0], max: parsed[0] };
+  // Take first two numbers as min/max
+  return { min: parsed[0], max: parsed[1] };
 }

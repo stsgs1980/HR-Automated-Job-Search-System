@@ -224,7 +224,7 @@ export const SKILL_PATTERNS = [
   { skill: 'управление проектами', patterns: [
     /проектн/i,
     /управлен(?:ие|ием|ию)\s+проект/i,
-    /PM/i,
+    /\bPM\b/i,
     /project\s+manag/i,
     /Agile/i,
     /Scrum/i,
@@ -406,7 +406,7 @@ export const SKILL_PATTERNS = [
   { skill: 'запуск продукта', patterns: [
     /запуск\s+(?:продукт|проект|бизнес|направлен)/i,
     /go[\s-]*to[\s-]*market/i,
-    /GTM/i,
+    /\bGTM\b/i,
     /вывод\s+(?:на\s+рынок|продукт)/i,
   ]},
   { skill: 'разработка стратегии', patterns: [
@@ -418,20 +418,20 @@ export const SKILL_PATTERNS = [
     /анализ\s+данн/i,
     /data\s+analysis/i,
     /big\s+data/i,
-    /BI/i,
+    /\bBI\b/i,
+    /business\s+intelligence/i,
   ]},
 
   // ═══════════════════════════════════════════
   // ДОП. ПОЛЕЗНЫЕ
   // ═══════════════════════════════════════════
   { skill: '1С', patterns: [
-    /1С/i,
-    /1с/i,
+    /1[СCсc]/,
   ]},
   { skill: 'SAP', patterns: [
     /\bSAP\b/i,
   ]},
-  { skill: ' Salesforce', patterns: [
+  { skill: 'Salesforce', patterns: [
     /salesforce/i,
   ]},
   { skill: 'многозадачность', patterns: [
@@ -443,7 +443,7 @@ export const SKILL_PATTERNS = [
     /стресс/i,
   ]},
   { skill: 'LLM', patterns: [
-    /\bLLM\b/i,
+    /\bLLMs?\b/i,
     /large\s+language\s+model/i,
     /языков[а-яё]+\s+модел/i,
     /GPT/i,

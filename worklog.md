@@ -1155,3 +1155,29 @@ Stage Summary:
 - Experience scoring now works for list-parsed vacancies (was always 8/15 before)
 - Supports: 'Нет опыта', 'Более 6 лет', '1–3 года', '3 года', etc.
 
+
+---
+Task ID: 4
+Agent: main
+Task: Bug hunt — fix 10 bugs found by code review
+
+Work Log:
+- BUG-2 CRITICAL: salary scoring always neutral for list vacancies → added parseVacancySalaryString()
+- BUG-3 CRITICAL: /BI/i matched any 'bi' substring → changed to /\bBI\b/i + added /business\s+intelligence/i
+- BUG-7 HIGH: vacExp.raw check treated unparseable as 0-99 years → changed to vacExp.min === null && vacExp.max === null
+- BUG-4 HIGH: leading space in ' Salesforce' → removed
+- BUG-1 CRITICAL: parseExperienceString missed months-only → added month pattern
+- BUG-6 HIGH: duplicated parseExperienceString → extracted to shared lib/parse-experience.js
+- BUG-8 MEDIUM: /PM/i too broad → /\bPM\b/i
+- BUG-9 MEDIUM: LLMs plural → /\bLLMs?\b/i
+- BUG-12 MEDIUM: 1C ASCII variant → /1[СCсc]/
+- BUG-10 MEDIUM: includes('навык') too loose → strict startswith check
+- Also fixed: /\bGTM\b/i word boundary
+- Bumped version to 1.9.18.0
+
+Stage Summary:
+- 3 CRITICAL + 4 HIGH + 4 MEDIUM bugs fixed
+- New shared module: lib/parse-experience.js
+- Salary scoring now works for list-parsed vacancies (was always 8/15)
+- Experience scoring now correctly handles unparseable strings (was giving 15/15)
+
