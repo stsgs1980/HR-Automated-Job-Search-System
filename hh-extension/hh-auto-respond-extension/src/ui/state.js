@@ -122,3 +122,13 @@ export function setActiveConversation(convId) {
 export function removeFromBlacklist(name) {
   panelState.blacklist = panelState.blacklist.filter(n => n !== name);
 }
+
+/** Merge stats object into panelState.stats. */
+export function updateStats(stats) {
+  Object.assign(panelState.stats, stats);
+}
+
+/** Merge settings object into panelState.settings. */
+export function updateSettings(settings) {
+  Object.assign(panelState.settings, settings);
+}

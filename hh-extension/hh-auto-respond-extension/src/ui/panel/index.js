@@ -7,7 +7,7 @@
  */
 
 import { createLogger } from '../../lib/anti-hallucination.js';
-import { panelState, refs, setAuthState, togglePanelOpen, setVacancies, setStatus as setStatusInternal } from '../state.js';
+import { panelState, refs, setAuthState, togglePanelOpen, setVacancies, setStatus as setStatusInternal, updateStats as mergeStatsState, updateSettings as mergeSettingsState } from '../state.js';
 export { panelState };
 import { getSidebarCSS } from '../styles.js';
 import { getSidebarHTML } from '../html.js';
@@ -153,7 +153,7 @@ export function updateVacancies(vacancies) {
 }
 
 export function updateStats(stats) {
-  Object.assign(panelState.stats, stats);
+  mergeStatsState(stats);
   renderStatsValues();
   renderOverviewKPI();
 }

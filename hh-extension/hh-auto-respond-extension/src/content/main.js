@@ -20,7 +20,7 @@ import { diagnoseResumeDOM, debugVisibility } from '../parsers/resume-detail.js'
 import { panelState, updateAuthState, createPanel, updateVacancies } from '../ui/panel.js';
 import { renderMyResumesPanel } from '../ui/tabs/resumes.js';
 import { VISIBILITY_UNKNOWN, TITLE_SUFFIX_NOISE } from '../lib/resume-constants.js';
-import { setActiveResumeState, setMyResumes } from '../ui/state.js';
+import { setActiveResumeState, setMyResumes, updateStats, updateSettings } from '../ui/state.js';
 
 // Split modules
 import { initPageLogic } from './main-page-handlers.js';
@@ -50,8 +50,8 @@ async function init() {
   // Load stats + settings into panelState at boot
   try {
     const [stats, settings] = await Promise.all([getStats(), getAllSettings()]);
-    Object.assign(panelState.stats, stats);
-    Object.assign(panelState.settings, settings);
+    updateStats(stats);
+    updateSettings(settings);
     mainLog.info('Boot: stats + settings loaded from storage');
   } catch (e) {
     mainLog.warn('Boot: failed to load stats/settings: ' + e.message);

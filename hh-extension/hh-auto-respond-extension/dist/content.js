@@ -2121,6 +2121,12 @@
   function removeFromBlacklist(name) {
     panelState.blacklist = panelState.blacklist.filter((n) => n !== name);
   }
+  function updateStats(stats) {
+    Object.assign(panelState.stats, stats);
+  }
+  function updateSettings(settings) {
+    Object.assign(panelState.settings, settings);
+  }
   var panelState, refs;
   var init_state = __esm({
     "src/ui/state.js"() {
@@ -5571,100 +5577,108 @@
     }
   });
 
-  // src/lib/resume-fetch-iframe-vis.js
-  function detectVisibilityFromIframeDoc(iframeDoc) {
-    const trace = [];
-    const diagInfo = { buttons: [], visElements: [], hideElements: [] };
+  // src/lib/resume-fetch-iframe-vis-dom.js
+  function checkVisibilityCard(iframeDoc) {
     const visCard = iframeDoc.querySelector('[data-qa="resume-visibility-card"]');
     if (visCard) {
       const cardText = normalizeWs(visCard.textContent || "").toLowerCase();
-      visLog4.info('[VIS-IFRAME] resume-visibility-card text="' + cardText.substring(0, 100) + '"');
       if (cardText.includes("\u043D\u0435 \u0432\u0438\u0434\u043D\u043E \u043D\u0438\u043A\u043E\u043C\u0443") || cardText.includes("\u043D\u0435\xA0\u0432\u0438\u0434\u043D\u043E \u043D\u0438\u043A\u043E\u043C\u0443")) {
-        trace.push('iframe-S0:visibility-card="\u043D\u0435 \u0432\u0438\u0434\u043D\u043E \u043D\u0438\u043A\u043E\u043C\u0443" \u2192 HIDDEN');
-        return { visibility: VISIBILITY_HIDDEN, trace };
+        return { visibility: VISIBILITY_HIDDEN, trace: 'iframe-S0:visibility-card="\u043D\u0435 \u0432\u0438\u0434\u043D\u043E \u043D\u0438\u043A\u043E\u043C\u0443" \u2192 HIDDEN' };
       }
       if (cardText.includes("\u0432\u0438\u0434\u043D\u043E \u0432\u0441\u0435\u043C") || cardText.includes("\u0432\u0438\u0434\u043D\u043E\xA0\u0432\u0441\u0435\u043C")) {
-        trace.push('iframe-S0:visibility-card="\u0432\u0438\u0434\u043D\u043E \u0432\u0441\u0435\u043C" \u2192 VISIBLE');
-        return { visibility: VISIBILITY_VISIBLE, trace };
+        return { visibility: VISIBILITY_VISIBLE, trace: 'iframe-S0:visibility-card="\u0432\u0438\u0434\u043D\u043E \u0432\u0441\u0435\u043C" \u2192 VISIBLE' };
       }
-      trace.push('iframe-S0:visibility-card-unknown-text="' + cardText.substring(0, 60) + '"');
-    } else {
-      trace.push("iframe-S0:no-visibility-card");
+      return { visibility: null, trace: 'iframe-S0:visibility-card-unknown-text="' + cardText.substring(0, 60) + '"' };
     }
+    return { visibility: null, trace: "iframe-S0:no-visibility-card" };
+  }
+  function checkHiddenDataQa(iframeDoc) {
+    for (const sel of VISIBILITY_HIDDEN_DATA_QA) {
+      const found = iframeDoc.querySelector(sel);
+      if (found) {
+        return { visibility: VISIBILITY_HIDDEN, trace: "iframe-S1:data-qa=" + sel + " \u2192 HIDDEN" };
+      }
+    }
+    return { visibility: null, trace: "iframe-S1:no-data-qa-hidden" };
+  }
+  function checkKeyButtons(allButtons) {
+    for (const btn of allButtons) {
+      const text = normalizeWs(btn.textContent || "").toLowerCase();
+      const qa = (btn.getAttribute("data-qa") || "").toLowerCase();
+      if (text.includes("\u0441\u0434\u0435\u043B\u0430\u0442\u044C \u0432\u0438\u0434\u0438\u043C\u044B\u043C") || qa.includes("make-visible") || qa.includes("show-resume")) {
+        return { visibility: VISIBILITY_HIDDEN, trace: 'iframe-S2:btn="\u0441\u0434\u0435\u043B\u0430\u0442\u044C \u0432\u0438\u0434\u0438\u043C\u044B\u043C" \u2192 HIDDEN' };
+      }
+      if (text.includes("\u0441\u043A\u0440\u044B\u0442\u044C \u0440\u0435\u0437\u044E\u043C\u0435") || qa.includes("hide-resume") || qa.includes("resume-action-hide")) {
+        return { visibility: VISIBILITY_VISIBLE, trace: 'iframe-S2:btn="\u0441\u043A\u0440\u044B\u0442\u044C \u0440\u0435\u0437\u044E\u043C\u0435" \u2192 VISIBLE' };
+      }
+    }
+    return { visibility: null, trace: "iframe-S2:no-key-buttons" };
+  }
+  function checkHideLink(iframeDoc) {
+    const hideLink = iframeDoc.querySelector('[data-qa="resume-action-hide"], [data-qa*="resume-hide"], a[data-qa*="hide-resume"]');
+    if (hideLink) {
+      return { visibility: VISIBILITY_VISIBLE, trace: "iframe-S4:hide-link-found \u2192 VISIBLE" };
+    }
+    return { visibility: null, trace: "iframe-S4:no-hide-link" };
+  }
+  function collectDiagButtons(iframeDoc) {
+    const buttons = [];
     const allButtons = iframeDoc.querySelectorAll('button, a, [role="button"]');
     for (const btn of allButtons) {
       const text = normalizeWs(btn.textContent || "").toLowerCase();
       const qa = (btn.getAttribute("data-qa") || "").toLowerCase();
       const href = (btn.getAttribute("href") || "").toLowerCase();
       if (text.includes("\u0432\u0438\u0434\u0438\u043C") || text.includes("\u0441\u043A\u0440\u044B\u0442\u044C") || text.includes("\u0441\u043A\u0440\u044B\u0442") || qa.includes("visible") || qa.includes("hide") || qa.includes("hidden") || qa.includes("show") || href.includes("visible") || href.includes("hide")) {
-        diagInfo.buttons.push({ text: text.substring(0, 50), qa, href: href.substring(0, 60), tag: btn.tagName });
+        buttons.push({ text: text.substring(0, 50), qa, href: href.substring(0, 60), tag: btn.tagName });
       }
     }
-    visLog4.info("[VIS-IFRAME] Diagnostic buttons: " + JSON.stringify(diagInfo.buttons));
-    for (const sel of VISIBILITY_HIDDEN_DATA_QA) {
-      const found = iframeDoc.querySelector(sel);
-      if (found) {
-        trace.push("iframe-S1:data-qa=" + sel + " \u2192 HIDDEN");
-        return { visibility: VISIBILITY_HIDDEN, trace };
-      }
+    return { buttons, allButtons };
+  }
+  var init_resume_fetch_iframe_vis_dom = __esm({
+    "src/lib/resume-fetch-iframe-vis-dom.js"() {
+      init_resume_constants();
     }
-    trace.push("iframe-S1:no-data-qa-hidden");
-    for (const btn of allButtons) {
-      const text = normalizeWs(btn.textContent || "").toLowerCase();
-      const qa = (btn.getAttribute("data-qa") || "").toLowerCase();
-      if (text.includes("\u0441\u0434\u0435\u043B\u0430\u0442\u044C \u0432\u0438\u0434\u0438\u043C\u044B\u043C") || qa.includes("make-visible") || qa.includes("show-resume")) {
-        trace.push('iframe-S2:btn="\u0441\u0434\u0435\u043B\u0430\u0442\u044C \u0432\u0438\u0434\u0438\u043C\u044B\u043C" \u2192 HIDDEN');
-        return { visibility: VISIBILITY_HIDDEN, trace };
-      }
-      if (text.includes("\u0441\u043A\u0440\u044B\u0442\u044C \u0440\u0435\u0437\u044E\u043C\u0435") || qa.includes("hide-resume") || qa.includes("resume-action-hide")) {
-        trace.push('iframe-S2:btn="\u0441\u043A\u0440\u044B\u0442\u044C \u0440\u0435\u0437\u044E\u043C\u0435" \u2192 VISIBLE');
-        return { visibility: VISIBILITY_VISIBLE, trace };
-      }
-    }
-    trace.push("iframe-S2:no-key-buttons");
-    const bodyText = iframeDoc.body ? normalizeWs(iframeDoc.body.textContent || "") : "";
+  });
+
+  // src/lib/resume-fetch-iframe-vis-adv.js
+  function checkBodyIndicators(bodyText) {
     if (hasHiddenIndicator(bodyText)) {
-      trace.push("iframe-S3:body-has-hidden-indicator \u2192 HIDDEN");
-      return { visibility: VISIBILITY_HIDDEN, trace };
+      return { visibility: VISIBILITY_HIDDEN, trace: "iframe-S3:body-has-hidden-indicator \u2192 HIDDEN" };
     }
     if (hasVisibleIndicator(bodyText)) {
-      trace.push("iframe-S3:body-has-visible-indicator \u2192 VISIBLE");
-      return { visibility: VISIBILITY_VISIBLE, trace };
+      return { visibility: VISIBILITY_VISIBLE, trace: "iframe-S3:body-has-visible-indicator \u2192 VISIBLE" };
     }
-    trace.push("iframe-S3:body-no-indicators");
-    const hideLink = iframeDoc.querySelector('[data-qa="resume-action-hide"], [data-qa*="resume-hide"], a[data-qa*="hide-resume"]');
-    if (hideLink) {
-      trace.push("iframe-S4:hide-link-found \u2192 VISIBLE");
-      return { visibility: VISIBILITY_VISIBLE, trace };
-    }
-    trace.push("iframe-S4:no-hide-link");
+    return { visibility: null, trace: "iframe-S3:body-no-indicators" };
+  }
+  function checkBodyVisibilityText(bodyText) {
     const bodyLower = bodyText.toLowerCase();
     if (bodyLower.includes("\u043D\u0435 \u0432\u0438\u0434\u044F\u0442") || bodyLower.includes("\u043D\u0435\xA0\u0432\u0438\u0434\u044F\u0442") || bodyLower.includes("\u043D\u0435 \u0432\u0438\u0434\u043D\u043E")) {
-      trace.push('iframe-S5:body-has-"\u043D\u0435 \u0432\u0438\u0434\u044F\u0442/\u043D\u0435 \u0432\u0438\u0434\u043D\u043E" \u2192 HIDDEN');
-      return { visibility: VISIBILITY_HIDDEN, trace };
+      return { visibility: VISIBILITY_HIDDEN, trace: 'iframe-S5:body-has-"\u043D\u0435 \u0432\u0438\u0434\u044F\u0442/\u043D\u0435 \u0432\u0438\u0434\u043D\u043E" \u2192 HIDDEN' };
     }
     if (bodyLower.includes("\u0432\u0438\u0434\u043D\u043E \u0432\u0441\u0435\u043C")) {
-      trace.push('iframe-S5:body-has-"\u0432\u0438\u0434\u043D\u043E \u0432\u0441\u0435\u043C" \u2192 VISIBLE');
-      return { visibility: VISIBILITY_VISIBLE, trace };
+      return { visibility: VISIBILITY_VISIBLE, trace: 'iframe-S5:body-has-"\u0432\u0438\u0434\u043D\u043E \u0432\u0441\u0435\u043C" \u2192 VISIBLE' };
     }
+    return { visibility: null, trace: null };
+  }
+  function checkScriptPatterns(iframeDoc) {
     try {
       const scripts = iframeDoc.querySelectorAll("script:not([src])");
       for (const script of scripts) {
         const t = script.textContent || "";
         if (t.length < 50) continue;
         if (/"hidden"\s*:\s*true/.test(t) || /"isHidden"\s*:\s*true/.test(t) || /"visibility"\s*:\s*"hidden"/.test(t) || /"status"\s*:\s*"hidden"/.test(t)) {
-          trace.push("iframe-S6:script-has-hidden-pattern \u2192 HIDDEN");
-          return { visibility: VISIBILITY_HIDDEN, trace };
+          return { visibility: VISIBILITY_HIDDEN, trace: "iframe-S6:script-has-hidden-pattern \u2192 HIDDEN" };
         }
         if (/"hidden"\s*:\s*false/.test(t) || /"visibility"\s*:\s*"visible"/.test(t)) {
-          trace.push("iframe-S6:script-has-visible-pattern \u2192 VISIBLE");
-          return { visibility: VISIBILITY_VISIBLE, trace };
+          return { visibility: VISIBILITY_VISIBLE, trace: "iframe-S6:script-has-visible-pattern \u2192 VISIBLE" };
         }
       }
     } catch (e) {
-      trace.push("iframe-S6:script-check-error(" + e.message.substring(0, 30) + ")");
+      return { visibility: null, trace: "iframe-S6:script-check-error(" + e.message.substring(0, 30) + ")" };
     }
-    trace.push("iframe-S6:no-script-patterns");
+    return { visibility: null, trace: "iframe-S6:no-script-patterns" };
+  }
+  function checkNotificationBanners(iframeDoc) {
     const notifSelectors = [
       '[data-qa="resume-visibility-notification"]',
       '[data-qa*="visibility-notification"]',
@@ -5678,35 +5692,76 @@
       if (el) {
         const elText = normalizeWs(el.textContent || "").toLowerCase();
         if (elText.includes("\u043D\u0435 \u0432\u0438\u0434\u044F\u0442") || elText.includes("\u0441\u043A\u0440\u044B\u0442") || elText.includes("\u0441\u0434\u0435\u043B\u0430\u0442\u044C \u0432\u0438\u0434\u0438\u043C")) {
-          trace.push("iframe-S7:notification=" + sel + ' text="' + elText.substring(0, 40) + '" \u2192 HIDDEN');
-          return { visibility: VISIBILITY_HIDDEN, trace };
+          return { visibility: VISIBILITY_HIDDEN, trace: "iframe-S7:notification=" + sel + ' text="' + elText.substring(0, 40) + '" \u2192 HIDDEN' };
         }
       }
     }
-    trace.push("iframe-S7:no-notification-hidden");
+    return { visibility: null, trace: "iframe-S7:no-notification-hidden" };
+  }
+  function checkActionLinks(iframeDoc) {
     const actionLinks = iframeDoc.querySelectorAll('a[href*="visible"], a[href*="show"], a[href*="publish"]');
     for (const link of actionLinks) {
       const href = (link.getAttribute("href") || "").toLowerCase();
       const linkText = normalizeWs(link.textContent || "").toLowerCase();
       if (href.includes("publish") || href.includes("make_visible") || href.includes("show")) {
-        trace.push('iframe-S8:action-link href="' + href.substring(0, 60) + '" text="' + linkText.substring(0, 40) + '" \u2192 HIDDEN');
-        return { visibility: VISIBILITY_HIDDEN, trace };
+        return { visibility: VISIBILITY_HIDDEN, trace: 'iframe-S8:action-link href="' + href.substring(0, 60) + '" text="' + linkText.substring(0, 40) + '" \u2192 HIDDEN' };
       }
     }
-    trace.push("iframe-S8:no-action-links");
+    return { visibility: null, trace: "iframe-S8:no-action-links" };
+  }
+  function collectVisRelatedElements(iframeDoc) {
+    const visElements = [];
     const visRelated = iframeDoc.querySelectorAll('[data-qa*="resume"], [data-qa*="visibility"]');
     for (const el of visRelated) {
       const elQa = el.getAttribute("data-qa") || "";
       const elText = normalizeWs(el.textContent || "").substring(0, 60);
       if (elText.includes("\u0441\u043A\u0440\u044B\u0442") || elText.includes("\u0432\u0438\u0434\u0438\u043C") || elText.includes("\u043D\u0435 \u0432\u0438\u0434\u044F\u0442")) {
-        diagInfo.visElements.push({ qa: elQa, text: elText });
+        visElements.push({ qa: elQa, text: elText });
       }
     }
-    if (diagInfo.visElements.length > 0) {
-      visLog4.info("[VIS-IFRAME] Related elements: " + JSON.stringify(diagInfo.visElements));
+    return visElements;
+  }
+  var init_resume_fetch_iframe_vis_adv = __esm({
+    "src/lib/resume-fetch-iframe-vis-adv.js"() {
+      init_resume_constants();
+    }
+  });
+
+  // src/lib/resume-fetch-iframe-vis.js
+  function tryStrategy(result, trace) {
+    if (result.trace) trace.push(result.trace);
+    return result.visibility !== null;
+  }
+  function detectVisibilityFromIframeDoc(iframeDoc) {
+    const trace = [];
+    const { buttons: diagButtons, allButtons } = collectDiagButtons(iframeDoc);
+    visLog4.info("[VIS-IFRAME] Diagnostic buttons: " + JSON.stringify(diagButtons));
+    let r = checkVisibilityCard(iframeDoc);
+    if (tryStrategy(r, trace)) return { visibility: r.visibility, trace };
+    r = checkHiddenDataQa(iframeDoc);
+    if (tryStrategy(r, trace)) return { visibility: r.visibility, trace };
+    r = checkKeyButtons(allButtons);
+    if (tryStrategy(r, trace)) return { visibility: r.visibility, trace };
+    const bodyText = iframeDoc.body ? normalizeWs(iframeDoc.body.textContent || "") : "";
+    r = checkBodyIndicators(bodyText);
+    if (tryStrategy(r, trace)) return { visibility: r.visibility, trace };
+    r = checkHideLink(iframeDoc);
+    if (tryStrategy(r, trace)) return { visibility: r.visibility, trace };
+    r = checkBodyVisibilityText(bodyText);
+    if (r.trace) trace.push(r.trace);
+    if (r.visibility) return { visibility: r.visibility, trace };
+    r = checkScriptPatterns(iframeDoc);
+    if (tryStrategy(r, trace)) return { visibility: r.visibility, trace };
+    r = checkNotificationBanners(iframeDoc);
+    if (tryStrategy(r, trace)) return { visibility: r.visibility, trace };
+    r = checkActionLinks(iframeDoc);
+    if (tryStrategy(r, trace)) return { visibility: r.visibility, trace };
+    const visElements = collectVisRelatedElements(iframeDoc);
+    if (visElements.length > 0) {
+      visLog4.info("[VIS-IFRAME] Related elements: " + JSON.stringify(visElements));
     }
     trace.push("\u2192 UNKNOWN");
-    visLog4.info("[VIS-IFRAME] All strategies exhausted. Buttons found: " + diagInfo.buttons.length + ", Related elements: " + diagInfo.visElements.length);
+    visLog4.info("[VIS-IFRAME] All strategies exhausted. Buttons found: " + diagButtons.length + ", Related elements: " + visElements.length);
     return { visibility: VISIBILITY_UNKNOWN, trace };
   }
   var visLog4;
@@ -5714,6 +5769,8 @@
     "src/lib/resume-fetch-iframe-vis.js"() {
       init_anti_hallucination();
       init_resume_constants();
+      init_resume_fetch_iframe_vis_dom();
+      init_resume_fetch_iframe_vis_adv();
       visLog4 = createLogger("ResumeFetch");
     }
   });
@@ -7302,8 +7359,8 @@
     updateVacancyCounts();
     if (panelState.resume) updateSkillGapSection(panelState.resume);
   }
-  function updateStats(stats) {
-    Object.assign(panelState.stats, stats);
+  function updateStats2(stats) {
+    updateStats(stats);
     renderStatsValues();
     renderOverviewKPI();
   }
@@ -7378,7 +7435,7 @@
     const vacancies = parseVacanciesFromPage();
     updateVacancies(vacancies);
     const stats = getStats();
-    updateStats(stats);
+    updateStats2(stats);
     let timer = null;
     new MutationObserver(() => {
       clearTimeout(timer);
@@ -7673,8 +7730,8 @@
     await checkDailyReset();
     try {
       const [stats, settings] = await Promise.all([getStats(), getAllSettings()]);
-      Object.assign(panelState.stats, stats);
-      Object.assign(panelState.settings, settings);
+      updateStats(stats);
+      updateSettings(settings);
       mainLog.info("Boot: stats + settings loaded from storage");
     } catch (e) {
       mainLog.warn("Boot: failed to load stats/settings: " + e.message);
