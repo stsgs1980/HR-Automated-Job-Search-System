@@ -3353,7 +3353,7 @@
       </div>
     </div>
     <div class="har-footer">
-      <span style="font-size:11px;color:#71717a;">HH Copilot v${"1.9.15"}</span>
+      <span style="font-size:11px;color:#71717a;">HH Copilot v${"1.9.15.3"}</span>
       <div style="display:flex;align-items:center;gap:4px;">
         <span style="width:6px;height:6px;background:#10B981;border-radius:50%;"></span>
         <span style="font-size:11px;color:#71717a;">chrome.storage</span>
@@ -3372,7 +3372,7 @@
     ${getSettingsSection()}
     ${getStatsSection()}
     <div class="har-footer">
-      <span style="font-size:11px;color:#71717a;">HH Copilot v${"1.9.15"}</span>
+      <span style="font-size:11px;color:#71717a;">HH Copilot v${"1.9.15.3"}</span>
       <div style="display:flex;align-items:center;gap:4px;">
         <span style="width:6px;height:6px;background:#10B981;border-radius:50%;"></span>
         <span style="font-size:11px;color:#71717a;">chrome.storage</span>
