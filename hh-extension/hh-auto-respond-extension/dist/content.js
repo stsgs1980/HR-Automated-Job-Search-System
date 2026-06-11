@@ -9604,7 +9604,13 @@
   init_state();
   var pageLog = createLogger("Main");
   var lastHandledPath = "";
+  var pageLogicInitialized = false;
   async function initPageLogic() {
+    if (pageLogicInitialized) {
+      pageLog.info("Page logic already initialized \u2014 skipping duplicate");
+      return;
+    }
+    pageLogicInitialized = true;
     const currentPath = window.location.pathname;
     await routeToHandler(currentPath);
     lastHandledPath = currentPath;
@@ -9613,6 +9619,7 @@
   }
   function resetPageInit() {
     lastHandledPath = "";
+    pageLogicInitialized = false;
   }
   function setupSPARouting() {
     window.addEventListener("popstate", () => {

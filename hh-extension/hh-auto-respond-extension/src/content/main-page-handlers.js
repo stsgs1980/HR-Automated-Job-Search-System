@@ -27,12 +27,22 @@ const pageLog = createLogger('Main');
 /** Tracks which URL path was last handled — prevents duplicate SPA triggers */
 let lastHandledPath = '';
 
+/** Guard: prevent duplicate initPageLogic() calls (event + safety net) */
+let pageLogicInitialized = false;
+
 /**
  * Initialize page-specific logic (parsers, observers).
- * Called ONCE when auth state changes from false/null to true.
+ * Called when auth state changes from false/null to true.
  * Also sets up SPA navigation listener.
+ * Idempotent — safe to call multiple times; only runs once.
  */
 export async function initPageLogic() {
+  if (pageLogicInitialized) {
+    pageLog.info('Page logic already initialized — skipping duplicate');
+    return;
+  }
+  pageLogicInitialized = true;
+
   const currentPath = window.location.pathname;
 
   // Handle initial page
@@ -48,6 +58,7 @@ export async function initPageLogic() {
 /** Reset state (for testing). */
 export function resetPageInit() {
   lastHandledPath = '';
+  pageLogicInitialized = false;
 }
 
 // ═══════════════════════════════════════════════

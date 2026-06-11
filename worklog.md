@@ -1057,3 +1057,17 @@ Stage Summary:
 - Skill gap analysis now lives in Vacancies tab (logical place)
 - Resume tab has new objective completeness score with visual ring + checklist
 - Version 1.9.14
+
+---
+Task ID: v1.9.15.6
+Agent: main
+Time: 2026-06-12T18:35:00+03:00
+Task: Fix initPageLogic() never called + make idempotent
+
+Work Log:
+- Replaced broken dynamic import() with CustomEvent pattern in panel/index.js
+- Added initPageLogic() idempotent guard to prevent duplicate execution
+- User confirmed: [VacDetail] and match scoring logs now appear in console
+
+Stage Summary:
+- Vacancy detail parser + match scorer now actually run on /vacancy/{id} pages

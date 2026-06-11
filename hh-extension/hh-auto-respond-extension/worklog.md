@@ -428,3 +428,30 @@ Stage Summary:
 - Vacancy storage: persistent details + scores in chrome.storage
 - List sorting: search results now sorted by match score (highest first)
 - Version: 1.9.15.5
+
+---
+Task ID: v1.9.15.6
+Agent: main
+Time: 2026-06-12T18:30:00+03:00
+Task: Fix initPageLogic() never called — replace broken dynamic import() with custom event pattern + make idempotent
+
+Work Log:
+- Root cause: panel/index.js used import('../../content/main.js') to call initPageLogic() on auth change
+  esbuild's IIFE bundle doesn't support dynamic import() at runtime — Promise silently fails
+- Result: routeToHandler() never fires, handleVacancyDetailPage() never runs
+  Vacancy detail parsing + match scoring were dead code
+- Fix 1: Replaced dynamic import() with CustomEvent 'hh-ar-init-page-logic' dispatch
+  panel/index.js dispatches event, main.js listens and calls initPageLogic() directly
+  Both updateAuthState() and updateAuthStateAsync() paths fixed
+- Fix 2: Added safety net in main.js — auto-calls initPageLogic() after 3s on vacancy detail pages
+- Fix 3: Made initPageLogic() idempotent with pageLogicInitialized guard flag
+  Prevents duplicate execution from event + safety net
+  Second call logs "Page logic already initialized — skipping duplicate"
+- Build verified: no dynamic import() remains in bundle, all routing/VacDetail/Scorer code present
+- User confirmed fix works: [VacDetail] and match scoring logs now appear in console
+
+Stage Summary:
+- Root cause fixed: CustomEvent replaces broken dynamic import()
+- initPageLogic() is now idempotent — no duplicate execution
+- Vacancy detail parser + match scorer now actually run on /vacancy/{id} pages
+- Remaining: "No active resume — skip match scoring" (need resume loaded for scoring)
