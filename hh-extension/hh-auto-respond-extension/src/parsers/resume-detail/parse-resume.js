@@ -78,6 +78,26 @@ export function parseResume() {
   // ═════════════════════════════════════════
   // On a live resume page, React has already hydrated, so we can check
   // for visibility indicators directly in the DOM.
+
+  // Strategy 0: Check resume-visibility-card (PRIMARY for Magritte)
+  // data-qa="resume-visibility-card" contains "не видно никому" (hidden)
+  // or "видно всем работодателям" (visible)
+  const visCard = document.querySelector('[data-qa="resume-visibility-card"]');
+  if (visCard) {
+    const cardText = normalizeWs(visCard.textContent || '').toLowerCase();
+    if (cardText.includes('не видно никому') || cardText.includes('не\u00A0видно никому')) {
+      resume.visibility = VISIBILITY_HIDDEN;
+      resume.hidden = true;
+    } else if (cardText.includes('видно всем') || cardText.includes('видно\u00A0всем')) {
+      resume.visibility = VISIBILITY_VISIBLE;
+      resume.hidden = false;
+    } else {
+      // Unknown text in visibility card — fall through to other strategies
+      resumeLog.info('Unknown visibility card text: "' + cardText.substring(0, 80) + '"');
+    }
+  }
+
+  if (resume.visibility === VISIBILITY_UNKNOWN) {
   const hiddenMsg = document.querySelector('[data-qa="resume-hidden-message"], [data-qa*="resume-hidden"], [data-qa="resume-make-visible"], [data-qa*="make-visible"]');
   if (hiddenMsg) {
     resume.visibility = VISIBILITY_HIDDEN;
@@ -124,6 +144,7 @@ export function parseResume() {
       }
     }
   }
+  } // end if (resume.visibility === VISIBILITY_UNKNOWN)
 
   // ═════════════════════════════════════════
   // ИТОГО

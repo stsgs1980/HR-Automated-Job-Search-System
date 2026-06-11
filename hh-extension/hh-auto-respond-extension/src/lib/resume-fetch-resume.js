@@ -396,6 +396,26 @@ async function parseExperienceFromDoc(doc, dbg, resume, html, resumeUrl) {
 function detectVisibilityFromResumePage(doc, html) {
   const diag = []; // diagnostic trace — every step logged
 
+  // ═══ Strategy 0: Check resume-visibility-card (PRIMARY for Magritte) ═══
+  // data-qa="resume-visibility-card" contains either "не видно никому" or "видно всем"
+  const visCard = doc.querySelector('[data-qa="resume-visibility-card"]');
+  if (visCard) {
+    const cardText = normalizeWs(visCard.textContent || '').toLowerCase();
+    if (cardText.includes('не видно никому') || cardText.includes('не\u00A0видно никому')) {
+      diag.push('S0:visibility-card="не видно никому" → HIDDEN');
+      fetchLog.info('[VIS-DIAG] ' + diag.join(' | '));
+      return { visibility: VISIBILITY_HIDDEN, trace: diag };
+    }
+    if (cardText.includes('видно всем') || cardText.includes('видно\u00A0всем')) {
+      diag.push('S0:visibility-card="видно всем" → VISIBLE');
+      fetchLog.info('[VIS-DIAG] ' + diag.join(' | '));
+      return { visibility: VISIBILITY_VISIBLE, trace: diag };
+    }
+    diag.push('S0:visibility-card-unknown="' + cardText.substring(0, 40) + '"');
+  } else {
+    diag.push('S0:no-visibility-card');
+  }
+
   // ═══ Strategy 1: Check for hidden-specific data-qa attributes ═══
   for (const sel of VISIBILITY_HIDDEN_DATA_QA) {
     const found = doc.querySelector(sel);

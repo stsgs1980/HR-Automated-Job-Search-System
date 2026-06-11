@@ -1327,7 +1327,7 @@
       VISIBILITY_VISIBLE = "visible";
       VISIBILITY_HIDDEN = "hidden";
       VISIBILITY_UNKNOWN = "unknown";
-      HIDDEN_INDICATORS = ["\u043C\u043D\u043E\u0433\u0438\u0435 \u043D\u0435 \u0432\u0438\u0434\u044F\u0442", "\u0441\u0434\u0435\u043B\u0430\u0442\u044C \u0432\u0438\u0434\u0438\u043C\u044B\u043C"];
+      HIDDEN_INDICATORS = ["\u043C\u043D\u043E\u0433\u0438\u0435 \u043D\u0435 \u0432\u0438\u0434\u044F\u0442", "\u0441\u0434\u0435\u043B\u0430\u0442\u044C \u0432\u0438\u0434\u0438\u043C\u044B\u043C", "\u043D\u0435 \u0432\u0438\u0434\u043D\u043E \u043D\u0438\u043A\u043E\u043C\u0443"];
       LINE_BREAK_INJECTORS = [
         /Многие\s+не\s+видят[^\n]*/gi,
         /Сделать\s+видимым/gi,
@@ -1420,43 +1420,58 @@
     parseEducation(dbg, resume);
     parseLanguagesAndAbout(dbg, resume);
     parseContacts(dbg, resume);
-    const hiddenMsg = document.querySelector('[data-qa="resume-hidden-message"], [data-qa*="resume-hidden"], [data-qa="resume-make-visible"], [data-qa*="make-visible"]');
-    if (hiddenMsg) {
-      resume.visibility = VISIBILITY_HIDDEN;
-      resume.hidden = true;
-    } else if (hasHiddenIndicator(document.body ? document.body.textContent : "")) {
-      resume.visibility = VISIBILITY_HIDDEN;
-      resume.hidden = true;
-    } else {
-      const allBtns = document.querySelectorAll('button, a, [role="button"]');
-      let foundMakeVisible = false;
-      let foundHideResume = false;
-      for (const btn of allBtns) {
-        const text = normalizeWs(btn.textContent || "").toLowerCase();
-        const qa = (btn.getAttribute("data-qa") || "").toLowerCase();
-        if (text.includes("\u0441\u0434\u0435\u043B\u0430\u0442\u044C \u0432\u0438\u0434\u0438\u043C\u044B\u043C") || qa.includes("make-visible") || qa.includes("show-resume")) {
-          foundMakeVisible = true;
-          break;
-        }
-        if (text.includes("\u0441\u043A\u0440\u044B\u0442\u044C \u0440\u0435\u0437\u044E\u043C\u0435") || qa.includes("hide-resume") || qa.includes("resume-action-hide")) {
-          foundHideResume = true;
-          break;
-        }
-      }
-      if (foundMakeVisible) {
+    const visCard = document.querySelector('[data-qa="resume-visibility-card"]');
+    if (visCard) {
+      const cardText = normalizeWs(visCard.textContent || "").toLowerCase();
+      if (cardText.includes("\u043D\u0435 \u0432\u0438\u0434\u043D\u043E \u043D\u0438\u043A\u043E\u043C\u0443") || cardText.includes("\u043D\u0435\xA0\u0432\u0438\u0434\u043D\u043E \u043D\u0438\u043A\u043E\u043C\u0443")) {
         resume.visibility = VISIBILITY_HIDDEN;
         resume.hidden = true;
-      } else if (foundHideResume) {
+      } else if (cardText.includes("\u0432\u0438\u0434\u043D\u043E \u0432\u0441\u0435\u043C") || cardText.includes("\u0432\u0438\u0434\u043D\u043E\xA0\u0432\u0441\u0435\u043C")) {
         resume.visibility = VISIBILITY_VISIBLE;
         resume.hidden = false;
       } else {
-        const bodyText = normalizeWs(document.body ? document.body.textContent : "").toLowerCase();
-        if (bodyText.includes("\u043D\u0435 \u0432\u0438\u0434\u044F\u0442")) {
+        resumeLog3.info('Unknown visibility card text: "' + cardText.substring(0, 80) + '"');
+      }
+    }
+    if (resume.visibility === VISIBILITY_UNKNOWN) {
+      const hiddenMsg = document.querySelector('[data-qa="resume-hidden-message"], [data-qa*="resume-hidden"], [data-qa="resume-make-visible"], [data-qa*="make-visible"]');
+      if (hiddenMsg) {
+        resume.visibility = VISIBILITY_HIDDEN;
+        resume.hidden = true;
+      } else if (hasHiddenIndicator(document.body ? document.body.textContent : "")) {
+        resume.visibility = VISIBILITY_HIDDEN;
+        resume.hidden = true;
+      } else {
+        const allBtns = document.querySelectorAll('button, a, [role="button"]');
+        let foundMakeVisible = false;
+        let foundHideResume = false;
+        for (const btn of allBtns) {
+          const text = normalizeWs(btn.textContent || "").toLowerCase();
+          const qa = (btn.getAttribute("data-qa") || "").toLowerCase();
+          if (text.includes("\u0441\u0434\u0435\u043B\u0430\u0442\u044C \u0432\u0438\u0434\u0438\u043C\u044B\u043C") || qa.includes("make-visible") || qa.includes("show-resume")) {
+            foundMakeVisible = true;
+            break;
+          }
+          if (text.includes("\u0441\u043A\u0440\u044B\u0442\u044C \u0440\u0435\u0437\u044E\u043C\u0435") || qa.includes("hide-resume") || qa.includes("resume-action-hide")) {
+            foundHideResume = true;
+            break;
+          }
+        }
+        if (foundMakeVisible) {
           resume.visibility = VISIBILITY_HIDDEN;
           resume.hidden = true;
-        } else {
+        } else if (foundHideResume) {
           resume.visibility = VISIBILITY_VISIBLE;
           resume.hidden = false;
+        } else {
+          const bodyText = normalizeWs(document.body ? document.body.textContent : "").toLowerCase();
+          if (bodyText.includes("\u043D\u0435 \u0432\u0438\u0434\u044F\u0442")) {
+            resume.visibility = VISIBILITY_HIDDEN;
+            resume.hidden = true;
+          } else {
+            resume.visibility = VISIBILITY_VISIBLE;
+            resume.hidden = false;
+          }
         }
       }
     }
@@ -2929,6 +2944,22 @@
   function detectVisibilityFromIframeDoc(iframeDoc) {
     const trace = [];
     const diagInfo = { buttons: [], visElements: [], hideElements: [] };
+    const visCard = iframeDoc.querySelector('[data-qa="resume-visibility-card"]');
+    if (visCard) {
+      const cardText = normalizeWs(visCard.textContent || "").toLowerCase();
+      fetchLog7.info('[VIS-IFRAME] resume-visibility-card text="' + cardText.substring(0, 100) + '"');
+      if (cardText.includes("\u043D\u0435 \u0432\u0438\u0434\u043D\u043E \u043D\u0438\u043A\u043E\u043C\u0443") || cardText.includes("\u043D\u0435\xA0\u0432\u0438\u0434\u043D\u043E \u043D\u0438\u043A\u043E\u043C\u0443")) {
+        trace.push('iframe-S0:visibility-card="\u043D\u0435 \u0432\u0438\u0434\u043D\u043E \u043D\u0438\u043A\u043E\u043C\u0443" \u2192 HIDDEN');
+        return { visibility: VISIBILITY_HIDDEN, trace };
+      }
+      if (cardText.includes("\u0432\u0438\u0434\u043D\u043E \u0432\u0441\u0435\u043C") || cardText.includes("\u0432\u0438\u0434\u043D\u043E\xA0\u0432\u0441\u0435\u043C")) {
+        trace.push('iframe-S0:visibility-card="\u0432\u0438\u0434\u043D\u043E \u0432\u0441\u0435\u043C" \u2192 VISIBLE');
+        return { visibility: VISIBILITY_VISIBLE, trace };
+      }
+      trace.push('iframe-S0:visibility-card-unknown-text="' + cardText.substring(0, 60) + '"');
+    } else {
+      trace.push("iframe-S0:no-visibility-card");
+    }
     const allButtons = iframeDoc.querySelectorAll('button, a, [role="button"]');
     for (const btn of allButtons) {
       const text = normalizeWs(btn.textContent || "").toLowerCase();
@@ -3703,6 +3734,23 @@
   }
   function detectVisibilityFromResumePage(doc, html) {
     const diag = [];
+    const visCard = doc.querySelector('[data-qa="resume-visibility-card"]');
+    if (visCard) {
+      const cardText = normalizeWs(visCard.textContent || "").toLowerCase();
+      if (cardText.includes("\u043D\u0435 \u0432\u0438\u0434\u043D\u043E \u043D\u0438\u043A\u043E\u043C\u0443") || cardText.includes("\u043D\u0435\xA0\u0432\u0438\u0434\u043D\u043E \u043D\u0438\u043A\u043E\u043C\u0443")) {
+        diag.push('S0:visibility-card="\u043D\u0435 \u0432\u0438\u0434\u043D\u043E \u043D\u0438\u043A\u043E\u043C\u0443" \u2192 HIDDEN');
+        fetchLog11.info("[VIS-DIAG] " + diag.join(" | "));
+        return { visibility: VISIBILITY_HIDDEN, trace: diag };
+      }
+      if (cardText.includes("\u0432\u0438\u0434\u043D\u043E \u0432\u0441\u0435\u043C") || cardText.includes("\u0432\u0438\u0434\u043D\u043E\xA0\u0432\u0441\u0435\u043C")) {
+        diag.push('S0:visibility-card="\u0432\u0438\u0434\u043D\u043E \u0432\u0441\u0435\u043C" \u2192 VISIBLE');
+        fetchLog11.info("[VIS-DIAG] " + diag.join(" | "));
+        return { visibility: VISIBILITY_VISIBLE, trace: diag };
+      }
+      diag.push('S0:visibility-card-unknown="' + cardText.substring(0, 40) + '"');
+    } else {
+      diag.push("S0:no-visibility-card");
+    }
     for (const sel of VISIBILITY_HIDDEN_DATA_QA) {
       const found = doc.querySelector(sel);
       if (found) {

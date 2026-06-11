@@ -70,7 +70,7 @@ export const VISIBILITY_UNKNOWN = 'unknown';
  * These are the actual Russian phrases hh.ru shows on hidden resumes.
  * ALL use regular spaces — normalizeWs() must be called before matching.
  */
-export const HIDDEN_INDICATORS = ['многие не видят', 'сделать видимым'];
+export const HIDDEN_INDICATORS = ['многие не видят', 'сделать видимым', 'не видно никому'];
 
 /**
  * Check if normalized text contains any hidden indicator.

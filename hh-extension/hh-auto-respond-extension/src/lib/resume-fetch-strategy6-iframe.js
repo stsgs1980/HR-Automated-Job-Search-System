@@ -144,6 +144,29 @@ function detectVisibilityFromIframeDoc(iframeDoc) {
   const trace = [];
   const diagInfo = { buttons: [], visElements: [], hideElements: [] };
 
+  // ── Strategy 0: Check resume-visibility-card (PRIMARY for Magritte) ──
+  // hh.ru uses data-qa="resume-visibility-card" which contains either:
+  //   "видимость резюмене видно никому" = HIDDEN
+  //   "видимость резюмевидно всем работодателям" = VISIBLE
+  // Note: text is concatenated without space between "резюме" and "не видно"/"видно"
+  const visCard = iframeDoc.querySelector('[data-qa="resume-visibility-card"]');
+  if (visCard) {
+    const cardText = normalizeWs(visCard.textContent || '').toLowerCase();
+    fetchLog.info('[VIS-IFRAME] resume-visibility-card text="' + cardText.substring(0, 100) + '"');
+    if (cardText.includes('не видно никому') || cardText.includes('не\u00A0видно никому')) {
+      trace.push('iframe-S0:visibility-card="не видно никому" → HIDDEN');
+      return { visibility: VISIBILITY_HIDDEN, trace };
+    }
+    if (cardText.includes('видно всем') || cardText.includes('видно\u00A0всем')) {
+      trace.push('iframe-S0:visibility-card="видно всем" → VISIBLE');
+      return { visibility: VISIBILITY_VISIBLE, trace };
+    }
+    // Card found but unrecognized text — log it for debugging
+    trace.push('iframe-S0:visibility-card-unknown-text="' + cardText.substring(0, 60) + '"');
+  } else {
+    trace.push('iframe-S0:no-visibility-card');
+  }
+
   // ── Diagnostic: collect ALL buttons/links with visibility-related text ──
   const allButtons = iframeDoc.querySelectorAll('button, a, [role="button"]');
   for (const btn of allButtons) {
