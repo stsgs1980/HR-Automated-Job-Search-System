@@ -172,10 +172,25 @@ export function buildRecommendations(ats, exp, flags, r) {
   }
 
   // ── Общие советы ──
+  // v1.9.19.0: Skills already in derivedSkills are "confirmed by experience text" — don't flag them
   if ((r.skills || []).length > 0 && (r.experience || []).length > 0) {
     const skillLower = (r.skills || []).map(s => s.toLowerCase().trim());
     const descText = (r.experience || []).map(e => e.description || '').join(' ').toLowerCase();
-    const uncovered = skillLower.filter(s => s.length > 2 && !descText.includes(s));
+    // derivedSkills = skills extracted from experience descriptions by skill-dictionary
+    // If a skill is in derivedSkills, it IS mentioned in experience text (just in different wording)
+    const derivedLower = new Set((r.derivedSkills || []).map(s => s.toLowerCase().trim()));
+    const uncovered = skillLower.filter(s => {
+      if (s.length <= 2) return false;
+      if (descText.includes(s)) return false;           // directly in experience text
+      if (derivedLower.has(s)) return false;             // extracted by skill-dictionary from text
+      // v1.9.19.0: also check normalized form (hyphens/dashes/ё)
+      const norm = s.replace(/[-–—]/g, ' ').replace(/ё/g, 'е').replace(/\s+/g, ' ');
+      for (const d of derivedLower) {
+        const dNorm = d.replace(/[-–—]/g, ' ').replace(/ё/g, 'е').replace(/\s+/g, ' ');
+        if (norm === dNorm) return false;
+      }
+      return true;
+    });
     if (uncovered.length > 3) {
       const sample = uncovered.slice(0, 5).map(s => '«' + s + '»').join(', ');
       const suffix = uncovered.length > 5 ? ' и ещё ' + (uncovered.length - 5) : '';
