@@ -107,7 +107,15 @@ v1.0 | 2026-06-09 | anti-hallucination-guard
 - Do NOT write "error fixed" if you did not verify
 - Every claim -> must be verifiable
 
-## Rule 6: Work structure
+## Rule 6: PlantUML -- read reference before editing PUML files
+
+- Before creating or editing ANY `.puml` file, the agent MUST read `docs/PLANTUML-REFERENCE.md`
+- This ensures correct PlantUML syntax (aliases, quotes, arrow types, skinparam, component notation)
+- All PUML files must pass the verification checklist in Section 9 of the reference
+- HH-Copilot conventions (Section 10) must be followed: theme, colors, naming, grouping
+- VIOLATION: writing PUML without reading reference = syntax errors and broken diagrams
+
+## Rule 7: Work structure
 
 1. Read AGENT_RULES.md and worklog.md
 2. Determine the specific next step
