@@ -1312,3 +1312,28 @@ Stage Summary:
 - Graceful degradation: without `ws` package, watch works normally without HMR
 - Files changed: esbuild.config.mjs, main.js, package.json, manifest.json, version.js, README.md
 - Version: 1.9.25.0
+
+---
+Task ID: main-page-parse-001
+Agent: main
+Task: Parse vacancies on hh.ru main page (/) — v1.9.26.0
+
+Work Log:
+- Analyzed DOM data from user: main page uses same vacancy-serp__vacancy selectors as search page
+- Key finding: first card has space-separated data-qa "vacancy-serp__vacancy vacancy-serp-item_clickme" — exact match fails
+- Also found "Vacancy of the Day" section with different selectors (vacancy_of_the_day_*)
+- Updated selectors.js: vacancyCard uses ~= (word-match) for space-separated data-qa values
+- Updated selectors.js: added vacancyTitleLink fallback 'a[href*="/vacancy/"]' for main page cards
+- Updated selectors.js: added vacancyOfTheDay* selectors (title, compensation, company, reply)
+- Updated vacancy-list.js: added findTitleLink() helper with fallback (any <a> to /vacancy/ inside card)
+- Updated vacancy-list.js: added parseVacanciesOfTheDay() for "Вакансия дня" block parsing
+- Updated main-page-handlers.js: added route '/' → handleMainPage()
+- handleMainPage() merges recommended vacancies + VotD, sets up MutationObserver for main page
+- Updated version: 1.9.25.0 → 1.9.26.0 (version.js, manifest.json, package.json)
+- Build verified: dist/content.js 572.7kb, 0 errors
+
+Stage Summary:
+- 5 files modified: selectors.js, vacancy-list.js, main-page-handlers.js, version.js, manifest.json, package.json
+- Main page (/) now parses: recommended vacancies (same as search) + "Vacancy of the Day" items
+- MutationObserver active on main page for dynamic content changes
+- Fallback title link extraction ensures parsing works even without standard data-qa attributes

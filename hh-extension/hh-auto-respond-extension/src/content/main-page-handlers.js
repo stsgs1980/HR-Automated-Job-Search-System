@@ -11,7 +11,7 @@
 
 import { createLogger } from '../lib/anti-hallucination.js';
 import { getStats, saveMyResume, getMyResumes, setActiveResume, getApplyQueue, setApplyQueue, saveVacancyDetail, saveVacancyScore } from '../lib/storage.js';
-import { parseVacanciesFromPage } from '../parsers/vacancy-list.js';
+import { parseVacanciesFromPage, parseVacanciesOfTheDay } from '../parsers/vacancy-list.js';
 import { diagnoseVacancyPage } from '../parsers/vacancy-diagnostic.js';
 import { parseVacancyDetail } from '../parsers/vacancy-detail.js';
 import { parseResume, parseResumeList, expandHiddenSections } from '../parsers/resume-detail.js';
@@ -130,6 +130,8 @@ async function routeToHandler(path) {
     await handleResumeListPage();
   } else if (/^\/vacancy\/\d+/.test(path)) {
     await handleVacancyDetailPage(path);
+  } else if (path === '/' || path === '') {
+    await handleMainPage();
   }
 }
 
@@ -271,6 +273,45 @@ async function handleVacancyDetailPage(path) {
     }
   } catch (e) {
     pageLog.error('Error processing apply queue: ' + e.message);
+  }
+}
+
+// ── Main page (/) ──
+
+let mainPageObserverActive = false;
+
+async function handleMainPage() {
+  pageLog.info('Main page detected — parsing recommended vacancies + "Vacancy of the Day"');
+
+  // Parse recommended vacancies (same vacancy-serp structure as search page)
+  const recommended = await parseVacanciesFromPage(panelState.resume);
+
+  // Parse "Vacancy of the Day" items
+  const votd = await parseVacanciesOfTheDay(panelState.resume);
+
+  // Merge: recommended first, then VotD
+  const allVacancies = [...recommended, ...votd];
+  updateVacancies(allVacancies);
+  const stats = getStats();
+  updateStats(stats);
+
+  pageLog.info('Main page: ' + recommended.length + ' recommended + ' + votd.length + ' VotD = ' + allVacancies.length + ' total');
+
+  // Set up MutationObserver to re-parse on dynamic content changes
+  if (!mainPageObserverActive) {
+    mainPageObserverActive = true;
+    let timer = null;
+    new MutationObserver(() => {
+      clearTimeout(timer);
+      timer = setTimeout(async () => {
+        // Only re-parse if still on main page
+        if (window.location.pathname !== '/' && window.location.pathname !== '') return;
+        const rec = await parseVacanciesFromPage(panelState.resume);
+        const vd = await parseVacanciesOfTheDay(panelState.resume);
+        updateVacancies([...rec, ...vd]);
+      }, 1500);
+    }).observe(document.body, { childList: true, subtree: true });
+    pageLog.info('Main page SPA observer active');
   }
 }
 

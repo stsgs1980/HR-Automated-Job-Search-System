@@ -11,8 +11,9 @@
 
 export const HH_SELECTORS = {
   // ── Vacancy Search ──
-  vacancyCard: ['[data-qa="vacancy-serp__vacancy"]', '[class*="vacancy-serp-item"]'],
-  vacancyTitleLink: ['a[data-qa="serp-item__title"]', 'a[data-qa="vacancy-serp__vacancy-title"]'],
+  // ~= matches word in space-separated data-qa (e.g. "vacancy-serp__vacancy vacancy-serp-item_clickme")
+  vacancyCard: ['[data-qa~="vacancy-serp__vacancy"]', '[data-qa="vacancy-serp__vacancy"]', '[class*="vacancy-serp-item"]'],
+  vacancyTitleLink: ['a[data-qa="serp-item__title"]', 'a[data-qa="vacancy-serp__vacancy-title"]', 'a[href*="/vacancy/"]'],
   vacancyTitleText: ['[data-qa="serp-item__title-text"]'],
   vacancyCompany: ['[data-qa="vacancy-serp__vacancy-employer-text"]', 'a[data-qa="vacancy-serp__vacancy-employer"]'],
   vacancySalary: ['[data-qa="vacancy-serp__compensation"]'],
@@ -21,6 +22,12 @@ export const HH_SELECTORS = {
   vacancyTags: ['.bloko-tag__text', '[data-qa*="tag"]'],
   replyButton: ['[data-qa="vacancy-serp__vacancy_response"]', '[data-qa="vacancy-response-link-top"]'],
   nextPage: ['[data-qa="pager-next"]'],
+  // ── Main Page: Vacancy of the Day ──
+  vacancyOfTheDayCard: ['[data-qa="vacancy_of_the_day_title"]'],
+  vacancyOfTheDayTitle: ['[data-qa="vacancy_of_the_day_title"]'],
+  vacancyOfTheDayCompensation: ['[data-qa="vacancy_of_the_day_compensation"]'],
+  vacancyOfTheDayCompany: ['[data-qa="vacancy_of_the_day_company"]'],
+  vacancyOfTheDayReply: ['[data-qa="vacancy-response-link-top-again"]'],
   // ── Vacancy Page ──
   vacancyTitleOnPage: ['[data-qa="vacancy-title"]', 'h1.bloko-header-section-1'],
   vacancyCompanyOnPage: ['[data-qa="vacancy-company-name"]', 'a[data-qa="vacancy-company-name"]'],
