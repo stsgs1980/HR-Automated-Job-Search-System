@@ -1219,3 +1219,22 @@ Stage Summary:
 - scripts/validate.sh: AHG_ALLOWED updated for v1.4 structure
 - .env: removed from git tracking (kept on disk, .gitignore protects it)
 - All validation checks pass
+---
+Task ID: remove-cascade-guard
+Agent: main
+Task: Remove cascade-guard submodule (repo deleted on GitHub)
+
+Work Log:
+- Removed cascade-guard from .gitmodules (git rm -f cascade-guard)
+- Removed cascade-guard section from .git/config
+- Removed cascade-guard checks from scripts/validate.sh
+- Removed Cascade-guard section from AGENT_RULES.md (Rules C-1..C-9)
+- Removed cascade-guard references from README.md (4 places)
+- Updated CHANGELOG.md reference
+- cascade-cli.sh, cascade-init.sh, cascade-state.json kept (local project files, not submodule)
+- validate.sh passes: 0 errors
+
+Stage Summary:
+- cascade-guard submodule fully removed from project
+- All references cleaned up
+- AHG remains as only submodule

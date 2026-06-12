@@ -64,7 +64,7 @@
 - Anti-monolith рефакторинг: все файлы ≤200 строк, panelState centralised
 - Split 6 monolith файлов, centralize chrome.storage
 - Split main.js (454→139), events.js (301→209), centralize storage
-- Обновлены submodules: anti-hallucination-guard + cascade-guard
+- Обновлены submodules: anti-hallucination-guard (cascade-guard удалён)
 
 ---
 

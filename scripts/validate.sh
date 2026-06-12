@@ -1,6 +1,6 @@
 #!/bin/bash
 # Root-project validate.sh
-# Проверяет сабмодули (cascade-guard, anti-hallucination-guard) и запрещённые файлы в корне.
+# Проверяет сабмодули (anti-hallucination-guard) и запрещённые файлы в корне.
 # Запуск: bash scripts/validate.sh
 
 set -euo pipefail
@@ -13,16 +13,7 @@ ERRORS=0
 echo "=== validate.sh: проверка проекта ==="
 echo ""
 
-# 1. cascade-guard submodule
-CG="$REPO_ROOT/cascade-guard"
-if [ -d "$CG" ] && [ -f "$CG/validate.sh" ]; then
-    echo "--- cascade-guard ---"
-    (cd "$CG" && bash validate.sh) || ERRORS=$((ERRORS + 1))
-else
-    echo "[SKIP] cascade-guard submodule не найден"
-fi
-
-# 2. anti-hallucination-guard submodule — whitelist check
+# 1. anti-hallucination-guard submodule — whitelist check
 AHG="$REPO_ROOT/anti-hallucination-guard"
 if [ -d "$AHG" ]; then
     echo "--- anti-hallucination-guard ---"
@@ -56,7 +47,7 @@ else
     echo "[SKIP] anti-hallucination-guard submodule не найден"
 fi
 
-# 3. Root-level forbidden files
+# 2. Root-level forbidden files
 echo "--- root repo ---"
 FORBIDDEN_PATTERNS=("*.env" "*.log" "*.tmp" "*.bak" "*.map")
 for PAT in "${FORBIDDEN_PATTERNS[@]}"; do
