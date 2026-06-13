@@ -1818,3 +1818,17 @@ Work Log:
 Stage Summary:
 - 17 WCAG violations fixed across 15 files
 - Extension builds and passes all checks
+
+---
+Task ID: rule-9.4
+Agent: main
+Task: Add Rule 9.4 -- mandatory PowerShell sync command after every push
+
+Work Log:
+- Added Rule 9.4 to AGENT_RULES.md: after every git push, immediately give user the PowerShell sync command
+- Added lesson: this is basic, should have been there from the start, no kick needed
+- Command: git stash && git pull && git stash pop && npm run build
+
+Stage Summary:
+- Rule 9.4 added and pushed
+- Commits: 0b40f4e (Rule 9.4), updating with lesson line
