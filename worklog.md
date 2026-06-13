@@ -1896,3 +1896,26 @@ Work Log:
 
 Stage Summary:
 - README now reflects actual current state of the project
+
+---
+Task ID: v1.9.28.0-anti-monolith
+Agent: main
+Task: Rule 11 compliance — split 6 files exceeding 250-line anti-monolith limit; Rule 9.5 fix in background/index.js
+
+Work Log:
+- Split 6 JS files that exceeded 250-line anti-monolith limit
+- main-page-handlers.js (334→132) → +main-page-handlers-pages.js (201)
+- resume-fetch-resume.js (323→171) → +resume-fetch-resume-skills.js (175)
+- parse-resume-sections.js (311→120) → +parse-resume-skills.js (195)
+- vacancy-diagnostic.js (266→120) → +vacancy-diagnostic-detectors.js (141)
+- vacancy-detail.js (265→116) → +vacancy-detail-parsers.js (150)
+- quality-flags.js (262→146) → +quality-recommendations.js (109)
+- Translated 10 Russian comments in background/index.js to English (Rule 9.5)
+- Updated CHANGELOG.md with missing Added/Changed sections for v1.9.28.0
+- Updated README.md Phase 0 claim to note dictionary exceptions
+- 67/67 tests pass, build OK
+
+Stage Summary:
+- All JS files ≤ 250 lines except skill-dictionary.js (475) and skill-synonyms.js (333)
+- background/index.js: zero Russian comments remaining
+- 107 Russian comments remain in src/ (lower priority, separate task)

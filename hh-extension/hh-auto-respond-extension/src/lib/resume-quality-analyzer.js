@@ -10,7 +10,8 @@
 
 import { analyzeATS } from './quality-ats.js';
 import { analyzeExperience } from './quality-experience.js';
-import { detectRedFlags, detectStrengths, buildRecommendations } from './quality-flags.js';
+import { detectRedFlags, detectStrengths } from './quality-flags.js';
+import { buildRecommendations } from './quality-recommendations.js';
 
 /**
  * Полный анализ качества резюме.

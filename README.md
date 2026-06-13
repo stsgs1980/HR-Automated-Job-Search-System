@@ -16,14 +16,14 @@ The project was originally developed as part of a large automation system (Next.
 
 The target audience is job seekers who send dozens of responses per day and want to speed up this process without losing quality. The extension doesn't replace the person entirely, but automates the mechanical part: searching, filtering, filling in fields, sending responses. The decision about which vacancies to respond to is made by the user (manual mode) or the scoring algorithm (semi-automatic and automatic modes).
 
-Current version (1.9.28.0) features a modular architecture based on esbuild. The content script is built from 134 JS modules in the src/ directory. Resume parsing (13+ fields: name, position, salary, gender, age, city, skills with levels, experience, education, languages, contacts, employment conditions, additional info), vacancy parsing from the search page + hh.ru main page (recommended + "Vacancy of the Day") + detailed vacancy parser, FAB button with green pulsation, Shadow DOM sidebar (720px, 6 tabs), authorization, SPA navigation with pushState patch, two-level resume visibility detection (list + detail page, 6 strategies), radio buttons for selecting the active resume, consolidated UI (↻ for re-parsing, contextual CTA "Take from page"), multi-strategy experience parsing (6 strategies), five-component scoring engine (skills 40%, salary 15%, experience 15%, position 15%, location 15%) with derived skills from work experience, skill synonyms, and position synonyms, resume quality analysis (ATS compatibility, red flags, improvement recommendations), guided tour for new users, auto-apply (orchestrator + queue + actions) -- all of this is working. AI cover letters and negotiations parser are stubs, planned for subsequent phases.
+Current version (1.9.28.0) features a modular architecture based on esbuild. The content script is built from 140 JS modules in the src/ directory. Resume parsing (13+ fields: name, position, salary, gender, age, city, skills with levels, experience, education, languages, contacts, employment conditions, additional info), vacancy parsing from the search page + hh.ru main page (recommended + "Vacancy of the Day") + detailed vacancy parser, FAB button with green pulsation, Shadow DOM sidebar (720px, 6 tabs), authorization, SPA navigation with pushState patch, two-level resume visibility detection (list + detail page, 6 strategies), radio buttons for selecting the active resume, consolidated UI (↻ for re-parsing, contextual CTA "Take from page"), multi-strategy experience parsing (6 strategies), five-component scoring engine (skills 40%, salary 15%, experience 15%, position 15%, location 15%) with derived skills from work experience, skill synonyms, and position synonyms, resume quality analysis (ATS compatibility, red flags, improvement recommendations), guided tour for new users, auto-apply (orchestrator + queue + actions) -- all of this is working. AI cover letters and negotiations parser are stubs, planned for subsequent phases.
 
 
 ## 2. Features
 
 ### What the extension can do now
 
-**Modular build (esbuild).** The source code is located in the src/ directory and consists of 134 ES modules organized by layers: lib/ (libraries, 58 files), parsers/ (parsers, 21 files), engine/ (business logic, 4 files), services/ (services, 1 file), ui/ (interface, 44 files), content/ (5 files). The esbuild bundler combines modules into a single IIFE bundle content.js (Manifest V3 does not support ES modules in content_scripts). Additionally, page-world.js is injected into the MAIN world for SPA navigation. Commands: `npm run build` (build), `npm run watch` (development with auto-rebuild).
+**Modular build (esbuild).** The source code is located in the src/ directory and consists of 140 ES modules organized by layers: lib/ (libraries, 60 files), parsers/ (parsers, 24 files), engine/ (business logic, 4 files), services/ (services, 1 file), ui/ (interface, 44 files), content/ (6 files). The esbuild bundler combines modules into a single IIFE bundle content.js (Manifest V3 does not support ES modules in content_scripts). Additionally, page-world.js is injected into the MAIN world for SPA navigation. Commands: `npm run build` (build), `npm run watch` (development with auto-rebuild).
 
 **Vacancy parsing from the search page.** The extension finds all vacancy cards on the hh.ru/search/vacancy page and extracts from each: position title, company name, salary, location, required experience, skill tags, URL, and identifier. Data is validated (title, company, URL, id checks), filtered by company blacklist and list of already-applied vacancies.
 
@@ -169,14 +169,15 @@ background/index.js            -- service worker (source)
 popup/index.html                -- popup (source, minimal redirect to FAB)
 icons/icon{16,48,128}.png      -- extension icons (source)
 
-src/                           -- source modules (134 JS files)
-  content/ (5 files):
+src/                           -- source modules (140 JS files)
+  content/ (6 files):
     index.js                   -- barrel re-export
     main.js                    -- boot sequence: init, auth gate, detectPageType, SPA observer, migration
-    main-page-handlers.js      -- initPageLogic, vacancy/resume page handlers, CustomEvent dispatch
+    main-page-handlers.js      -- initPageLogic, SPA routing, page routing
+    main-page-handlers-pages.js -- page handler implementations (search, resume, vacancy, main page)
     main-resume-loader.js      -- resume loading: parseResume, fetchAndParseResume
     main-sync.js               -- synchronization: storage listeners, state sync
-  lib/ (58 files):
+  lib/ (60 files):
     -- base modules --
     index.js, selectors.js, anti-hallucination.js, timing.js, rate-limiter.js, version.js
     storage.js, storage-queue.js, storage-settings.js, storage-vacancies.js
@@ -203,15 +204,17 @@ src/                           -- source modules (134 JS files)
     tour-engine.js, tour-steps.js, tour-tooltip.js
     -- resume constants --
     resume-constants.js, resume-constants-core.js, resume-constants-title.js, resume-constants-visibility.js
-    -- resume fetch (25 files) --
-    resume-fetch.js, resume-fetch-list.js, resume-fetch-resume.js,
+    -- resume fetch (27 files) --
+    resume-fetch.js, resume-fetch-list.js, resume-fetch-resume.js, resume-fetch-resume-skills.js,
     resume-fetch-*.js (experience, strategy4-6, json-utils, education-languages, helpers,
     parse, parse-edu, vis-fallback, iframe-vis*, list-vis*, resume-diag, resume-exp-orch, resume-page-vis)
-  parsers/ (21 files):
+  parsers/ (24 files):
     index.js, vacancy-list.js
     vacancy-detail.js           -- parseVacancyDetail (implemented)
     vacancy-detail-skills.js    -- parseVacancySkills (5 fallback strategies)
     vacancy-diagnostic.js       -- diagnoseVacancyDOM()
+    vacancy-diagnostic-detectors.js -- heuristic detectors (title, company, salary, etc.)
+    vacancy-detail-parsers.js   -- salary, experience, description parsers
     negotiations.js             -- stub (Phase 1)
     resume-detail.js            -- barrel to resume-detail/
     resume-detail/ (14 files):
@@ -309,7 +312,7 @@ For selector development when hh.ru DOM changes, the diagnoseResumeDOM() functio
 
 The extension is built on the classic Chrome Extension Manifest V3 architecture and consists of three executable contexts: Content Script, Service Worker, and Popup. Each context performs its role and interacts with others via chrome.storage.local and chrome.runtime.sendMessage.
 
-**Content Script (content.js)** -- the main extension module, loaded on all hh.ru pages. Content is built by esbuild from 134 source modules in the src/ directory into a single IIFE bundle. Additionally, page-world.js is injected into the MAIN world for SPA navigation. Modules are organized by layers: content (boot sequence, page handlers), library (src/lib/ -- 58 files: selectors, anti-hallucination, storage, timing, rate limiter, match-scorer, skill-dictionary, derive-skills, quality analysis, tour, resume-fetch), parsers (src/parsers/ -- 21 files: vacancies, resumes, negotiations, diagnostics), engine (src/engine/ -- apply-orchestrator, apply-actions, apply-queue), services (src/services/, stub), UI (src/ui/ -- 44 files: FAB, panel, tabs, styles, state, auth, sidebar-css).
+**Content Script (content.js)** -- the main extension module, loaded on all hh.ru pages. Content is built by esbuild from 140 source modules in the src/ directory into a single IIFE bundle. Additionally, page-world.js is injected into the MAIN world for SPA navigation. Modules are organized by layers: content (boot sequence, page handlers), library (src/lib/ -- 60 files: selectors, anti-hallucination, storage, timing, rate limiter, match-scorer, skill-dictionary, derive-skills, quality analysis, tour, resume-fetch), parsers (src/parsers/ -- 24 files: vacancies, resumes, negotiations, diagnostics), engine (src/engine/ -- apply-orchestrator, apply-actions, apply-queue), services (src/services/, stub), UI (src/ui/ -- 44 files: FAB, panel, tabs, styles, state, auth, sidebar-css).
 
 **Service Worker (background/index.js)** -- background script running in the extension context (not on the hh.ru page). Responsible for storage initialization on first install, creating a daily alarm (chrome.alarms) for resetting limits at midnight, message routing between popup and content scripts, badge updates (number on the extension icon).
 
@@ -464,7 +467,7 @@ Rule 10. Each commit must be accompanied by an entry in worklog.md. The pre-comm
 
 ### Phase 0 (completed): Modular refactoring
 
-The monolithic content.js (1637 lines) was decomposed into 134 ES modules. esbuild was configured (IIFE, bundle, sourcemap). Modular structure created: lib/ (58 files), parsers/ (21 files), engine/ (4 files), services/ (1 file), ui/ (44 files), content/ (5 files) with barrel files. All files don't exceed 250 lines. All Phase 0 tasks are completed.
+The monolithic content.js (1637 lines) was decomposed into 140 ES modules. esbuild was configured (IIFE, bundle, sourcemap). Modular structure created: lib/ (60 files), parsers/ (24 files), engine/ (4 files), services/ (1 file), ui/ (44 files), content/ (6 files) with barrel files. All files stay under 250 lines (except skill-dictionary.js and skill-synonyms.js which are Russian-language data dictionaries). All Phase 0 tasks are completed.
 
 Additional work (Phase 0.5): FAB CSS isolation with !important, Auth UX (passive authorization, username), 6-tab wireframe panel, client-side vacancy filtering, blacklist management UI, version sync, CustomEvent bridge.
 

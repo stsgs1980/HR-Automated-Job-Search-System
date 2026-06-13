@@ -1,13 +1,13 @@
 /**
  * Service Worker (Background Script)
  * ====================================
- * Manifest V3: Service Worker вместо background page.
+ * Manifest V3: Service Worker instead of background page.
  *
- * Обязанности:
- * - chrome.alarms для периодических задач (сброс лимитов в полночь)
- * - Message routing между popup и content scripts
- * - Логирование и аналитика
- * - Установка/обновление расширения
+ * Responsibilities:
+ * - chrome.alarms for periodic tasks (daily limit reset at midnight)
+ * - Message routing between popup and content scripts
+ * - Logging and analytics
+ * - Extension install/update handling
  */
 
 // ─── Install / Update ──────────────────────────
@@ -16,7 +16,7 @@ chrome.runtime.onInstalled.addListener((details) => {
   console.log('[HH-AR] Extension installed/updated', details);
 
   if (details.reason === 'install') {
-    // Первый запуск — инициализация
+    // First launch — initialize defaults
     chrome.storage.local.set({
       settings: {
         mode: 'manual',
@@ -45,7 +45,7 @@ chrome.runtime.onInstalled.addListener((details) => {
       installedAt: new Date().toISOString()
     });
 
-    // Alarm для daily reset
+    // Alarm for daily reset
     chrome.alarms.create('dailyReset', {
       when: getNextMidnight(),
       periodInMinutes: 24 * 60
@@ -125,8 +125,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 // ─── Badge Updates ─────────────────────────────
 
 /**
- * Обновляет badge (цифра на иконке расширения) с количеством откликов сегодня.
- * Вызывается периодически или при изменении stats.
+ * Updates the badge (number on extension icon) with today's apply count.
+ * Called periodically or when stats change.
  */
 export function updateBadge() {
   chrome.storage.local.get('stats', (data) => {

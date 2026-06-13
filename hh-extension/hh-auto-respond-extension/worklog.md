@@ -524,3 +524,26 @@ Work Log:
 Stage Summary:
 - Vacancy links navigate in current tab, sidebar auto-closes on click
 - SPA routing handles the URL change automatically
+
+---
+Task ID: v1.9.28.0-anti-monolith
+Agent: main
+Task: Rule 11 compliance — split 6 files exceeding 250-line anti-monolith limit; Rule 9.5 fix in background/index.js
+
+Work Log:
+- Identified 8 files exceeding 250-line limit; 2 dictionaries (skill-dictionary 475, skill-synonyms 333) left as-is per user decision
+- Split main-page-handlers.js (334→132) → +main-page-handlers-pages.js (201)
+- Split resume-fetch-resume.js (323→171) → +resume-fetch-resume-skills.js (175)
+- Split parse-resume-sections.js (311→120) → +parse-resume-skills.js (195)
+- Split vacancy-diagnostic.js (266→120) → +vacancy-diagnostic-detectors.js (141)
+- Split vacancy-detail.js (265→116) → +vacancy-detail-parsers.js (150)
+- Split quality-flags.js (262→146) → +quality-recommendations.js (109)
+- Translated 10 Russian comments in background/index.js to English (Rule 9.5)
+- Updated CHANGELOG.md: added missing Added/Changed sections for v1.9.28.0
+- Updated README.md Phase 0: noted dictionary exceptions for 250-line claim
+- All 67 tests pass, build succeeds
+
+Stage Summary:
+- All JS files now ≤ 250 lines except skill-dictionary.js (475) and skill-synonyms.js (333) — Russian-language data dictionaries
+- background/index.js: zero Russian comments remaining
+- 107 Russian comments remain in src/ files (lower priority, separate task)

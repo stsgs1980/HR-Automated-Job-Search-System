@@ -7,6 +7,12 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [1.9.28.0] — 2026-06-12
 
+### Added
+- **Rule 9.5** — all project documentation MUST be in English; chat responses to the user remain in Russian. Added to AGENT_RULES.md.
+
+### Changed
+- **All documentation translated to English** — README, ARCHITECTURE, CHANGELOG, TASK-CASCADE, guides, wireframes, PUML reference, and worklog entries. UI strings visible to end users remain in Russian.
+
 ### Fixed
 - **Sponsored VotD (adsrv.hh.ru)** — 3 of 14 "Vacancies of the Day" were skipped due to tracking URLs (`adsrv.hh.ru/click?meta=ENCRYPTED`) without `vacancyId`. The vacancy ID is now extracted from the numeric `id` attribute of the parent element (e.g., `id="131408939"`). Three-level extraction strategy: (1) `vacancyId` parameter in click-URL, (2) nearest link with `vacancyId=`, (3) `id` attribute of ancestor element matching `/^\d{6,12}$/`.
 - All VotD elements now receive the canonical URL `https://hh.ru/vacancy/{id}` instead of the tracking URL.
