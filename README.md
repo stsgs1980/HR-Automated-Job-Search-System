@@ -394,7 +394,7 @@ Each commit must start with a change type: feat:, fix:, refactor:, docs:, chore:
 
 ### Changelog
 
-Full version history is maintained in the CHANGELOG.md file in the extension root. Format -- Keep a Changelog. Each release contains "Added", "Changed", "Fixed", "Removed" sections. Current version -- 1.8.3.
+Full version history is maintained in the CHANGELOG.md file in the extension root. Format -- Keep a Changelog. Each release contains "Added", "Changed", "Fixed", "Removed" sections. Current version -- 1.9.28.0.
 
 ### Version timeline
 
@@ -416,6 +416,15 @@ Full version history is maintained in the CHANGELOG.md file in the extension roo
 - **v1.8.1**: Fix "Load from current page" button (container ID mismatch har-resume-content→res-parsed-data)
 - **v1.8.2**: Repo restoration after destructive agent, wireframe files added to docs/wireframes/
 - **v1.8.3**: Resume UI wireframe compliance -- anti-monolith refactor (resumes.js → 5 files), subtitle fix, name field, structured education/languages
+- **v1.9.0-v1.9.10**: Match scoring engine (5 components), derived skills, SPA navigation, resume quality analysis, anti-monolith refactoring (all files <= 200 lines), collapsible accordion, contacts parsing
+- **v1.9.11-v1.9.15.9**: Contact fixes (email/phone/telegram), resume assessment block, detailed vacancy parser, derived skills from experience, HMR for development
+- **v1.9.16-v1.9.19**: SPA navigation (pushState/replaceState patch), skill parser fallbacks, experience scoring, synonym matching, vacancy skill derivation, 10 bug fixes from code review
+- **v1.9.20-v1.9.23**: Recommendation improvements, synonym skill matching, anti-monolith split of match-scorer.js into 4 modules
+- **v1.9.24**: 35 WCAG/typography fixes (contrast, ARIA, keyboard nav, focus indicators)
+- **v1.9.25**: HMR (Hot Module Replacement) for development
+- **v1.9.26**: Homepage vacancy parsing (recommended + Vacancy of the Day)
+- **v1.9.27**: VotD parsing fix (tracking URLs with vacancyId param)
+- **v1.9.28**: Sponsored VotD fix (adsrv.hh.ru parent id extraction), all docs translated to English, Rule 9.5 added
 
 
 ## 9. Development
@@ -455,21 +464,21 @@ Rule 10. Each commit must be accompanied by an entry in worklog.md. The pre-comm
 
 ### Phase 0 (completed): Modular refactoring
 
-The monolithic content.js (1637 lines) was decomposed into 49 ES modules. esbuild was configured (IIFE, bundle, sourcemap). Modular structure created: lib/, parsers/, engine/, services/, ui/ with barrel files. All files don't exceed 250 lines. All Phase 0 tasks are completed.
+The monolithic content.js (1637 lines) was decomposed into 134 ES modules. esbuild was configured (IIFE, bundle, sourcemap). Modular structure created: lib/ (58 files), parsers/ (21 files), engine/ (4 files), services/ (1 file), ui/ (44 files), content/ (5 files) with barrel files. All files don't exceed 250 lines. All Phase 0 tasks are completed.
 
 Additional work (Phase 0.5): FAB CSS isolation with !important, Auth UX (passive authorization, username), 6-tab wireframe panel, client-side vacancy filtering, blacklist management UI, version sync, CustomEvent bridge.
 
-### Phase 1: Extended parsing
+### Phase 1 (completed): Extended parsing
 
-Detailed vacancy parser (parseVacancyDetail), negotiations parser (parseNegotiations), salary parser, experience parser. All tasks -- pending (cascade-state.json).
+Detailed vacancy parser (parseVacancyDetail), resume list synchronization, resume quality analysis (ATS compatibility, red flags, improvement recommendations), 5-component match scoring engine (skills 40%, salary 15%, experience 15%, position 15%, location 15%), derived skills from work experience, skill synonyms and position synonyms, vacancy skill derivation from job titles.
 
-### Phase 2: Matching Engine
+### Phase 2 (completed): Matching Engine
 
-Five-component scoring (Jaccard + alias matching), skill gap analysis, integration into vacancy parser. All tasks -- pending.
+Five-component scoring (Jaccard + alias matching), skill gap analysis, synonym skill matching, integrated into vacancy parser and resume panel. Resume assessment with ring chart and actionable recommendations.
 
-### Phase 3: Auto-Apply
+### Phase 3 (in progress): Auto-Apply
 
-5-step modal (pre-flight, navigation, button search, alert handling, fill and submit), CAPTCHA/429 handling, semi-automatic and fully automatic modes, typing simulation. All tasks -- pending.
+Auto-apply orchestrator + queue + actions implemented. Guided tour for new users. WCAG 2.1 AA compliance (17 violations fixed). SPA navigation (pushState/replaceState patch). HMR for development. Homepage vacancy parsing. CAPTCHA/429 handling, semi-automatic and fully automatic modes -- in progress.
 
 ### Phase 4: AI Integration
 
