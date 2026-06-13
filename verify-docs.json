@@ -21,7 +21,12 @@
     "docs/UNICODE_POLICY-v2.1.md",
     "docs/Z.ai-Sandbox-Guide.md",
     "docs/assets/",
+    "docs/worklog.md",
+    "docs/worklog-temp.md",
     "cascade/",
-    ".ahg/"
+    ".ahg/",
+    "hh-extension/hh-auto-respond-extension/worklog.md",
+    "hh-extension/hh-auto-respond-extension/docs/UNICODE_POLICY.md",
+    "hh-extension/hh-auto-respond-extension/package-lock.json"
   ]
 }

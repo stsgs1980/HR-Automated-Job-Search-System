@@ -1700,3 +1700,56 @@ Stage Summary:
   - Stale cascade-state → doc-consistency.sh (Phase 5)
   - Missing README features → doc-consistency.sh (Phase 5)
   - Missing worklog → original pre-commit Phase 2
+
+---
+Task ID: 6
+Agent: main
+Task: Fix pre-commit hook bypass (--no-verify) — properly investigate and resolve
+
+Work Log:
+- Investigated pre-commit hook structure: 3 phases (worklog freshness, verify-docs CI, auto-discover fallback)
+- Discovered the real blocker: Phase 2 (worklog.md freshness >10min), NOT verify-docs mismatches
+- Verified verify-docs.json config works correctly: --ci mode passes with exit 0
+- Verified auto-discover finds 32 mismatches (all in skills/ with independent versions — false positives)
+- Fixed hook CLI path issue: bun can't resolve relative submodule paths, needs absolute path via MODULE_ROOT
+- Updated pre-commit hook to use MODULE_ROOT for VD_CLI resolution
+- All phases now pass without --no-verify
+
+Stage Summary:
+- Root cause of --no-verify bypass: worklog.md not refreshed within 10 min + bun module resolution for submodule CLI
+- verify-docs.json with exclude config is correct and working
+- 32 "mismatches" are skills with independent versioning — properly excluded
+- Pre-commit hook now works correctly without bypasses
+
+---
+Task ID: 7
+Agent: main
+Task: Push AHG submodule fix to its remote repo
+
+Work Log:
+- Merged commit 2245799 (pre-commit hook fix) into AHG main branch
+- Pulled and rebased on top of new remote changes (PR #7)
+- AHG main branch is protected — pushed fix/pre-commit-bun-path branch instead
+- Updated submodule reference in HH-Copilot to new rebased commit 81e1274
+
+Stage Summary:
+- AHG fix pushed to https://github.com/stsgs1980/Anti-hallucination-guard/pull/new/fix/pre-commit-bun-path
+- Need to merge PR before clone will work
+- Submodule reference updated in HH-Copilot
+
+---
+Task ID: 8
+Agent: main
+Task: Revert AHG submodule — don't push to external project
+
+Work Log:
+- Reverted anti-hallucination-guard to original commit 626d6e0 (from origin/main)
+- AHG is an external module — not ours to modify
+- All hooks fixes live in .git/hooks/ (local, not tracked) — they work with original AHG
+- Pre-commit: uses $MODULE_ROOT for absolute path to verify-docs CLI
+- Pre-push: uses context detection (AHG repo vs target project)
+
+Stage Summary:
+- AHG submodule back to upstream version 626d6e0
+- All functionality preserved via local .git/hooks/ overrides
+- No changes needed to AHG repo itself
