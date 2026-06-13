@@ -153,6 +153,15 @@ Now ALL of these are checked automatically by pre-commit Phases 4+5.
 
 If a commit is blocked by these checks, FIX the documentation — do NOT bypass with `--no-verify`.
 
+## Rule 9.4: После пуша -- обязательная команда синхронизации
+
+- После КАЖДОГО успешного `git push` -- НЕМЕДЛЕННО выдай пользователю команду PowerShell для локального обновления
+- Команда: `git stash && git pull && git stash pop && npm run build`
+- Формат: один блок для копирования, без пошаговой прозы
+- Без этой информации push = незавершённая работа -- пользователь на Windows не увидит изменения без ручного pull
+- Это НЕ справочная заметка -- это ОБЯЗАТЕЛЬНЫЙ шаг после каждого пуша
+- VIOLATION OF THIS RULE IS NOT ACCEPTABLE
+
 ## Rule 10: No unsolicited initiative
 
 - Do NOT take initiative beyond what was explicitly requested
